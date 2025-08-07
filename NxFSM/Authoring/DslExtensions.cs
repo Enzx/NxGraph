@@ -1,5 +1,6 @@
 ﻿using NxFSM.Fsm;
 using NxFSM.Graphs;
+
 // ReSharper disable UnusedMember.Global
 
 namespace NxFSM.Authoring;
@@ -71,6 +72,45 @@ public static partial class DslExtensions
         ArgumentNullException.ThrowIfNull(run);
         INode node = new RelayState(run);
         return prev.To(node);
+    }
+
+    public static TimeSpan Milliseconds(this int milliseconds)
+    {
+        return TimeSpan.FromMilliseconds(milliseconds);
+    }
+    
+    public static TimeSpan Seconds(this int seconds)
+    {
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    public static TimeSpan Minutes(this int minutes)
+    {
+        return TimeSpan.FromMinutes(minutes);
+    }
+
+    public static TimeSpan Hours(this int hours)
+    {
+        return TimeSpan.FromHours(hours);
+    }
+    
+    public static TimeSpan Days(this int days)
+    {
+        return TimeSpan.FromDays(days);
+    }
+    
+    
+    
+    public static StateToken WaitFor(this StateToken token, TimeSpan delay, CancellationToken ct = default)
+    {
+        return token.To(Wait.For(delay, ct));
+    }
+
+    public static StateToken WaitFor(this StartToken token, TimeSpan delay, CancellationToken ct = default)
+    {
+        State node = Wait.For(delay, ct);
+        NodeId id = token.Builder.AddNode(node, isStart: true);
+        return new StateToken(id, token.Builder);
     }
 
     /// <summary>

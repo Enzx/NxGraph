@@ -7,7 +7,7 @@ public readonly struct StartToken
 {
     internal readonly GraphBuilder Builder;
     internal StartToken(GraphBuilder b) => Builder = b;
-
+    
     /// <summary>
     /// Creates the first state of the graph and marks it as <c>Start</c>.
     /// </summary>

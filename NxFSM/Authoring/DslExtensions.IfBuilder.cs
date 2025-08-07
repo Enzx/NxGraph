@@ -13,8 +13,6 @@ public static partial class DslExtensions
         private readonly GraphBuilder _builder;
         private readonly NodeId _truePad;
         private readonly NodeId _falsePad;
-        
-        public GraphBuilder Builder => _builder;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="prev"/> struct.
@@ -60,4 +58,5 @@ public static partial class DslExtensions
             return new ThenElseBuilder(_builder, _falsePad);
         }
     }
+    
 }
