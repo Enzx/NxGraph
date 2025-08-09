@@ -1,16 +1,11 @@
 ﻿namespace NxGraph.Graphs;
 
-public sealed class Node
+public sealed class Node(NodeId id, INode logic)
 {
-    public NodeId Key { get; }
-    public INode Logic { get; }
-    public static readonly Node Empty = new(NodeId.Default, new EmptyNodeLogic());
+    public NodeId Id { get; } = id;
+    public INode Logic { get; } = logic;
 
-    internal Node(NodeId key, INode logic)
-    {
-        Key = key;
-        Logic = logic;
-    }
+    public static readonly Node Empty = new(NodeId.Default, new EmptyNodeLogic());
 }
 
 public sealed record EmptyNodeLogic : INode

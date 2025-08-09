@@ -1,4 +1,5 @@
-﻿using NxGraph.Fsm;
+﻿using System.Runtime.CompilerServices;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 // ReSharper disable UnusedMethodReturnValue.Global
@@ -10,81 +11,100 @@ namespace NxGraph.Authoring;
 /// </summary>
 public sealed class GraphBuilder
 {
-    private readonly Graph _graph = new();
-    private NodeId _id = NodeId.Default;
-
-    // ReSharper disable once NullableWarningSuppressionIsUsed
+    private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private Node? _startNode;
-    private readonly Dictionary<NodeId, INode> _nodes = new();
-    private readonly Dictionary<INode, NodeId> _nodesToId = new();
 
-    /// <summary>
-    /// Adds a node to the graph with the given logic.
-    /// </summary>
-    /// <param name="logic">The logic to be executed by the node.</param>
-    /// <param name="isStart">Indicates if this node is the starting node of the graph.</param>
-    /// <returns>The NodeId of the newly added node.</returns>
+    private readonly Dictionary<NodeId, INode> _nodes = new(); // non-start nodes only
+    private readonly Dictionary<INode, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<NodeId, Transition> _transitions = new();
+
+    /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
     public NodeId AddNode(INode logic, bool isStart = false)
     {
+        ArgumentNullException.ThrowIfNull(logic);
+
         if (isStart)
         {
-            _id = _id.Next();
-            if (_startNode != null)
-            {
+            if (_startNode is not null)
                 throw new InvalidOperationException("A start node has already been added.");
-            }
 
-            _startNode = new Node(_id, logic);
-            return _id;
+            _startNode = new Node(NodeId.Start, logic);
+            _byLogic[logic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
+            return NodeId.Start;
         }
 
         if (_startNode?.Logic == logic)
-        {
-            return _startNode.Key;
-        }
+            return NodeId.Start;
 
-        if (_nodesToId.TryGetValue(logic, out NodeId existingId))
-        {
-            return existingId; // Return the existing ID if the node already exists
-        }
+        if (_byLogic.TryGetValue(logic, out NodeId existing))
+            return existing;
 
-        _id = _id.Next();
-        _nodes[_id] = logic;
-        _nodesToId[logic] = _id;
-        return _id;
+
+        _next = _next.Next();
+        _nodes[_next] = logic;
+        _byLogic[logic] = _next;
+        return _next;
     }
 
-    /// <summary>
-    ///  Adds a transition from one node to another.
-    /// </summary>
-    /// <param name="from">NodeId from</param>
-    /// <param name="to">NodeId to</param>
-    /// <returns>The current instance of GraphBuilder for fluent chaining.</returns>
+    /// <summary>Add a single outgoing transition from <paramref name="from"/> to <paramref name="to"/>.</summary>
     public GraphBuilder AddTransition(NodeId from, NodeId to)
     {
-        _graph.AddEdge(from, to);
+        if (!_transitions.TryAdd(from, new Transition(to)))
+            throw new InvalidOperationException($"A transition from {from} is already defined.");
         return this;
     }
 
     /// <summary>
-    /// Builds the graph and returns it.
+    ///  Builds the graph from the added nodes and transitions.
     /// </summary>
-    /// <returns>The constructed Graph object.</returns>
+    /// <returns>A <see cref="Graph"/> instance of a graph with the defined nodes and transitions.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no start node has been added or if there are inconsistencies in the graph structure.</exception>
     public Graph Build()
     {
-        if (_startNode == null)
-        {
+        if (_startNode is null)
             throw new InvalidOperationException("No start node has been added to the graph.");
-        }
 
-        _graph.AddNode(_startNode, isStart: true);
-        foreach (KeyValuePair<NodeId, INode> node in _nodes)
+        int maxIndex = 0;
+        foreach (NodeId id in _nodes.Keys)
+            if (id.Index > maxIndex)
+                maxIndex = id.Index;
+
+        int length = Math.Max(1, maxIndex + 1);
+
+        Node[] nodes = new Node[length];
+        Transition[] edges = new Transition[length];
+
+        for (int i = 0; i < edges.Length; i++)
+            edges[i] = Transition.Empty;
+
+        nodes[NodeId.Start.Index] = _startNode;
+
+        // Place the rest (null-safe checks)
+        foreach ((NodeId id, INode logic) in _nodes)
         {
-            _graph.AddNode(new Node(node.Key, node.Value), false);
+            int idx = id.Index;
+
+            if ((uint)idx >= (uint)nodes.Length)
+                throw new InvalidOperationException($"Node {id} is out of bounds.");
+
+            if (nodes[idx] != null)
+                throw new InvalidOperationException($"Node slot {idx} already occupied (duplicate NodeId index).");
+
+            nodes[idx] = new Node(id, logic);
         }
 
-        return _graph;
+        //transitions > dense array
+        foreach ((NodeId from, Transition t) in _transitions)
+        {
+            int idx = from.Index;
+            if ((uint)idx >= (uint)edges.Length)
+                throw new InvalidOperationException($"Transition 'from' {from} is out of bounds.");
+            edges[idx] = t;
+        }
+
+        return new Graph(nodes[0], nodes, edges);
     }
+
 
     /// <summary>
     /// Creates a new state token that starts with the given node.
@@ -110,6 +130,62 @@ public sealed class GraphBuilder
     {
         return FsmDsl.Start();
     }
+
+    /// <summary>
+    /// Sets the name of a node in the graph.
+    /// </summary>
+    /// <param name="newId">The new ID of the node, which must already exist in the graph.</param>
+    /// <param name="name">The new name to assign to the node.</param>
+    /// <exception cref="ArgumentException">Thrown if the provided name is null or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the node with the specified ID does not exist in the graph.</exception>
+    public void SetName(NodeId newId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
+        }
+
+        if (_startNode != null && _startNode.Id == newId)
+        {
+            _startNode = new Node(_startNode.Id.WithName(name), _startNode.Logic);
+            return;
+        }
+
+        if (_nodes.Remove(newId, out INode? node))
+        {
+            newId = newId.WithName(name);
+
+            _nodes[newId] = node;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Node with ID {newId} does not exist in the graph.");
+        }
+
+        // Update transitions to reflect the new node ID
+        foreach (KeyValuePair<NodeId, Transition> transition in _transitions.ToList())
+        {
+            if (transition.Key == newId)
+            {
+                _transitions.Remove(transition.Key);
+                _transitions.Add(newId, transition.Value);
+            }
+            else if (transition.Value.Destination == newId)
+            {
+                _transitions[transition.Key] = new Transition(newId);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Reference equality comparer for INode keys so AddNode(same instance) dedupes, but identical delegates do not.
+/// </summary>
+internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+{
+    public static readonly ReferenceEqualityComparer Instance = new();
+    public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+    public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
 }
 
 public static class GraphBuilderExtensions

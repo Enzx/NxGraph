@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Tests", "NxGraph.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxFSM.Examples", "NxFSM.Examples\NxFSM.Examples.csproj", "{40FA1A07-C05C-43B2-8E74-6DD97C241353}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Benchmarks", "NxGraph.Benchmarks\NxGraph.Benchmarks.csproj", "{4A1A7595-EFD9-4E23-B058-A835BA2A7E38}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{40FA1A07-C05C-43B2-8E74-6DD97C241353}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{40FA1A07-C05C-43B2-8E74-6DD97C241353}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{40FA1A07-C05C-43B2-8E74-6DD97C241353}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A1A7595-EFD9-4E23-B058-A835BA2A7E38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A1A7595-EFD9-4E23-B058-A835BA2A7E38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A1A7595-EFD9-4E23-B058-A835BA2A7E38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A1A7595-EFD9-4E23-B058-A835BA2A7E38}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

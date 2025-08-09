@@ -37,4 +37,6 @@ public interface IAsyncStateObserver
     ValueTask OnStateEntered(NodeId id, CancellationToken ct = default) => default;
     ValueTask OnStateExited(NodeId id, CancellationToken ct = default) => default;
     ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default) => default;
+    ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default) => default;
+
 }

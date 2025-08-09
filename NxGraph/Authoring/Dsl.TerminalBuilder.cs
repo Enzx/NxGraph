@@ -2,7 +2,7 @@
 
 namespace NxGraph.Authoring;
 
-public static partial class DslExtensions
+public static partial class Dsl
 {
     /// <summary>
     /// Represents the final stage of building an FSM graph after a conditional statement.

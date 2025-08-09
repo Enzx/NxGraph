@@ -11,7 +11,7 @@ public static class FsmDsl
     /// Create the first state of the graph and mark it as <c>Start</c>.
     /// </summary>
     /// <param name="logic">The logic to be executed in the start state.</param>
-    /// <returns></returns>
+    /// <returns>A <see cref="StateToken"/> representing the start state of the FSM graph.</returns>
     public static StateToken StartWith(INode logic)
     {
         GraphBuilder builder = new();

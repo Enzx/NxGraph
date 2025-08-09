@@ -7,6 +7,11 @@ namespace NxGraph.Fsm;
 /// </summary>
 public abstract class State : INode
 {
+    /// <summary>
+    /// Executes the state asynchronously, entering and exiting the state as needed.
+    /// </summary>
+    /// <param name="ct">The cancellation token to observe while executing the state.</param>
+    /// <returns>A <see cref="ValueTask{Result}"/> representing the<see cref="Result"/> of the state execution.</returns>
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
         await OnEnterAsync(ct).ConfigureAwait(false);
@@ -17,7 +22,7 @@ public abstract class State : INode
 
     protected virtual ValueTask OnEnterAsync(CancellationToken ct) => default;
     protected abstract ValueTask<Result> OnRunAsync(CancellationToken ct);
-    protected virtual ValueTask OnExitAsync (CancellationToken ct) => default;
+    protected virtual ValueTask OnExitAsync(CancellationToken ct) => default;
 }
 
 /// <summary>

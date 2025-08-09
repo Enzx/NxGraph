@@ -3,7 +3,7 @@ using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
 
-public static partial class DslExtensions
+public static partial class Dsl
 {
     /// <summary>
     /// Creates a conditional branch in the FSM graph.
@@ -66,7 +66,7 @@ public static partial class DslExtensions
         
         public BranchEnd Else(INode logic)
         {
-            var firstElse = Builder.AddNode(logic);
+            NodeId firstElse = Builder.AddNode(logic);
             Builder.AddTransition(_falsePad, firstElse);
             return new BranchEnd(Builder, firstElse);
         }
@@ -83,16 +83,18 @@ public static partial class DslExtensions
             _tip = tip;
         }
 
-        public BranchEnd To(INode logic)
+        // ReSharper disable once MemberCanBePrivate.Global
+        internal BranchEnd To(INode logic)
         {
             NodeId next = _b.AddNode(logic);
             _b.AddTransition(_tip, next);
             return new BranchEnd(_b, next);
         }
 
+        // ReSharper disable once UnusedMember.Global
         public BranchEnd WaitFor(TimeSpan delay) => To(Wait.For(delay));
 
         public StateMachine ToStateMachine() => _b.Build().ToStateMachine();
         public StateMachine<T> ToStateMachine<T>() => new(_b.Build());
-    }
+    } 
 }

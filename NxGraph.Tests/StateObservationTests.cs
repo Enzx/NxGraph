@@ -33,11 +33,11 @@ public class StateObservationTests
 
     private static readonly string[] Expected =
     [
+        "Entered: (0)", 
+        "Exited: (0)", 
+        "Transitioned from (0) to (1)", 
         "Entered: (1)", 
-        "Exited: (1)", 
-        "Transitioned from (1) to (2)", 
-        "Entered: (2)", 
-        "Exited: (2)"
+        "Exited: (1)"
     ];
 
     [Test]

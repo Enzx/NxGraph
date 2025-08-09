@@ -1,5 +1,11 @@
 ﻿namespace NxGraph.Fsm;
 
+/// <summary>
+/// RelayState is a state that can be used to encapsulate a function that returns a Result.
+/// </summary>
+/// <param name="run">The function to run when the state is executed. It should return a <see cref="Result"/>.</param>
+/// <param name="onEnter">Optional function to run when the state is entered. It can be used for initialization or setup.</param>
+/// <param name="onExit">Optional function to run when the state is exited. It can be used for cleanup or finalization.</param>
 public sealed class RelayState(
     Func<CancellationToken, ValueTask<Result>> run,
     Func<CancellationToken, ValueTask>? onEnter = null,
@@ -14,6 +20,13 @@ public sealed class RelayState(
     protected override ValueTask OnExitAsync(CancellationToken ct) => onExit?.Invoke(ct) ?? default;
 }
 
+/// <summary>
+/// RelayState is a state that can be used to encapsulate a function that returns a Result.
+/// </summary>
+/// <param name="run">The function to run when the state is executed. It should return a <see cref="Result"/>.</param>
+/// <param name="onEnter">Optional function to run when the state is entered. It can be used for initialization or setup.</param>
+/// <param name="onExit">Optional function to run when the state is exited. It can be used for cleanup or finalization.</param>
+/// <typeparam name="TAgent">The type of the agent that this state operates on.</typeparam>
 public sealed class RelayState<TAgent>(
     Func<TAgent, CancellationToken, ValueTask<Result>> run,
     Func<TAgent, CancellationToken, ValueTask>? onEnter = null,

@@ -1,25 +1,31 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
+using Example;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
+using NxGraph.Graphs;
 
-
+IAsyncStateObserver observer = new ConsoleStateObserver();
 Console.WriteLine("Simple FSM Example");
 Console.WriteLine();
 StateMachine fsm = GraphBuilder
     .StartWith(_ =>
     {
-        Console.WriteLine("Starting FSM...");
+        Console.WriteLine("Initializing workflow...");
         return ResultHelpers.Success;
-    })
+    }).SetName("Initial")
     .To(_ =>
     {
-        Console.WriteLine("Transitioning to next state...");
+        Console.WriteLine("Running first step...");
         return ResultHelpers.Success;
-    })
-    .To(_ => ResultHelpers.Success)
-    .ToStateMachine();
+    }).SetName("Second")
+    .To(_ =>
+    {
+        Console.WriteLine("Running second step...");
+        return ResultHelpers.Success;
+    }).SetName("End")
+    .ToStateMachine(observer);
 
 Result result = await fsm.ExecuteAsync();
 
@@ -28,14 +34,35 @@ Console.WriteLine();
 Console.WriteLine();
 Console.WriteLine("AI Enemy Example");
 Console.WriteLine();
-Example.AiEnemy aiEnemy = new();
+AiEnemy aiEnemy = new();
 await aiEnemy.ExecuteAsync();
-
-
 return 0;
+
 
 namespace Example
 {
+    
+    public class ConsoleStateObserver : IAsyncStateObserver
+    {
+        public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
+        {
+            Console.WriteLine($"{id.Name}::Enter");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
+        {
+            Console.WriteLine($"{id.Name}::Exit");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default)
+        {
+            Console.WriteLine($"{from.Name}->{to.Name}");
+            return ValueTask.CompletedTask;
+        }
+    }
+    
     public sealed class Player
     {
         public int Health { get; set; } = 3;

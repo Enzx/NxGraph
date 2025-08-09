@@ -69,22 +69,19 @@ public class WaitStateExecutionTests
             Assert.That(stopwatch.Elapsed.TotalMilliseconds, Is.LessThan(10)); // should be nearly immediate
         });
     }
-    
+
     [Test]
     public async Task wait_state_should_fail_if_cancelled()
     {
-        CancellationTokenSource cts = new ();
+        CancellationTokenSource cts = new();
         StateMachine fsm = GraphBuilder
             .Start()
-            .WaitFor(5.Seconds(), cts.Token)
+            .WaitFor(5.Seconds())
             .To(_ => ResultHelpers.Success)
             .ToStateMachine();
-
-        // Cancel immediately
+        
+        ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
         await cts.CancelAsync();
-
-        // ReSharper disable once MethodSupportsCancellation
-        Result result = await fsm.ExecuteAsync();
-        Assert.That(result, Is.EqualTo(Result.Failure));
+        Assert.ThrowsAsync<TaskCanceledException>(async () => await task);
     }
 }

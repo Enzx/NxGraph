@@ -3,7 +3,7 @@ using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
 
-public static partial class DslExtensions
+public static partial class Dsl
 {
     /// <summary>
     /// Represents a switch statement in the FSM graph, allowing for multiple branches based on a key.
@@ -31,7 +31,6 @@ public static partial class DslExtensions
             _builder = start.Builder;
             _isStart = true;
             _switchNode = new SwitchState<TKey>(selector, _map);
-            
         }
 
         /// <summary>
@@ -62,9 +61,8 @@ public static partial class DslExtensions
         /// <returns>Returns a <see cref="StateToken"/> representing the switch state.</returns>
         public StateToken End()
         {
-            
             NodeId switchId = _builder.AddNode(_switchNode, _isStart);
-            _builder.AddTransition(_prev.Id, switchId);
+            if (_prev.Id != NodeId.Default) _builder.AddTransition(_prev.Id, switchId);
             return new StateToken(switchId, _builder);
         }
     }

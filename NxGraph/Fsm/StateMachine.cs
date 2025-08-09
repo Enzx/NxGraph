@@ -13,7 +13,7 @@ public class StateMachine<TAgent>(Graph graph, IAsyncStateObserver? observer = n
 {
     public void SetAgent(TAgent agent)
     {
-          Graph.SetAgent(agent);
+        Graph.SetAgent(agent);
     }
 }
 
@@ -22,10 +22,40 @@ public class StateMachine<TAgent>(Graph graph, IAsyncStateObserver? observer = n
 /// </summary>
 public class StateMachine : State
 {
-    protected readonly Graph Graph;
+    protected readonly IGraph Graph;
     private readonly NodeId _initialState;
     private readonly IAsyncStateObserver? _observer;
     private NodeId _currentState;
+    private volatile ExecutionStatus _status = ExecutionStatus.Created;
+    private readonly object _lifecycleLock = new object();
+
+    /// <summary>
+    /// Public execution status of this state machine.
+    /// </summary>
+    public ExecutionStatus Status => _status;
+
+
+    /// <summary>
+    /// Try to transition to Running. Throws if already Running.
+    /// </summary>
+    private void EnterRunningOrThrow()
+    {
+        lock (_lifecycleLock)
+        {
+            if (_status == ExecutionStatus.Running)
+                throw new InvalidOperationException("StateMachine is already running.");
+            _status = ExecutionStatus.Running;
+        }
+    }
+
+    private void TransitionTo(ExecutionStatus next)
+    {
+        lock (_lifecycleLock)
+        {
+            _status = next;
+        }
+    }
+
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StateMachine"/> class.
@@ -34,10 +64,10 @@ public class StateMachine : State
     /// the nodes <see cref="Node"/>
     /// and transitions <see cref="Transition"/>.</param>
     /// <param name="observer">An optional observer to monitor state transitions and executions.</param>
-    public StateMachine(Graph graph, IAsyncStateObserver? observer = null)
+    public StateMachine(IGraph graph, IAsyncStateObserver? observer = null)
     {
         Graph = graph;
-        _initialState = graph.StartNode.Key;
+        _initialState = graph.StartNode.Id;
         _currentState = _initialState;
         _observer = observer;
     }
@@ -53,9 +83,40 @@ public class StateMachine : State
 
     protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
     {
+        EnterRunningOrThrow();
+        try
+        {
+            Result result = await InternalRunAsync(ct).ConfigureAwait(false);
+            TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+            return result;
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (_observer is not null)
+            {
+                await _observer.OnStateFailed(_currentState, ex, ct).ConfigureAwait(false);
+            }
+
+            TransitionTo(ExecutionStatus.Cancelled);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (_observer is not null)
+            {
+                await _observer.OnStateFailed(_currentState, ex, ct).ConfigureAwait(false);
+            }
+
+            TransitionTo(ExecutionStatus.Failed);
+            throw;
+        }
+    }
+
+    private async ValueTask<Result> InternalRunAsync(CancellationToken ct)
+    {
         while (!ct.IsCancellationRequested)
         {
-            if (!Graph.Nodes.TryGetValue(_currentState, out Node? node))
+            if (!Graph.TryGetNode(_currentState, out Node? node))
             {
                 throw new InvalidOperationException($"Node {_currentState} not found");
             }
@@ -82,8 +143,20 @@ public class StateMachine : State
                     }
                     else
                     {
-                        Transition edge = Graph.GetTransition(_currentState);
-                        if (edge.IsEmpty) return Result.Success;
+                        if (!Graph.TryGetTransition(_currentState, out Transition edge))
+                        {
+                            if (_observer is not null)
+                                await _observer.OnStateFailed(_currentState,
+                                        new InvalidOperationException($"No transition found for state {_currentState}"),
+                                        ct)
+                                    .ConfigureAwait(false);
+                            return Result.Failure;
+                        }
+
+                        if (edge.IsEmpty)
+                        {
+                            return Result.Success;
+                        }
 
                         next = edge.Destination;
                     }

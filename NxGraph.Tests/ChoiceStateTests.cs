@@ -7,7 +7,7 @@ namespace NxGraph.Tests;
 [Category("branching_choice")]
 public class ChoiceStateTests
 {
-    [Test]
+    [Test, Timeout(5000)]
     public async Task choice_state_should_follow_true_branch()
     {
         const bool flag = true;
@@ -30,11 +30,11 @@ public class ChoiceStateTests
         StateMachine fsm = GraphBuilder
             .Start()
             .If(() => flag)
-            .Then(_ => ResultHelpers.Success)
-            .Else(_ => ResultHelpers.Failure)
+            .Then(_ => ResultHelpers.Failure)
+            .Else(_ => ResultHelpers.Success)
             .ToStateMachine();
 
         Result result = await fsm.ExecuteAsync();
-        Assert.That(result, Is.EqualTo(Result.Failure));
+        Assert.That(result, Is.EqualTo(Result.Success));
     }
 }
