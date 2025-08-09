@@ -17,13 +17,8 @@ public static class Wait
             {
                 return Result.Success;
             }
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(delay, ct).ConfigureAwait(false);
-                return Result.Success;
-            }
-            ct.ThrowIfCancellationRequested();
-            return Result.Failure;
+            await Task.Delay(delay, ct).ConfigureAwait(false);
+            return Result.Success;
         }
     }
 }
