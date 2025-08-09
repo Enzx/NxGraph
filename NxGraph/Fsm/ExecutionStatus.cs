@@ -4,7 +4,7 @@ namespace NxGraph.Fsm
     /// <summary>
     /// Execution status for a running entity (state or state machine).
     /// </summary>
-    public enum ExecutionStatus
+    public enum ExecutionStatus : byte
     {
         Created = 0, 
         Running = 1,

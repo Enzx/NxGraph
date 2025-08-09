@@ -13,7 +13,7 @@ namespace NxGraph.Fsm;
 /// </summary>
 public sealed class NodeStatusTracker
 {
-    private ExecutionStatus[] _statuses = [];
+    private byte[] _statuses = [];
     private long[] _enterTicks = [];
     private long[] _exitTicks = [];
 
@@ -33,7 +33,7 @@ public sealed class NodeStatusTracker
         int n = graph.NodeCount;
         if (_statuses.Length != n)
         {
-            _statuses = new ExecutionStatus[n];
+            _statuses = new byte[n];
             _enterTicks = new long[n];
             _exitTicks = new long[n];
         }
@@ -53,7 +53,7 @@ public sealed class NodeStatusTracker
     {
         int idx = id.Index;
         if ((uint)idx >= (uint)_length) return;
-        Volatile.Write<>(ref _statuses[idx], ExecutionStatus.Running);
+        Volatile.Write(ref _statuses[idx], (byte)ExecutionStatus.Running);
         _enterTicks[idx] = Stopwatch.GetTimestamp();
     }
 
@@ -62,7 +62,7 @@ public sealed class NodeStatusTracker
     {
         int idx = id.Index;
         if ((uint)idx >= (uint)_length) return;
-        Volatile.Write<>(ref _statuses[idx], success ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+        Volatile.Write(ref _statuses[idx], success ? (byte)ExecutionStatus.Completed : (byte)ExecutionStatus.Failed);
         _exitTicks[idx] = Stopwatch.GetTimestamp();
     }
 
@@ -71,7 +71,7 @@ public sealed class NodeStatusTracker
     {
         int idx = id.Index;
         if ((uint)idx >= (uint)_length) return;
-        Volatile.Write<>(ref _statuses[idx], ExecutionStatus.Cancelled);
+        Volatile.Write(ref _statuses[idx], (byte)ExecutionStatus.Cancelled);
         _exitTicks[idx] = Stopwatch.GetTimestamp();
     }
     
@@ -83,10 +83,10 @@ public sealed class NodeStatusTracker
 
         if ((uint)fromIdx >= (uint)_length || (uint)toIdx >= (uint)_length) return;
 
-        Volatile.Write<>(ref _statuses[fromIdx], ExecutionStatus.Transitioning);
+        Volatile.Write(ref _statuses[fromIdx], (byte)ExecutionStatus.Transitioning);
         _exitTicks[fromIdx] = Stopwatch.GetTimestamp();
 
-        Volatile.Write<>(ref _statuses[toIdx], ExecutionStatus.Running);
+        Volatile.Write(ref _statuses[toIdx], (byte)ExecutionStatus.Running);
         _enterTicks[toIdx] = Stopwatch.GetTimestamp();
     }
 
@@ -95,7 +95,7 @@ public sealed class NodeStatusTracker
     public ExecutionStatus Get(NodeId id)
     {
         int idx = id.Index;
-        return (uint)idx >= (uint)_length ? ExecutionStatus.Created : Volatile.Read<>(ref _statuses[idx]);
+        return (uint)idx >= (uint)_length ? ExecutionStatus.Created : (ExecutionStatus)Volatile.Read(ref _statuses[idx]);
     }
 
     public TimeSpan GetDuration(NodeId id)
