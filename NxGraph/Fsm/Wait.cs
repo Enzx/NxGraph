@@ -7,7 +7,10 @@ public static class Wait
     /// </summary>
     /// <param name="delay">The duration to wait before completing the state.</param>
     /// <returns>A new instance of <see cref="State"/> that represents the delay state.</returns>
-    public static State For(TimeSpan delay) => new DelayState(delay);
+    public static State For(TimeSpan delay)
+    {
+        return new DelayState(delay);
+    }
 
     private sealed class DelayState(TimeSpan delay) : State
     {
@@ -17,6 +20,7 @@ public static class Wait
             {
                 return Result.Success;
             }
+
             await Task.Delay(delay, ct).ConfigureAwait(false);
             return Result.Success;
         }

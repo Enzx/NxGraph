@@ -34,5 +34,8 @@ public readonly struct StateToken
     }
 
     /// <summary> Finishes the DSL and produces an immutable <see cref="Graph"/>. </summary>
-    public Graph Build() => Builder.Build();
+    public Graph Build()
+    {
+        return Builder.Build();
+    }
 }

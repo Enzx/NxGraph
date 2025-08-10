@@ -57,7 +57,7 @@ public static partial class Dsl
         ArgumentNullException.ThrowIfNull(startToken);
         return startToken.Builder.Build().ToStateMachine<TAgent>(observer);
     }
-    
+
     public static StateMachine ToStateMachine(this BranchBuilder branch, IAsyncStateObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(branch);
@@ -70,6 +70,7 @@ public static partial class Dsl
         ArgumentNullException.ThrowIfNull(branch);
         return branch.Builder.Build().ToStateMachine<TAgent>(observer);
     }
+
     public static StateMachine<TAgent> WithAgent<TAgent>(this StateMachine<TAgent> fsm,
         TAgent agent)
     {

@@ -9,5 +9,7 @@ namespace NxGraph.Fsm;
 public class CompositeState(INode child) : State
 {
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
-        => child.ExecuteAsync(ct);
+    {
+        return child.ExecuteAsync(ct);
+    }
 }

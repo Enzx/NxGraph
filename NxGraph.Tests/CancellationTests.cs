@@ -16,7 +16,7 @@ public class CancellationTests
         {
             await Task.Delay(1000, ct);
             return Result.Success;
-        }), isStart: true);
+        }), true);
         Graph graph = builder.Build();
 
         StateMachine fsm = new(graph);

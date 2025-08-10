@@ -22,7 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\NxGraph\NxGraph.csproj" />
+        <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>
     </ItemGroup>
 
 </Project>

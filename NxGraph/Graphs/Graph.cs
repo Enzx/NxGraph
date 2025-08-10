@@ -14,9 +14,14 @@ public sealed class Graph : IGraph
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(edges);
         if (start.Id != NodeId.Start)
+        {
             throw new ArgumentException("Start node must be NodeId.Start (index 0).", nameof(start));
+        }
+
         if (nodes.Length == 0 || edges.Length == 0 || nodes.Length != edges.Length)
+        {
             throw new ArgumentException("Nodes/edges arrays must be non-empty and have equal length.");
+        }
 
         StartNode = start;
         _nodes = nodes;
@@ -58,12 +63,18 @@ public sealed class Graph : IGraph
 
     public void SetAgent<TAgent>(TAgent agent)
     {
-        if (agent is null) throw new ArgumentNullException(nameof(agent));
+        if (agent is null)
+        {
+            throw new ArgumentNullException(nameof(agent));
+        }
+
         for (int i = 0; i < _nodes.Length; i++)
         {
             INode logic = _nodes[i].Logic;
             if (logic is IAgentSettable<TAgent> settable)
+            {
                 settable.SetAgent(agent);
+            }
         }
     }
 

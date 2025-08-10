@@ -27,7 +27,7 @@ public static partial class Dsl
     public static StateToken WaitFor(this StartToken token, TimeSpan delay)
     {
         State node = Wait.For(delay);
-        NodeId id = token.Builder.AddNode(node, isStart: true);
+        NodeId id = token.Builder.AddNode(node, true);
         return new StateToken(id, token.Builder);
     }
 }

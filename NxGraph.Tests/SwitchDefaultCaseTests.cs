@@ -15,9 +15,9 @@ public class SwitchDefaultCaseTests
         StateMachine? fsm = GraphBuilder
             .Start()
             .Switch(() => key)
-                .Case("a", _ => ResultHelpers.Failure)
-                .Case("b", _ => ResultHelpers.Failure)
-                .Default(_ => ResultHelpers.Success)
+            .Case("a", _ => ResultHelpers.Failure)
+            .Case("b", _ => ResultHelpers.Failure)
+            .Default(_ => ResultHelpers.Success)
             .End()
             .ToStateMachine();
 

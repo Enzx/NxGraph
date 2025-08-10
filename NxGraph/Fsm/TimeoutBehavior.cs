@@ -7,5 +7,5 @@ public enum TimeoutBehavior
     Fail = 0,
 
     /// <summary>Throw a <see cref="TimeoutException"/>.</summary>
-    Throw = 1,
+    Throw = 1
 }

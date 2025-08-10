@@ -34,9 +34,23 @@ namespace NxGraph.Fsm;
 /// </example>
 public interface IAsyncStateObserver
 {
-    ValueTask OnStateEntered(NodeId id, CancellationToken ct = default) => default;
-    ValueTask OnStateExited(NodeId id, CancellationToken ct = default) => default;
-    ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default) => default;
-    ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default) => default;
+    ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
+    {
+        return default;
+    }
 
+    ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+    {
+        return default;
+    }
 }

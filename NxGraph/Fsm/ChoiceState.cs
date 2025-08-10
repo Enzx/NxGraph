@@ -11,7 +11,10 @@ public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId fa
     private readonly Func<bool> _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
 
 
-    protected override ValueTask<Result> OnRunAsync(CancellationToken _) => ResultHelpers.Success;
+    protected override ValueTask<Result> OnRunAsync(CancellationToken _)
+    {
+        return ResultHelpers.Success;
+    }
 
     /// <summary>
     /// Selects the next node based on the predicate.

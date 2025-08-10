@@ -62,7 +62,11 @@ public static partial class Dsl
         public StateToken End()
         {
             NodeId switchId = _builder.AddNode(_switchNode, _isStart);
-            if (_prev.Id != NodeId.Default) _builder.AddTransition(_prev.Id, switchId);
+            if (_prev.Id != NodeId.Default)
+            {
+                _builder.AddTransition(_prev.Id, switchId);
+            }
+
             return new StateToken(switchId, _builder);
         }
     }

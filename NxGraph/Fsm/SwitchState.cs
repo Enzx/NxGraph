@@ -26,7 +26,10 @@ public sealed class SwitchState<TKey>(
         return cases.GetValueOrDefault(key, _defaultNode);
     }
 
-    protected override ValueTask<Result> OnRunAsync(CancellationToken _) => ResultHelpers.Success;
+    protected override ValueTask<Result> OnRunAsync(CancellationToken _)
+    {
+        return ResultHelpers.Success;
+    }
 
     /// <summary>
     /// Sets the default node to be used when no case matches the selector's key.

@@ -9,7 +9,7 @@ public static class ResultHelpers
     /// Represents a successful result.
     /// </summary>
     public static readonly ValueTask<Result> Success = new(Result.Success);
-    
+
     /// <summary>
     /// Represents a failed result.
     /// </summary>

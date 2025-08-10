@@ -26,7 +26,9 @@ public sealed class GraphBuilder
         if (isStart)
         {
             if (_startNode is not null)
+            {
                 throw new InvalidOperationException("A start node has already been added.");
+            }
 
             _startNode = new Node(NodeId.Start, logic);
             _byLogic[logic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
@@ -34,10 +36,14 @@ public sealed class GraphBuilder
         }
 
         if (_startNode?.Logic == logic)
+        {
             return NodeId.Start;
+        }
 
         if (_byLogic.TryGetValue(logic, out NodeId existing))
+        {
             return existing;
+        }
 
 
         _next = _next.Next();
@@ -50,7 +56,10 @@ public sealed class GraphBuilder
     public GraphBuilder AddTransition(NodeId from, NodeId to)
     {
         if (!_transitions.TryAdd(from, new Transition(to)))
+        {
             throw new InvalidOperationException($"A transition from {from} is already defined.");
+        }
+
         return this;
     }
 
@@ -62,12 +71,18 @@ public sealed class GraphBuilder
     public Graph Build()
     {
         if (_startNode is null)
+        {
             throw new InvalidOperationException("No start node has been added to the graph.");
+        }
 
         int maxIndex = 0;
         foreach (NodeId id in _nodes.Keys)
+        {
             if (id.Index > maxIndex)
+            {
                 maxIndex = id.Index;
+            }
+        }
 
         int length = Math.Max(1, maxIndex + 1);
 
@@ -75,7 +90,9 @@ public sealed class GraphBuilder
         Transition[] edges = new Transition[length];
 
         for (int i = 0; i < edges.Length; i++)
+        {
             edges[i] = Transition.Empty;
+        }
 
         nodes[NodeId.Start.Index] = _startNode;
 
@@ -85,10 +102,14 @@ public sealed class GraphBuilder
             int idx = id.Index;
 
             if ((uint)idx >= (uint)nodes.Length)
+            {
                 throw new InvalidOperationException($"Node {id} is out of bounds.");
+            }
 
             if (nodes[idx] != null)
+            {
                 throw new InvalidOperationException($"Node slot {idx} already occupied (duplicate NodeId index).");
+            }
 
             nodes[idx] = new Node(id, logic);
         }
@@ -98,7 +119,10 @@ public sealed class GraphBuilder
         {
             int idx = from.Index;
             if ((uint)idx >= (uint)edges.Length)
+            {
                 throw new InvalidOperationException($"Transition 'from' {from} is out of bounds.");
+            }
+
             edges[idx] = t;
         }
 
@@ -184,8 +208,16 @@ public sealed class GraphBuilder
 internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
 {
     public static readonly ReferenceEqualityComparer Instance = new();
-    public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
-    public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
+
+    public new bool Equals(object? x, object? y)
+    {
+        return ReferenceEquals(x, y);
+    }
+
+    public int GetHashCode(object obj)
+    {
+        return RuntimeHelpers.GetHashCode(obj);
+    }
 }
 
 public static class GraphBuilderExtensions

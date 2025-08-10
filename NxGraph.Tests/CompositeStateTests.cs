@@ -13,14 +13,14 @@ public class CompositeStateTests
     {
         // Child graph: A (success)
         GraphBuilder builder = new();
-        builder.AddNode(new RelayState(_ => ResultHelpers.Success), isStart: true);
+        builder.AddNode(new RelayState(_ => ResultHelpers.Success), true);
         Graph childGraph = builder.Build();
         StateMachine childFsm = new(childGraph);
         CompositeState composite = new(childFsm);
 
         // Parent graph: single composite node
         GraphBuilder parentBuilder = new();
-        parentBuilder.AddNode(composite, isStart: true);
+        parentBuilder.AddNode(composite, true);
         Graph parentGraph = parentBuilder.Build();
         StateMachine parentFsm = new(parentGraph);
         Result result = await parentFsm.ExecuteAsync();

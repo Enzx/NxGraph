@@ -79,7 +79,7 @@ public class WaitStateExecutionTests
             .WaitFor(5.Seconds())
             .To(_ => ResultHelpers.Success)
             .ToStateMachine();
-        
+
         ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
         await cts.CancelAsync();
         Assert.ThrowsAsync<TaskCanceledException>(async () => await task);

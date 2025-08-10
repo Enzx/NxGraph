@@ -7,7 +7,6 @@ namespace NxGraph.Authoring;
 
 public static partial class Dsl
 {
-    
     /// <summary>
     /// Converts the previous state token into a new state token with a relay state.
     /// </summary>
@@ -20,18 +19,20 @@ public static partial class Dsl
         INode node = new RelayState(run);
         return prev.To(node);
     }
-    
+
     public static StateToken SetName(this StateToken prev, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
-        
+        }
+
         prev.Builder.SetName(prev.Id, name);
         return prev;
     }
 
-    
+
     /// <summary>
     /// Creates a conditional branch in the FSM graph.
     /// </summary>
@@ -39,7 +40,9 @@ public static partial class Dsl
     /// <param name="predicate">A function that returns <c>true</c> for the "then" branch and <c>false</c> for the "else" branch.</param>
     /// <returns></returns>
     public static IfBuilder If(this StateToken prev, Func<bool> predicate)
-        => new(prev, predicate);
+    {
+        return new IfBuilder(prev, predicate);
+    }
 
     /// <summary>
     /// Creates a conditional branch in the FSM graph.
@@ -51,9 +54,10 @@ public static partial class Dsl
     public static SwitchBuilder<TKey> Switch<TKey>(this StateToken prev,
         Func<TKey> selector)
         where TKey : notnull
-        => new(prev, selector);
+    {
+        return new SwitchBuilder<TKey>(prev, selector);
+    }
 
-  
 
     /// <summary>
     /// Creates a "then" branch in the FSM graph that executes the specified logic.
@@ -82,8 +86,6 @@ public static partial class Dsl
         return ifBuilder.Else(relay);
     }
 
-
- 
 
     /// <summary>
     ///  Creates a case in the switch statement of the FSM graph.
@@ -122,5 +124,4 @@ public static partial class Dsl
     {
         return branch.Builder.Build();
     }
-   
 }

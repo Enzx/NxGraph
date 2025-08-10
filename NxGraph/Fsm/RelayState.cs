@@ -15,9 +15,20 @@ public sealed class RelayState(
     private readonly Func<CancellationToken, ValueTask<Result>> _run =
         run ?? throw new ArgumentNullException(nameof(run));
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct) => onEnter?.Invoke(ct) ?? default;
-    protected override ValueTask<Result> OnRunAsync(CancellationToken ct) => _run(ct);
-    protected override ValueTask OnExitAsync(CancellationToken ct) => onExit?.Invoke(ct) ?? default;
+    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    {
+        return onEnter?.Invoke(ct) ?? default;
+    }
+
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        return _run(ct);
+    }
+
+    protected override ValueTask OnExitAsync(CancellationToken ct)
+    {
+        return onExit?.Invoke(ct) ?? default;
+    }
 }
 
 /// <summary>
@@ -36,7 +47,18 @@ public sealed class RelayState<TAgent>(
     private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run =
         run ?? throw new ArgumentNullException(nameof(run));
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct) => onEnter?.Invoke(Agent, ct) ?? default;
-    protected override ValueTask<Result> OnRunAsync(CancellationToken ct) => _run(Agent, ct);
-    protected override ValueTask OnExitAsync(CancellationToken ct) => onExit?.Invoke(Agent, ct) ?? default;
+    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    {
+        return onEnter?.Invoke(Agent, ct) ?? default;
+    }
+
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        return _run(Agent, ct);
+    }
+
+    protected override ValueTask OnExitAsync(CancellationToken ct)
+    {
+        return onExit?.Invoke(Agent, ct) ?? default;
+    }
 }

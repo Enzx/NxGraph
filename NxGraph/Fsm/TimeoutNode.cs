@@ -49,7 +49,10 @@ public class TimeoutNode : INode
             catch (OperationCanceledException) when (!ct.IsCancellationRequested && cts.IsCancellationRequested)
             {
                 if (_behavior == TimeoutBehavior.Throw)
+                {
                     throw new TimeoutException($"Node timed out after {_timeout}.");
+                }
+
                 return Result.Failure;
             }
         }
@@ -62,7 +65,11 @@ public class TimeoutNode : INode
 
     private static void CancelCallback(object? s)
     {
-        if (s is null) return;
+        if (s is null)
+        {
+            return;
+        }
+
         CancellationTokenSource source = (CancellationTokenSource)s;
         source.Cancel();
     }
@@ -74,9 +81,15 @@ public class TimeoutNode : INode
 
         public static CancellationTokenSource Rent()
         {
-            if (!Bag.TryTake(out CancellationTokenSource? cts)) return new CancellationTokenSource();
+            if (!Bag.TryTake(out CancellationTokenSource? cts))
+            {
+                return new CancellationTokenSource();
+            }
+
             if (cts.TryReset())
+            {
                 return cts;
+            }
 
             // Could not reset safely; dispose and fall through to new
             cts.Dispose();
@@ -102,10 +115,14 @@ public static class Timeout
 {
     /// <summary>Wrap an existing node with a timeout.</summary>
     public static INode Wrap(INode node, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
-        => new TimeoutNode(node, timeout, behavior);
+    {
+        return new TimeoutNode(node, timeout, behavior);
+    }
 
     /// <summary>Wrap a delegate as a node with a timeout (convenience overload).</summary>
     public static INode For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
-        => new TimeoutNode(new RelayState(run), timeout, behavior);
+    {
+        return new TimeoutNode(new RelayState(run), timeout, behavior);
+    }
 }

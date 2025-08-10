@@ -20,7 +20,7 @@ public class AgentPropagationTests
             agent.Visited = true;
             return ResultHelpers.Success;
         });
-        
+
         DummyAgent agent = new();
         StateMachine<DummyAgent> fsm = GraphBuilder
             .StartWith(node)

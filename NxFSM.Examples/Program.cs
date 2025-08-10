@@ -41,7 +41,6 @@ return 0;
 
 namespace Example
 {
-    
     public class ConsoleStateObserver : IAsyncStateObserver
     {
         public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
@@ -62,7 +61,7 @@ namespace Example
             return ValueTask.CompletedTask;
         }
     }
-    
+
     public sealed class Player
     {
         public int Health { get; set; } = 3;

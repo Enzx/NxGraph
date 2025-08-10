@@ -58,7 +58,7 @@ public static partial class Dsl
     {
         ArgumentNullException.ThrowIfNull(nextStateLogic);
         INode wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
-        NodeId id = prev.Builder.AddNode(wrapped, isStart: true);
+        NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }
 
@@ -78,7 +78,7 @@ public static partial class Dsl
         ArgumentNullException.ThrowIfNull(run);
         INode nextStateLogic = new RelayState(run);
         INode wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
-        NodeId id = prev.Builder.AddNode(wrapped, isStart: true);
+        NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }
 }

@@ -27,7 +27,7 @@ public class StateMachine : State
     private readonly IAsyncStateObserver? _observer;
     private NodeId _currentState;
     private volatile ExecutionStatus _status = ExecutionStatus.Created;
-    private readonly object _lifecycleLock = new object();
+    private readonly object _lifecycleLock = new();
 
     /// <summary>
     /// Public execution status of this state machine.
@@ -43,7 +43,10 @@ public class StateMachine : State
         lock (_lifecycleLock)
         {
             if (_status == ExecutionStatus.Running)
+            {
                 throw new InvalidOperationException("StateMachine is already running.");
+            }
+
             _status = ExecutionStatus.Running;
         }
     }
@@ -139,17 +142,22 @@ public class StateMachine : State
                         next = director.SelectNext();
 
                         if (next.Equals(NodeId.Default))
+                        {
                             return Result.Success;
+                        }
                     }
                     else
                     {
                         if (!Graph.TryGetTransition(_currentState, out Transition edge))
                         {
                             if (_observer is not null)
+                            {
                                 await _observer.OnStateFailed(_currentState,
                                         new InvalidOperationException($"No transition found for state {_currentState}"),
                                         ct)
                                     .ConfigureAwait(false);
+                            }
+
                             return Result.Failure;
                         }
 
@@ -162,12 +170,17 @@ public class StateMachine : State
                     }
 
                     if (_observer is not null)
+                    {
                         await _observer.OnTransition(_currentState, next, ct).ConfigureAwait(false);
+                    }
 
                     _currentState = next;
 
                     if (_observer is not null)
+                    {
                         await _observer.OnStateEntered(_currentState, ct).ConfigureAwait(false);
+                    }
+
                     continue;
                 }
                 case Result.Failure:

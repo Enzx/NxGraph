@@ -12,8 +12,8 @@ public class ExceptionPropagationTests
     {
         StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(
-                run: _ => ResultHelpers.Success,
-                onEnter: _ => throw new InvalidOperationException("enter boom")))
+                _ => ResultHelpers.Success,
+                _ => throw new InvalidOperationException("enter boom")))
             .ToStateMachine();
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
@@ -24,7 +24,7 @@ public class ExceptionPropagationTests
     {
         StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(
-                run: _ => throw new ApplicationException("run boom")))
+                _ => throw new ApplicationException("run boom")))
             .ToStateMachine();
 
         Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
@@ -35,7 +35,7 @@ public class ExceptionPropagationTests
     {
         StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(
-                run: _ => ResultHelpers.Success,
+                _ => ResultHelpers.Success,
                 onExit: _ => throw new NotSupportedException("exit boom")))
             .ToStateMachine();
 

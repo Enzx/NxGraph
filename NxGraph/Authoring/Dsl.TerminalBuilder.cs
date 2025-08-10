@@ -9,14 +9,21 @@ public static partial class Dsl
     /// </summary>
     public readonly struct TerminalBuilder
     {
-        internal TerminalBuilder(GraphBuilder builder) => Builder = builder;
+        internal TerminalBuilder(GraphBuilder builder)
+        {
+            Builder = builder;
+        }
+
         public GraphBuilder Builder { get; }
-    
+
 
         /// <summary>
         /// Finalizes the FSM graph and returns the built graph.
         /// </summary>
         /// <returns>Returns the constructed <see cref="Graph"/>.</returns>
-        public Graph Build() => Builder.Build();
+        public Graph Build()
+        {
+            return Builder.Build();
+        }
     }
 }

@@ -7,7 +7,8 @@ namespace NxGraph.Tests;
 [Category("branching_choice")]
 public class ChoiceStateTests
 {
-    [Test, Timeout(5000)]
+    [Test]
+    [Timeout(5000)]
     public async Task choice_state_should_follow_true_branch()
     {
         const bool flag = true;

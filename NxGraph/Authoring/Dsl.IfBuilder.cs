@@ -28,7 +28,7 @@ public static partial class Dsl
             _builder = root.Builder;
             _truePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
             _falsePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), isStart: true);
+            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
 
@@ -42,7 +42,7 @@ public static partial class Dsl
 
     public readonly struct BranchBuilder
     {
-        private readonly NodeId _tip; 
+        private readonly NodeId _tip;
         private readonly NodeId _falsePad;
 
         internal BranchBuilder(GraphBuilder builder, NodeId tip, NodeId falsePad)
@@ -62,8 +62,10 @@ public static partial class Dsl
         }
 
         public BranchBuilder WaitFor(TimeSpan delay)
-            => To(Wait.For(delay));
-        
+        {
+            return To(Wait.For(delay));
+        }
+
         public BranchEnd Else(INode logic)
         {
             NodeId firstElse = Builder.AddNode(logic);
@@ -92,9 +94,19 @@ public static partial class Dsl
         }
 
         // ReSharper disable once UnusedMember.Global
-        public BranchEnd WaitFor(TimeSpan delay) => To(Wait.For(delay));
+        public BranchEnd WaitFor(TimeSpan delay)
+        {
+            return To(Wait.For(delay));
+        }
 
-        public StateMachine ToStateMachine() => _b.Build().ToStateMachine();
-        public StateMachine<T> ToStateMachine<T>() => new(_b.Build());
-    } 
+        public StateMachine ToStateMachine()
+        {
+            return _b.Build().ToStateMachine();
+        }
+
+        public StateMachine<T> ToStateMachine<T>()
+        {
+            return new StateMachine<T>(_b.Build());
+        }
+    }
 }

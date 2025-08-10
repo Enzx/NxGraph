@@ -11,7 +11,9 @@ public class ObserverExceptionTests
     private sealed class ExplosiveObserver : IAsyncStateObserver
     {
         public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
-            => throw new InvalidOperationException("observer entered boom");
+        {
+            throw new InvalidOperationException("observer entered boom");
+        }
     }
 
     [Test]

@@ -7,5 +7,4 @@ public interface IGraph
     bool TryGetTransition(NodeId from, out Transition transition);
     bool TryGetNode(NodeId id, out Node node);
     void SetAgent<TAgent>(TAgent agent);
-  
 }

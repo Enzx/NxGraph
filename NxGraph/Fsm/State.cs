@@ -20,9 +20,17 @@ public abstract class State : INode
         return result;
     }
 
-    protected virtual ValueTask OnEnterAsync(CancellationToken ct) => default;
+    protected virtual ValueTask OnEnterAsync(CancellationToken ct)
+    {
+        return default;
+    }
+
     protected abstract ValueTask<Result> OnRunAsync(CancellationToken ct);
-    protected virtual ValueTask OnExitAsync(CancellationToken ct) => default;
+
+    protected virtual ValueTask OnExitAsync(CancellationToken ct)
+    {
+        return default;
+    }
 }
 
 /// <summary>
@@ -33,5 +41,9 @@ public abstract class State<TAgent> : State, IAgentSettable<TAgent>
 {
     // ReSharper disable once NullableWarningSuppressionIsUsed
     protected TAgent Agent = default!;
-    public void SetAgent(TAgent agent) => Agent = agent;
+
+    public void SetAgent(TAgent agent)
+    {
+        Agent = agent;
+    }
 }

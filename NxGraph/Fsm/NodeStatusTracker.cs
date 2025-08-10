@@ -52,7 +52,11 @@ public sealed class NodeStatusTracker
     public void MarkEntered(NodeId id)
     {
         int idx = id.Index;
-        if ((uint)idx >= (uint)_length) return;
+        if ((uint)idx >= (uint)_length)
+        {
+            return;
+        }
+
         Volatile.Write(ref _statuses[idx], (byte)ExecutionStatus.Running);
         _enterTicks[idx] = Stopwatch.GetTimestamp();
     }
@@ -61,7 +65,11 @@ public sealed class NodeStatusTracker
     public void MarkExited(NodeId id, bool success)
     {
         int idx = id.Index;
-        if ((uint)idx >= (uint)_length) return;
+        if ((uint)idx >= (uint)_length)
+        {
+            return;
+        }
+
         Volatile.Write(ref _statuses[idx], success ? (byte)ExecutionStatus.Completed : (byte)ExecutionStatus.Failed);
         _exitTicks[idx] = Stopwatch.GetTimestamp();
     }
@@ -70,18 +78,25 @@ public sealed class NodeStatusTracker
     public void MarkCancelled(NodeId id)
     {
         int idx = id.Index;
-        if ((uint)idx >= (uint)_length) return;
+        if ((uint)idx >= (uint)_length)
+        {
+            return;
+        }
+
         Volatile.Write(ref _statuses[idx], (byte)ExecutionStatus.Cancelled);
         _exitTicks[idx] = Stopwatch.GetTimestamp();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void MarkTransitioned(NodeId from, NodeId to)
     {
         int fromIdx = from.Index;
         int toIdx = to.Index;
 
-        if ((uint)fromIdx >= (uint)_length || (uint)toIdx >= (uint)_length) return;
+        if ((uint)fromIdx >= (uint)_length || (uint)toIdx >= (uint)_length)
+        {
+            return;
+        }
 
         Volatile.Write(ref _statuses[fromIdx], (byte)ExecutionStatus.Transitioning);
         _exitTicks[fromIdx] = Stopwatch.GetTimestamp();
@@ -95,16 +110,26 @@ public sealed class NodeStatusTracker
     public ExecutionStatus Get(NodeId id)
     {
         int idx = id.Index;
-        return (uint)idx >= (uint)_length ? ExecutionStatus.Created : (ExecutionStatus)Volatile.Read(ref _statuses[idx]);
+        return (uint)idx >= (uint)_length
+            ? ExecutionStatus.Created
+            : (ExecutionStatus)Volatile.Read(ref _statuses[idx]);
     }
 
     public TimeSpan GetDuration(NodeId id)
     {
         int idx = id.Index;
-        if ((uint)idx >= (uint)_length) return TimeSpan.Zero;
+        if ((uint)idx >= (uint)_length)
+        {
+            return TimeSpan.Zero;
+        }
+
         long start = Volatile.Read(ref _enterTicks[idx]);
         long end = Volatile.Read(ref _exitTicks[idx]);
-        if (start == 0 || end == 0 || end < start) return TimeSpan.Zero;
+        if (start == 0 || end == 0 || end < start)
+        {
+            return TimeSpan.Zero;
+        }
+
         return TimeSpan.FromSeconds((end - start) / (double)Stopwatch.Frequency);
     }
 
@@ -113,7 +138,11 @@ public sealed class NodeStatusTracker
     /// </summary>
     public void Reset()
     {
-        if (!_initialized) return;
+        if (!_initialized)
+        {
+            return;
+        }
+
         Array.Clear(_statuses);
         Array.Clear(_enterTicks);
         Array.Clear(_exitTicks);
@@ -136,7 +165,7 @@ public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsy
 
     public ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
     {
-        _tracker.MarkExited(id, success: true);
+        _tracker.MarkExited(id, true);
         return ValueTask.CompletedTask;
     }
 
@@ -148,7 +177,7 @@ public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsy
             return ValueTask.CompletedTask;
         }
 
-        _tracker.MarkExited(id, success: false);
+        _tracker.MarkExited(id, false);
         return ValueTask.CompletedTask;
     }
 

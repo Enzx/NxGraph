@@ -18,7 +18,7 @@ public class StatelessBenchmarks
     private int _stateWithObserver;
     private int _stateTimeoutWrapper;
     private int _stateDirector;
-    
+
     // ReSharper disable NullableWarningSuppressionIsUsed
     private StateMachine<int, int> _single = null!;
     private StateMachine<int, int> _chain10 = null!;
@@ -36,11 +36,15 @@ public class StatelessBenchmarks
 
         _chain10 = new StateMachine<int, int>(() => _stateChain10, s => _stateChain10 = s);
         for (int i = 0; i < 10; i++)
+        {
             _chain10.Configure(i).Permit(TriggerNext, i + 1);
+        }
 
         _chain50 = new StateMachine<int, int>(() => _stateChain50, s => _stateChain50 = s);
         for (int i = 0; i < 50; i++)
+        {
             _chain50.Configure(i).Permit(TriggerNext, i + 1);
+        }
 
         // WithObserver: mirror NxGraph's no-op observer using async entry hooks
         // We attach a trivial async OnEntry to each state to simulate observer overhead.
@@ -66,26 +70,46 @@ public class StatelessBenchmarks
         _directorLinear10 = new StateMachine<int, int>(() => _stateDirector, s => _stateDirector = s);
         _directorLinear10.Configure(0).Permit(TriggerNext, 1);
         for (int i = 1; i < 10; i++)
+        {
             _directorLinear10.Configure(i).Permit(TriggerNext, i + 1);
+        }
     }
 
     [IterationSetup(Target = nameof(SingleTransition))]
-    public void ResetSingle() => _stateSingle = 0;
+    public void ResetSingle()
+    {
+        _stateSingle = 0;
+    }
 
     [IterationSetup(Target = nameof(Chain10))]
-    public void Reset10() => _stateChain10 = 0;
+    public void Reset10()
+    {
+        _stateChain10 = 0;
+    }
 
     [IterationSetup(Target = nameof(Chain50))]
-    public void Reset50() => _stateChain50 = 0;
+    public void Reset50()
+    {
+        _stateChain50 = 0;
+    }
 
     [IterationSetup(Target = nameof(Chain10_WithObserver))]
-    public void ResetObserver() => _stateWithObserver = 0;
+    public void ResetObserver()
+    {
+        _stateWithObserver = 0;
+    }
 
     [IterationSetup(Target = nameof(WithTimeoutWrapper))]
-    public void ResetTimeout() => _stateTimeoutWrapper = 0;
+    public void ResetTimeout()
+    {
+        _stateTimeoutWrapper = 0;
+    }
 
     [IterationSetup(Target = nameof(DirectorLinear10))]
-    public void ResetDirector() => _stateDirector = 0;
+    public void ResetDirector()
+    {
+        _stateDirector = 0;
+    }
 
     // ---- Benchmarks ----
 
@@ -102,7 +126,10 @@ public class StatelessBenchmarks
     public async Task<int> Chain10()
     {
         for (int i = 0; i < 10; i++)
+        {
             await _chain10.FireAsync(TriggerNext);
+        }
+
         return _stateChain10;
     }
 
@@ -111,7 +138,10 @@ public class StatelessBenchmarks
     public async Task<int> Chain50()
     {
         for (int i = 0; i < 50; i++)
+        {
             await _chain50.FireAsync(TriggerNext);
+        }
+
         return _stateChain50;
     }
 
@@ -120,7 +150,10 @@ public class StatelessBenchmarks
     public async Task<int> Chain10_WithObserver()
     {
         for (int i = 0; i < 10; i++)
+        {
             await _withObserver.FireAsync(TriggerNext);
+        }
+
         return _stateWithObserver;
     }
 
@@ -138,7 +171,10 @@ public class StatelessBenchmarks
     {
         //emulate a director sequencing nodes
         for (int i = 0; i < 10; i++)
+        {
             await _directorLinear10.FireAsync(TriggerNext);
+        }
+
         return _stateDirector;
     }
 }
