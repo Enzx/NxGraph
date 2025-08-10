@@ -9,7 +9,7 @@ namespace NxGraph.Authoring;
 /// <summary>
 /// A builder class for constructing a finite state machine graph.
 /// </summary>
-public sealed class GraphBuilder
+public sealed partial class GraphBuilder
 {
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private Node? _startNode;
@@ -68,13 +68,8 @@ public sealed class GraphBuilder
     /// </summary>
     /// <returns>A <see cref="Graph"/> instance of a graph with the defined nodes and transitions.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no start node has been added or if there are inconsistencies in the graph structure.</exception>
-    public Graph Build()
+    public Graph InternalBuild()
     {
-        if (_startNode is null)
-        {
-            throw new InvalidOperationException("No start node has been added to the graph.");
-        }
-
         int maxIndex = 0;
         foreach (NodeId id in _nodes.Keys)
         {
@@ -199,6 +194,22 @@ public sealed class GraphBuilder
                 _transitions[transition.Key] = new Transition(newId);
             }
         }
+    }
+
+    public IReadOnlyList<NodeId>? GetAllNodeIds()
+    {
+        if (_nodes.Count == 0 || _startNode == null)
+        {
+            return null;
+        }
+
+        List<NodeId> ids = new(_nodes.Keys.Count) { _startNode.Id };
+        foreach (NodeId id in _nodes.Keys)
+        {
+            ids.Add(id);
+        }
+
+        return ids;
     }
 }
 

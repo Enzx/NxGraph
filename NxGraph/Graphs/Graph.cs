@@ -11,8 +11,10 @@ public sealed class Graph : IGraph
 
     internal Graph(Node start, Node[] nodes, Transition[] edges)
     {
+        ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(edges);
+        
         if (start.Id != NodeId.Start)
         {
             throw new ArgumentException("Start node must be NodeId.Start (index 0).", nameof(start));
