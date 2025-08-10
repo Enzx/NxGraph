@@ -186,6 +186,9 @@ dotnet add package NxGraph
 * [ ] Graph validation & analyzers
 * [ ] Deterministic replay for debugging
 * [ ] Virtual-time testing
+* [ ] Graph visualizer with real-time view
+* [ ] Persistence: Binary and Text Serialization
+* [ ] Visual Graph Editor?
 * [ ] Unity Support?
 * [ ] Synchronous API?
 
