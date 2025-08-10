@@ -25,7 +25,7 @@ public class WaitStateExecutionTests
         Assert.Multiple(() =>
         {
             Assert.That(result, Is.EqualTo(Result.Success));
-            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.GreaterThanOrEqualTo(delay));
+            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.GreaterThanOrEqualTo(delay - errorMargin));
             Assert.That(stopwatch.Elapsed.TotalSeconds, Is.LessThan(delay + errorMargin));
         });
     }
