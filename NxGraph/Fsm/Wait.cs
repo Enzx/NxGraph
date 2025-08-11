@@ -1,5 +1,8 @@
 ﻿namespace NxGraph.Fsm;
 
+/// <summary>
+/// Represents a state that waits for a specified duration before completing.
+/// </summary>
 public static class Wait
 {
     /// <summary>

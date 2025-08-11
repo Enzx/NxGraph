@@ -22,7 +22,7 @@ public class NxFsmBenchmarks
     private StateMachine _directorLinear10 = null!;
     // ReSharper restore NullableWarningSuppressionIsUsed
 
-    private sealed class NoopObserver : IAsyncStateObserver
+    private sealed class NoopObserver : IAsyncStateMachineObserver
     {
         public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
         {

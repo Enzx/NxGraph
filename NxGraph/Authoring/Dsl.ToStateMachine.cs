@@ -12,13 +12,13 @@ public static partial class Dsl
     /// <param name="prev">The previous state token, which is the source of the transition.</param>
     /// <param name="observer">An optional observer that can be used to monitor the state machine's execution.</param>
     /// <returns>A state machine built from the previous state token.</returns>
-    public static StateMachine ToStateMachine(this StateToken prev, IAsyncStateObserver? observer = null)
+    public static StateMachine ToStateMachine(this StateToken prev, IAsyncStateMachineObserver? observer = null)
     {
         return prev.Build().ToStateMachine(observer);
     }
 
     public static StateMachine<TAgent> ToStateMachine<TAgent>(this StateToken prev,
-        IAsyncStateObserver? observer = null)
+        IAsyncStateMachineObserver? observer = null)
     {
         return prev.Build().ToStateMachine<TAgent>(observer);
     }
@@ -52,20 +52,20 @@ public static partial class Dsl
     }
 
     public static StateMachine<TAgent> ToStateMachine<TAgent>(this StartToken startToken,
-        IAsyncStateObserver? observer = null)
+        IAsyncStateMachineObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(startToken);
         return startToken.Builder.Build().ToStateMachine<TAgent>(observer);
     }
 
-    public static StateMachine ToStateMachine(this BranchBuilder branch, IAsyncStateObserver? observer = null)
+    public static StateMachine ToStateMachine(this BranchBuilder branch, IAsyncStateMachineObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(branch);
         return branch.Builder.Build().ToStateMachine(observer);
     }
 
     public static StateMachine<TAgent> ToStateMachine<TAgent>(this BranchBuilder branch,
-        IAsyncStateObserver? observer = null)
+        IAsyncStateMachineObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(branch);
         return branch.Builder.Build().ToStateMachine<TAgent>(observer);

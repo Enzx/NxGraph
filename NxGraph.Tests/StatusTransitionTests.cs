@@ -12,7 +12,7 @@ public class StatusTransitionTests
         StateMachine fsm = GraphBuilder
             .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
             .ToStateMachine();
-
+        fsm.SetAutoReset(false);
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Created));
         ValueTask<Result> t = fsm.ExecuteAsync();
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Running));
@@ -25,17 +25,19 @@ public class StatusTransitionTests
     }
 
     [Test]
-    public void status_sets_cancelled_on_cancellation()
+    public async Task status_sets_cancelled_on_cancellation()
     {
         CancellationTokenSource cts = new(10);
         StateMachine fsm = GraphBuilder
             .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
             .ToStateMachine();
-        Assert.ThrowsAsync<TaskCanceledException>(async () =>
-        {
-            await fsm.ExecuteAsync(cts.Token);
-            await cts.CancelAsync();
-        });
+        fsm.SetAutoReset(false);
+
+        Assert.That(async () => await fsm.ExecuteAsync(cts.Token),
+            Throws.InstanceOf<OperationCanceledException>());
+
+        await cts.CancelAsync();
+
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Cancelled));
     }
 
@@ -45,7 +47,7 @@ public class StatusTransitionTests
         StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(_ => throw new InvalidOperationException("boom")))
             .ToStateMachine();
-
+        fsm.SetAutoReset(false);
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
     }

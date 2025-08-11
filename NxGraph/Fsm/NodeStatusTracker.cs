@@ -153,7 +153,7 @@ public sealed class NodeStatusTracker
 /// Observer that mirrors node lifecycle events into a <see cref="NodeStatusTracker"/>.
 /// Plug this into your StateMachine to get live status without touching the FSM loop.
 /// </summary>
-public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsyncStateObserver
+public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsyncStateMachineObserver
 {
     private readonly NodeStatusTracker _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
 
