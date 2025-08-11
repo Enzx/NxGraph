@@ -30,4 +30,15 @@ public class AgentPropagationTests
 
         Assert.That(agent.Visited, Is.True);
     }
+
+    [Test]
+    public void agent_should_throw_exception_if_fsm_has_no_generic_state()
+    {
+        DummyAgent agent = new();
+        StateMachine<DummyAgent> fsm = GraphBuilder
+            .StartWith(_ => ResultHelpers.Success)
+            .ToStateMachine<DummyAgent>();
+
+        Assert.Throws<InvalidOperationException>(() => fsm.SetAgent(agent));
+    }
 }

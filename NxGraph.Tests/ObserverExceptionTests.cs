@@ -8,7 +8,7 @@ namespace NxGraph.Tests;
 [Category("observer_exceptions")]
 public class ObserverExceptionTests
 {
-    private sealed class ExplosiveObserver : IAsyncStateObserver
+    private sealed class ExplosiveObserver : IAsyncStateMachineObserver
     {
         public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
         {

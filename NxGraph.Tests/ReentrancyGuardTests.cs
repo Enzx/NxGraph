@@ -13,11 +13,12 @@ public class ReentrancyGuardTests
         StateMachine fsm = GraphBuilder
             .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
             .ToStateMachine();
-
+        fsm.SetAutoReset(false);
         ValueTask<Result> first = fsm.ExecuteAsync();
 
-        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Running));
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+        SpinWait.SpinUntil(() => fsm.Status == ExecutionStatus.Running, 1.Seconds());
+
+        Assert.That(async () => await fsm.ExecuteAsync(), Throws.InvalidOperationException);
 
         blockTcs.SetResult();
         Assert.DoesNotThrowAsync(async () => await first);

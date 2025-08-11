@@ -9,14 +9,14 @@ namespace NxGraph.Fsm;
 /// returns <see cref="Result.Failure"/> or throws <see cref="TimeoutException"/>,
 /// depending on <see cref="TimeoutBehavior"/>.
 /// </summary>
-public class TimeoutNode : INode
+public class TimeoutState : INode
 {
     private readonly INode _inner;
     private readonly TimeSpan _timeout;
     private readonly TimeoutBehavior _behavior;
     private readonly Action<object?> _cachedCancelCallback = CancelCallback;
 
-    public TimeoutNode(INode inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
+    public TimeoutState(INode inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         if (timeout <= TimeSpan.Zero)
@@ -116,13 +116,13 @@ public static class Timeout
     /// <summary>Wrap an existing node with a timeout.</summary>
     public static INode Wrap(INode node, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutNode(node, timeout, behavior);
+        return new TimeoutState(node, timeout, behavior);
     }
 
     /// <summary>Wrap a delegate as a node with a timeout (convenience overload).</summary>
     public static INode For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutNode(new RelayState(run), timeout, behavior);
+        return new TimeoutState(new RelayState(run), timeout, behavior);
     }
 }

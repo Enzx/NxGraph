@@ -6,7 +6,7 @@ using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
-IAsyncStateObserver observer = new ConsoleStateObserver();
+IAsyncStateMachineObserver observer = new ConsoleStateObserver();
 Console.WriteLine("Simple FSM Example");
 Console.WriteLine();
 StateMachine fsm = GraphBuilder
@@ -41,7 +41,7 @@ return 0;
 
 namespace Example
 {
-    public class ConsoleStateObserver : IAsyncStateObserver
+    public class ConsoleStateObserver : IAsyncStateMachineObserver
     {
         public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
         {

@@ -89,7 +89,8 @@ public sealed partial class GraphBuilder
             edges[i] = Transition.Empty;
         }
 
-        nodes[NodeId.Start.Index] = _startNode;
+        nodes[NodeId.Start.Index] =
+            _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
 
         // Place the rest (null-safe checks)
         foreach ((NodeId id, INode logic) in _nodes)
@@ -121,7 +122,8 @@ public sealed partial class GraphBuilder
             edges[idx] = t;
         }
 
-        return new Graph(nodes[0], nodes, edges);
+        NodeId graphId = _next.Next();
+        return new Graph(graphId, nodes[0], nodes, edges);
     }
 
 
@@ -196,6 +198,17 @@ public sealed partial class GraphBuilder
         }
     }
 
+    public static void SetName(Graph graph, string name)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Graph name cannot be null or whitespace.", nameof(name));
+        }
+
+        graph.Id = graph.Id.WithName(name);
+    }
+
     public IReadOnlyList<NodeId>? GetAllNodeIds()
     {
         if (_nodes.Count == 0 || _startNode == null)
@@ -239,7 +252,7 @@ public static class GraphBuilderExtensions
     /// <param name="graph">The Graph to be converted.</param>
     /// <param name="observer">Optional observer for state changes.</param>
     /// <returns>A StateMachine instance.</returns>
-    public static StateMachine ToStateMachine(this Graph graph, IAsyncStateObserver? observer = null)
+    public static StateMachine ToStateMachine(this Graph graph, IAsyncStateMachineObserver? observer = null)
     {
         return new StateMachine(graph, observer);
     }
@@ -251,7 +264,8 @@ public static class GraphBuilderExtensions
     /// <param name="observer">Optional observer for state changes.</param>
     /// <typeparam name="TAgent">The type of the agent to be used in the state machine.</typeparam>
     /// <returns>A StateMachine instance with the specified agent type.</returns>
-    public static StateMachine<TAgent> ToStateMachine<TAgent>(this Graph graph, IAsyncStateObserver? observer = null)
+    public static StateMachine<TAgent> ToStateMachine<TAgent>(this Graph graph,
+        IAsyncStateMachineObserver? observer = null)
     {
         return new StateMachine<TAgent>(graph, observer);
     }

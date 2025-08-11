@@ -32,6 +32,18 @@ public static partial class Dsl
         return prev;
     }
 
+    public static Graph SetName(this Graph graph, string name)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
+        }
+
+        graph.Id.WithName(name);
+        return graph;
+    }
+
 
     /// <summary>
     /// Creates a conditional branch in the FSM graph.
