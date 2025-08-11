@@ -32,7 +32,7 @@ namespace NxGraph.Fsm;
 ///  await stateMachine.ExecuteAsync();
 ///  ```
 /// </example>
-public interface IAsyncStateObserver
+public interface IAsyncStateMachineObserver
 {
     ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
     {
@@ -50,6 +50,34 @@ public interface IAsyncStateObserver
     }
 
     ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+    {
+        return default;
+    }
+    
+    //--- State Machine Lifecycle Events ---
+
+    ValueTask OnStateMachineReset(NodeId graphId, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnStateMachineStarted(NodeId graphId, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnStateMachineCompleted(NodeId graphId, Result result, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnStateMachineCancelled(NodeId graphId, CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask StateMachineStatusChanged(NodeId graphId, ExecutionStatus prev, ExecutionStatus next,
+        CancellationToken ct = default)
     {
         return default;
     }
