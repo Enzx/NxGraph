@@ -118,7 +118,7 @@ namespace NxGraph.Fsm
                 if (_observer is not null)
                     await _observer.OnStateMachineCancelled(Graph.Id, ct).ConfigureAwait(false);
 
-                if (_autoReset) TransitionToReady();
+                if (_autoReset) await Reset(ct);
 
                 throw;
             }
@@ -133,7 +133,7 @@ namespace NxGraph.Fsm
                 if (_observer is not null)
                     await _observer.OnStateMachineCompleted(Graph.Id, Result.Failure, ct).ConfigureAwait(false);
 
-                if (_autoReset) TransitionToReady();
+                if (_autoReset) await Reset(ct);
 
                 throw;
             }
@@ -277,15 +277,6 @@ namespace NxGraph.Fsm
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(next), next, null);
-            }
-        }
-
-        private void TransitionToReady()
-        {
-            lock (_lifecycleLock)
-            {
-                _current = _initial;
-                _status = ExecutionStatus.Ready;
             }
         }
     }
