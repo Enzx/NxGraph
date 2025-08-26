@@ -15,7 +15,7 @@ public static class FsmDsl
     /// </summary>
     /// <param name="logic">The logic to be executed in the start state.</param>
     /// <returns>A <see cref="StateToken"/> representing the start state of the FSM graph.</returns>
-    public static StateToken StartWith(INode logic)
+    public static StateToken StartWith(ILogic logic)
     {
         GraphBuilder builder = new();
         NodeId id = builder.AddNode(logic, true);

@@ -1,6 +1,6 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using Example;
+using NxFSM.Examples;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
@@ -29,6 +29,8 @@ StateMachine fsm = GraphBuilder
 
 Result result = await fsm.ExecuteAsync();
 
+await SerializationExample.Run();
+
 Console.WriteLine($"Simple FSM execution result: {result}");
 Console.WriteLine();
 Console.WriteLine();
@@ -39,7 +41,7 @@ await aiEnemy.ExecuteAsync();
 return 0;
 
 
-namespace Example
+namespace NxFSM.Examples
 {
     public class ConsoleStateObserver : IAsyncStateMachineObserver
     {

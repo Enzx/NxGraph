@@ -5,7 +5,7 @@ namespace NxGraph.Fsm;
 /// <summary>
 /// Base class for all states in a finite state machine.
 /// </summary>
-public abstract class State : INode
+public abstract class State : ILogic
 {
     /// <summary>
     /// Executes the state asynchronously, entering and exiting the state as needed.

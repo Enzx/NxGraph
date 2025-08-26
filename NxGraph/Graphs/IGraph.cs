@@ -14,6 +14,11 @@ public interface IGraph
     /// Represents the total number of nodes in the graph, including the start node.
     /// </summary>
     int NodeCount { get; }
+    
+    /// <summary>
+    /// Represents the total number of transitions in the graph, which are connections between nodes.
+    /// </summary>
+    int TransitionCount { get; }
     /// <summary>
     /// Attempts to retrieve the transition from a given node.
     /// </summary>

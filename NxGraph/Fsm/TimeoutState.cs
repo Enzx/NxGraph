@@ -4,19 +4,19 @@ using NxGraph.Graphs;
 namespace NxGraph.Fsm;
 
 /// <summary>
-/// Wraps any <see cref="INode"/> and enforces a maximum execution time.
+/// Wraps any <see cref="ILogic"/> and enforces a maximum execution time.
 /// If the inner node does not complete within the timeout, the wrapper either
 /// returns <see cref="Result.Failure"/> or throws <see cref="TimeoutException"/>,
 /// depending on <see cref="TimeoutBehavior"/>.
 /// </summary>
-public class TimeoutState : INode
+public class TimeoutState : ILogic
 {
-    private readonly INode _inner;
+    private readonly ILogic _inner;
     private readonly TimeSpan _timeout;
     private readonly TimeoutBehavior _behavior;
     private readonly Action<object?> _cachedCancelCallback = CancelCallback;
 
-    public TimeoutState(INode inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
+    public TimeoutState(ILogic inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         if (timeout <= TimeSpan.Zero)
@@ -114,13 +114,13 @@ public class TimeoutState : INode
 public static class Timeout
 {
     /// <summary>Wrap an existing node with a timeout.</summary>
-    public static INode Wrap(INode node, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
+    public static ILogic Wrap(ILogic logic, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutState(node, timeout, behavior);
+        return new TimeoutState(logic, timeout, behavior);
     }
 
     /// <summary>Wrap a delegate as a node with a timeout (convenience overload).</summary>
-    public static INode For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
+    public static ILogic For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         return new TimeoutState(new RelayState(run), timeout, behavior);
