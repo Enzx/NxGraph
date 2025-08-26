@@ -14,12 +14,12 @@ public sealed partial class GraphBuilder
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private Node? _startNode;
 
-    private readonly Dictionary<NodeId, INode> _nodes = new(); // non-start nodes only
-    private readonly Dictionary<INode, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<NodeId, ILogic> _nodes = new(); // non-start nodes only
+    private readonly Dictionary<ILogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
-    public NodeId AddNode(INode logic, bool isStart = false)
+    public NodeId AddNode(ILogic logic, bool isStart = false)
     {
         ArgumentNullException.ThrowIfNull(logic);
 
@@ -93,7 +93,7 @@ public sealed partial class GraphBuilder
             _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
 
         // Place the rest (null-safe checks)
-        foreach ((NodeId id, INode logic) in _nodes)
+        foreach ((NodeId id, ILogic logic) in _nodes)
         {
             int idx = id.Index;
 
@@ -123,24 +123,24 @@ public sealed partial class GraphBuilder
         }
 
         NodeId graphId = _next.Next();
-        return new Graph(graphId, nodes[0], nodes, edges);
+        return new Graph(graphId, nodes, edges);
     }
 
 
     /// <summary>
     /// Creates a new state token that starts with the given node.
     /// </summary>
-    /// <param name="startNode">The node that will be the starting point of the state token.</param>
+    /// <param name="startLogic">The node that will be the starting point of the state token.</param>
     /// <returns>A new StateToken initialized with the specified start node.</returns>
-    public static StateToken StartWith(INode startNode)
+    public static StateToken StartWith(ILogic startLogic)
     {
-        return FsmDsl.StartWith(startNode);
+        return FsmDsl.StartWith(startLogic);
     }
 
     public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
     {
-        INode startNode = new RelayState(run);
-        return FsmDsl.StartWith(startNode);
+        ILogic startLogic = new RelayState(run);
+        return FsmDsl.StartWith(startLogic);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public sealed partial class GraphBuilder
             return;
         }
 
-        if (_nodes.Remove(newId, out INode? node))
+        if (_nodes.Remove(newId, out ILogic? node))
         {
             newId = newId.WithName(name);
 

@@ -32,7 +32,7 @@ public static partial class Dsl
         }
 
 
-        public BranchBuilder Then(INode logic)
+        public BranchBuilder Then(ILogic logic)
         {
             NodeId firstTrue = _builder.AddNode(logic);
             _builder.AddTransition(_truePad, firstTrue);
@@ -54,7 +54,7 @@ public static partial class Dsl
 
         public GraphBuilder Builder { get; }
 
-        public BranchBuilder To(INode logic)
+        public BranchBuilder To(ILogic logic)
         {
             NodeId next = Builder.AddNode(logic);
             Builder.AddTransition(_tip, next);
@@ -66,7 +66,7 @@ public static partial class Dsl
             return To(Wait.For(delay));
         }
 
-        public BranchEnd Else(INode logic)
+        public BranchEnd Else(ILogic logic)
         {
             NodeId firstElse = Builder.AddNode(logic);
             Builder.AddTransition(_falsePad, firstElse);
@@ -86,7 +86,7 @@ public static partial class Dsl
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        internal BranchEnd To(INode logic)
+        internal BranchEnd To(ILogic logic)
         {
             NodeId next = _b.AddNode(logic);
             _b.AddTransition(_tip, next);

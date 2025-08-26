@@ -36,7 +36,7 @@ public static partial class Dsl
         /// <summary>
         /// Adds a case to the switch statement.
         /// </summary>
-        public SwitchBuilder<TKey> Case(TKey key, INode logic)
+        public SwitchBuilder<TKey> Case(TKey key, ILogic logic)
         {
             NodeId id = _builder.AddNode(logic);
             _map[key] = id;
@@ -48,7 +48,7 @@ public static partial class Dsl
         /// </summary>
         /// <param name="logic">The logic to execute if no case matches.</param>
         /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>
-        public SwitchBuilder<TKey> Default(INode logic)
+        public SwitchBuilder<TKey> Default(ILogic logic)
         {
             NodeId defaultNode = _builder.AddNode(logic);
             _switchNode.SetDefault(defaultNode);

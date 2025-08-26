@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <PackageReference Include="coverlet.collector" Version="6.0.0"/>
+        <PackageReference Include="MessagePack" Version="3.1.4" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0"/>
         <PackageReference Include="NUnit" Version="3.14.0"/>
         <PackageReference Include="NUnit.Analyzers" Version="3.9.0"/>
@@ -22,8 +23,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\NxGraph.Serialization\NxGraph.Serialization.csproj" />
-        <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>
+      <ProjectReference Include="..\NxGraph.Serialization\NxGraph.Serialization.csproj" />
+      <ProjectReference Include="..\NxGraph\NxGraph.csproj" />
     </ItemGroup>
 
 </Project>

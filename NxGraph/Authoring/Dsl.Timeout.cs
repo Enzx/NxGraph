@@ -32,14 +32,14 @@ public static partial class Dsl
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         ArgumentNullException.ThrowIfNull(run);
-        INode wrapped = Timeout.Wrap(new RelayState(run), timeout, behavior);
+        ILogic wrapped = Timeout.Wrap(new RelayState(run), timeout, behavior);
         return prev.To(wrapped);
     }
 
     /// <summary>
     /// Utility to wrap an existing node logic in-place with a timeout (when you already have a node instance).
     /// </summary>
-    public static StateToken ToWithTimeout(this StateToken prev, INode nextStateLogic, TimeSpan timeout,
+    public static StateToken ToWithTimeout(this StateToken prev, ILogic nextStateLogic, TimeSpan timeout,
         TimeoutBehavior behavior)
     {
         return prev.To(Timeout.Wrap(nextStateLogic, timeout, behavior));
@@ -53,11 +53,11 @@ public static partial class Dsl
     /// <param name="timeout">The duration of the timeout for the next state logic.</param>
     /// <param name="behavior">The behavior to apply when the timeout occurs, such as failing or skipping.</param>
     /// <returns>A new state token that represents the next state logic wrapped in a timeout.</returns>
-    public static StateToken ToWithTimeout(this StartToken prev, INode nextStateLogic, TimeSpan timeout,
+    public static StateToken ToWithTimeout(this StartToken prev, ILogic nextStateLogic, TimeSpan timeout,
         TimeoutBehavior behavior)
     {
         ArgumentNullException.ThrowIfNull(nextStateLogic);
-        INode wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
+        ILogic wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }
@@ -76,8 +76,8 @@ public static partial class Dsl
         TimeoutBehavior behavior)
     {
         ArgumentNullException.ThrowIfNull(run);
-        INode nextStateLogic = new RelayState(run);
-        INode wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
+        ILogic nextStateLogic = new RelayState(run);
+        ILogic wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }

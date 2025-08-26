@@ -1,13 +1,14 @@
 ﻿namespace NxGraph.Graphs;
 
-public readonly struct NodeId : IEquatable<NodeId>
+public readonly struct NodeId(int index) : IEquatable<NodeId>
 {
-    private NodeId(int index)
+    public NodeId(int index, string? name)
+        : this(index)
     {
-        Index = index;
+        Name = name ?? string.Empty;
     }
 
-    private NodeId(NodeId id, string name)
+    public NodeId(NodeId id, string name)
         : this(id.Index)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
@@ -18,7 +19,7 @@ public readonly struct NodeId : IEquatable<NodeId>
     {
     }
 
-    public readonly int Index;
+    public readonly int Index = index;
 
     public readonly string Name { get; private init; } = string.Empty;
 

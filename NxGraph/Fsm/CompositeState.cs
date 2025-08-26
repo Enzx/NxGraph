@@ -6,7 +6,7 @@ namespace NxGraph.Fsm;
 /// A composite state that contains a single child node.
 /// </summary>
 /// <param name="child">The child node to execute.</param>
-public class CompositeState(INode child) : State
+public class CompositeState(ILogic child) : State
 {
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
     {

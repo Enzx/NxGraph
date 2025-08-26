@@ -29,16 +29,24 @@ public sealed class Graph : IGraph
     /// </summary>
     public int NodeCount => _nodes.Length;
 
+    public int TransitionCount => _edges.Length;
 
-    internal Graph(NodeId id, Node start, Node[] nodes, Transition[] edges)
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Graph"/> class with the specified nodes and edges.
+    /// </summary>
+    /// <param name="id">The unique identifier for the graph.</param>
+    /// <param name="nodes">The array of nodes in the graph. Must be non-empty and start with the start node at index 0.</param>
+    /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
+    /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
+    public Graph(NodeId id, Node[] nodes, Transition[] edges)
     {
-        ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(edges);
 
-        if (start.Id != NodeId.Start)
+        if (nodes[0].Id != NodeId.Start)
         {
-            throw new ArgumentException("Start node must be NodeId.Start (index 0).", nameof(start));
+            throw new ArgumentException("Start node (nodes[0]) Id must be NodeId.Start (index 0).", nameof(nodes));
         }
 
         if (nodes.Length == 0 || edges.Length == 0 || nodes.Length != edges.Length)
@@ -47,7 +55,7 @@ public sealed class Graph : IGraph
         }
 
         Id = id;
-        StartNode = start;
+        StartNode = nodes[0];
         _nodes = nodes;
         _edges = edges;
     }
@@ -113,7 +121,7 @@ public sealed class Graph : IGraph
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
         {
-            INode logic = _nodes[i].Logic;
+            ILogic logic = _nodes[i].Logic;
             if (logic is not IAgentSettable<TAgent> settable)
             {
                 continue;
@@ -127,5 +135,27 @@ public sealed class Graph : IGraph
         {
             throw new InvalidOperationException($"No nodes in the graph implement {nameof(IAgentSettable<TAgent>)}.");
         }
+    }
+
+    public Node GetNodeByIndex(int index)
+    {
+        if (index < 0 || index >= _nodes.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index),
+                "Index must be within the range of the graph's nodes.");
+        }
+
+        return _nodes[index];
+    }
+
+    public Transition GetTransitionByIndex(int index)
+    {
+        if (index < 0 || index >= _edges.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index),
+                "Index must be within the range of the graph's transitions.");
+        }
+
+        return _edges[index];
     }
 }
