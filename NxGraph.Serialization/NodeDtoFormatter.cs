@@ -4,7 +4,7 @@ using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public sealed class NodeDtoFormatter : GraphEntityFormatter<INodeDto>
+internal sealed class NodeDtoFormatter : GraphEntityFormatter<INodeDto>
 {
     public static readonly NodeDtoFormatter Instance = new();
 

@@ -1,6 +1,5 @@
 ﻿using NxGraph.Authoring;
 using NxGraph.Graphs;
-using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization.Tests;
 
@@ -56,139 +55,18 @@ public class GraphSerializerTestsTextCodec
         });
     }
 
-    [Test]
-    public void ToDto_emits_text_nodes_and_correct_transitions()
-    {
-        Graph graph = BuildChain("a", "b", "c");
-        GraphDto dto = GraphSerializer.ToDto(graph);
+    
 
-        Assert.That(dto.Nodes, Has.Length.EqualTo(3));
-        Assert.That(dto.Transitions, Has.Length.EqualTo(3));
-
-        // Node DTO types
-        Assert.That(dto.Nodes[0], Is.TypeOf<NodeTextDto>());
-        Assert.That(dto.Nodes[1], Is.TypeOf<NodeTextDto>());
-        Assert.That(dto.Nodes[2], Is.TypeOf<NodeTextDto>());
-
-        // Transition destinations: 0->1, 1->2, 2->-1
-        Assert.Multiple(() =>
-        {
-            Assert.That(dto.Transitions[0].Destination, Is.EqualTo(1));
-            Assert.That(dto.Transitions[1].Destination, Is.EqualTo(2));
-            Assert.That(dto.Transitions[2].Destination, Is.EqualTo(-1));
-        });
-    }
-
-    [Test]
-    public void FromDto_ignores_invalid_or_negative_destinations()
-    {
-        // Create a mixed transition set: -1 (empty), 99 (out-of-range), 1 (valid)
-        INodeDto[] nodes =
-        [
-            new NodeTextDto("n0", "{}"),
-            new NodeTextDto("n1", "{}"),
-            new NodeTextDto("n2", "{}")
-        ];
-
-        GraphDto dto = new(
-            nodes,
-            [
-                new TransitionDto(-1), // empty
-                new TransitionDto(99), // ignored -> empty
-                new TransitionDto(1) // valid
-            ],
-            "MyGraph"
-        );
-
-        Graph graph = GraphSerializer.FromDto(dto);
-
-        Assert.That(graph.Id.Name, Is.EqualTo("MyGraph"));
-
-        Transition t0 = graph.GetTransitionByIndex(0);
-        Transition t1 = graph.GetTransitionByIndex(1);
-        Transition t2 = graph.GetTransitionByIndex(2);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(t0.IsEmpty, Is.True);
-            Assert.That(t1.IsEmpty, Is.True);
-            Assert.That(t2.IsEmpty, Is.False);
-            Assert.That(t2.Destination.Index, Is.EqualTo(1));
-        });
-    }
-
-    [Test]
-    public void FromDto_handles_shorter_transition_array()
-    {
-        // 3 nodes, only 1 transition supplied; others should default to Empty
-        INodeDto[] nodes =
-        [
-            new NodeTextDto("n0", "{}"),
-            new NodeTextDto("n1", "{}"),
-            new NodeTextDto("n2", "{}")
-        ];
-        GraphDto dto = new(nodes, [
-                new TransitionDto(1),
-                new TransitionDto(NodeId.Default.Index),
-                new TransitionDto(NodeId.Default.Index)
-            ],
-            "Shorty");
-
-        Graph graph = GraphSerializer.FromDto(dto);
-
-        Assert.That(graph.TransitionCount, Is.EqualTo(3));
-        Assert.Multiple(() =>
-        {
-            Assert.That(graph.GetTransitionByIndex(0).IsEmpty, Is.False);
-            Assert.That(graph.GetTransitionByIndex(0).Destination.Index, Is.EqualTo(1));
-            Assert.That(graph.GetTransitionByIndex(1).IsEmpty, Is.True);
-            Assert.That(graph.GetTransitionByIndex(2).IsEmpty, Is.True);
-        });
-    }
-
-    [Test]
-    public void GraphDto_should_throw_exception_for_mismatch_nodes_edges_length()
-    {
-        INodeDto[] nodes =
-        [
-            new NodeTextDto("n0", "{}"),
-            new NodeTextDto("n1", "{}"),
-            new NodeTextDto("n2", "{}")
-        ];
-        Assert.Throws<ArgumentException>(() =>
-        {
-            _ = new GraphDto(nodes, [
-                    new TransitionDto(1),
-                ],
-                "ExceptionCase");
-        });
-    }
+    
 
 
-    [Test]
-    public void FromDto_throws_when_no_nodes()
-    {
-        GraphDto dto = new([], [], "Empty");
-        Assert.Throws<InvalidOperationException>(() => GraphSerializer.FromDto(dto));
-    }
+    
 
     [Test]
     public void SetLogicCodec_throws_on_null()
     {
         // ReSharper disable once NullableWarningSuppressionIsUsed
         Assert.Throws<ArgumentNullException>(() => GraphSerializer.SetLogicCodec<string>(null!));
-    }
-
-    [Test]
-    public void ToDto_throws_with_incompatible_codec_type()
-    {
-        // Install an incompatible codec (int), ToDto should fail with "No ILogicCodec configured..."
-        GraphSerializer.SetLogicCodec(new DummyLogicIntCodec());
-
-        Graph graph = BuildChain("x", "y");
-        InvalidOperationException?
-            ex = Assert.Throws<InvalidOperationException>(() => GraphSerializer.ToDto(graph));
-        StringAssert.Contains("No ILogicCodec configured", ex.Message);
     }
 
     [Test]

@@ -3,9 +3,9 @@ using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
+internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
 {
-    public static readonly GraphDtoFormatter Instance = new();
+    internal static readonly GraphDtoFormatter Instance = new();
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {

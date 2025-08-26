@@ -57,7 +57,26 @@ public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerial
         return FromDto(dto);
     }
 
-    public static GraphDto ToDto(Graph graph)
+    public static async ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(destination);
+
+        GraphDto dto = ToDto(graph);
+
+        await MessagePackSerializer.SerializeAsync(destination, dto, Options, ct);
+
+        await destination.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    public static async ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        GraphDto dto = await MessagePackSerializer.DeserializeAsync<GraphDto>(source, Options, ct);
+        return FromDto(dto);
+    }
+
+    private static GraphDto ToDto(Graph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
         if (_codec is NullLogicCodec)
@@ -93,7 +112,7 @@ public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerial
     }
 
 
-    public static Graph FromDto(GraphDto dto)
+    private static Graph FromDto(GraphDto dto)
     {
         ArgumentNullException.ThrowIfNull(dto);
 
@@ -135,23 +154,17 @@ public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerial
         NodeId graphId = new(0, dto.Name ?? string.Empty);
         return new Graph(graphId, nodes, edges);
     }
+}
 
-    public static async ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default)
+public static class GraphSerializerExtensions
+{
+    public static IGraphJsonSerializer AsJsonSerializer(this GraphSerializer serializer)
     {
-        ArgumentNullException.ThrowIfNull(graph);
-        ArgumentNullException.ThrowIfNull(destination);
-
-        GraphDto dto = ToDto(graph);
-
-        await MessagePackSerializer.SerializeAsync(destination, dto, Options, ct);
-
-        await destination.FlushAsync(ct).ConfigureAwait(false);
+        return serializer;
     }
 
-    public static async ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default)
+    public static IGraphBinarySerializer AsBinarySerializer(this GraphSerializer serializer)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        GraphDto dto = await MessagePackSerializer.DeserializeAsync<GraphDto>(source, Options, ct);
-        return FromDto(dto);
+        return serializer;
     }
 }

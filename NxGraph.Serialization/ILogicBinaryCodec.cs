@@ -2,6 +2,4 @@
 
 namespace NxGraph.Serialization;
 
-internal sealed class NullLogicCodec : ILogicCodec
-{
-}
+public interface ILogicBinaryCodec : ILogicCodec<ReadOnlyMemory<byte>>;

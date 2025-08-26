@@ -1,10 +1,9 @@
 ﻿using System.Text;
 using NxGraph.Graphs;
-using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization.Tests;
 
-public class DummyLogicBinaryCodec : ILogicCodec<ReadOnlyMemory<byte>>
+public class DummyLogicBinaryCodec : ILogicBinaryCodec
 {
     public ILogic Deserialize(ReadOnlyMemory<byte> payload)
     {

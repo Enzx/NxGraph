@@ -3,7 +3,7 @@ using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public sealed class TransitionArrayDtoFormatter : GraphEntityFormatter<TransitionDto[]>
+internal sealed class TransitionArrayDtoFormatter : GraphEntityFormatter<TransitionDto[]>
 {
     public static readonly TransitionArrayDtoFormatter Instance = new();
 

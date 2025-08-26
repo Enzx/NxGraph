@@ -1,6 +1,6 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using Example;
+using NxFSM.Examples;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
@@ -41,7 +41,7 @@ await aiEnemy.ExecuteAsync();
 return 0;
 
 
-namespace Example
+namespace NxFSM.Examples
 {
     public class ConsoleStateObserver : IAsyncStateMachineObserver
     {

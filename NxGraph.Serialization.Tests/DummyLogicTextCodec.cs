@@ -1,5 +1,4 @@
 ﻿using NxGraph.Graphs;
-using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization.Tests;
 

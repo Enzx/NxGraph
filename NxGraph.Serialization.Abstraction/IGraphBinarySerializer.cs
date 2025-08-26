@@ -2,22 +2,22 @@
 
 namespace NxGraph.Serialization.Abstraction;
 
-public interface IGraphJsonSerializer : IGraphSerializer
+public interface IGraphBinarySerializer : IGraphSerializer
 {
     /// <summary>
-    /// Serialize a graph to the stream as JSON.
+    /// Serialize a graph to the stream as binary.
     /// </summary>
     /// <param name="graph">The graph to serialize.</param>
     /// <param name="destination">The destination stream.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    static abstract ValueTask ToJsonAsync(Graph graph, Stream destination, CancellationToken ct = default);
+    static abstract ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default);
 
     /// <summary>
-    /// Deserialize a graph from a JSON stream.
+    /// Deserialize a graph from a binary stream.
     /// </summary>
     /// <param name="source">The source stream.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the deserialized graph.</returns>
-    static abstract ValueTask<Graph> FromJsonAsync(Stream source, CancellationToken ct = default);
+    static abstract ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default);
 }

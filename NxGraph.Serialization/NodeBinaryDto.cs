@@ -2,4 +2,4 @@
 
 namespace NxGraph.Serialization;
 
-public sealed record NodeBinaryDto(string Name, ReadOnlyMemory<byte> Logic) : INodeDto;
+internal sealed record NodeBinaryDto(string Name, ReadOnlyMemory<byte> Logic) : INodeDto;

@@ -1,6 +1,6 @@
-﻿namespace NxGraph.Serialization.Abstraction;
+﻿namespace NxGraph.Serialization;
 
 /// <summary>
 /// Interface for node DTOs used in graph serialization.
 /// </summary>
-public interface INodeDto;
+internal interface INodeDto;

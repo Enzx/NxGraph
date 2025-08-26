@@ -3,7 +3,7 @@ using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public sealed class NodeDtoArrayFormatter : GraphEntityFormatter<INodeDto[]>
+internal sealed class NodeDtoArrayFormatter : GraphEntityFormatter<INodeDto[]>
 {
     public static readonly NodeDtoArrayFormatter Instance = new();
 

@@ -4,7 +4,7 @@ using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public sealed class GraphFormatterResolver : IFormatterResolver
+internal sealed class GraphFormatterResolver : IFormatterResolver
 {
     public static readonly GraphFormatterResolver Instance = new();
 

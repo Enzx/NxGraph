@@ -3,7 +3,7 @@ using MessagePack.Formatters;
 
 namespace NxGraph.Serialization;
 
-public abstract class GraphEntityFormatter<TEntity> : IMessagePackFormatter<TEntity> where TEntity : notnull
+internal abstract class GraphEntityFormatter<TEntity> : IMessagePackFormatter<TEntity> where TEntity : notnull
 {
     public abstract void Serialize(ref MessagePackWriter writer, TEntity value, MessagePackSerializerOptions options);
 
