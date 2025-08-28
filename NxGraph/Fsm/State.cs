@@ -1,11 +1,12 @@
-﻿using NxGraph.Graphs;
+﻿using NxGraph.Diagnostics.Replay;
+using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
 
 /// <summary>
 /// Base class for all states in a finite state machine.
 /// </summary>
-public abstract class State : ILogic
+public abstract class State : ILogic, ILogReporter
 {
     /// <summary>
     /// Executes the state asynchronously, entering and exiting the state as needed.
@@ -18,6 +19,16 @@ public abstract class State : ILogic
         Result result = await OnRunAsync(ct).ConfigureAwait(false);
         await OnExitAsync(ct).ConfigureAwait(false);
         return result;
+    }
+
+    public Func<string, CancellationToken, ValueTask>? LogReport { get; set; }
+
+    protected async ValueTask LogAsync(string message, CancellationToken ct = default)
+    {
+        if (LogReport != null)
+        {
+            await LogReport(message, ct);
+        }
     }
 
     protected virtual ValueTask OnEnterAsync(CancellationToken ct)

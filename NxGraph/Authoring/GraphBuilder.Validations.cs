@@ -1,4 +1,5 @@
 ﻿using NxGraph.Diagnostics;
+using NxGraph.Diagnostics.Validations;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
