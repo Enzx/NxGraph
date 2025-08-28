@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 using NxGraph.Authoring;
-using NxGraph.Diagnostics;
+using NxGraph.Diagnostics.Validations;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -68,11 +68,7 @@ public class GraphValidatorTests
         Graph graph = builder.Build(throwOnError: false);
 
         GraphValidationResult res = graph.Validate(new GraphValidationOptions { AllNodes = builder.GetAllNodeIds() });
-        foreach (var r in res.Diagnostics)
-        {
-            Debug.WriteLine($"{r.Severity}: {r.Message} (Node: {r.Node})");
-        }
-
+        
         Assert.That(
             res.Diagnostics.Any(d =>
                 d.Severity == Severity.Warning &&
