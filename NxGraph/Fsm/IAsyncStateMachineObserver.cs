@@ -53,7 +53,7 @@ public interface IAsyncStateMachineObserver
     {
         return default;
     }
-    
+
     //--- State Machine Lifecycle Events ---
 
     ValueTask OnStateMachineReset(NodeId graphId, CancellationToken ct = default)
@@ -78,6 +78,11 @@ public interface IAsyncStateMachineObserver
 
     ValueTask StateMachineStatusChanged(NodeId graphId, ExecutionStatus prev, ExecutionStatus next,
         CancellationToken ct = default)
+    {
+        return default;
+    }
+
+    ValueTask OnLogReport(NodeId nodeId, string message, CancellationToken ct)
     {
         return default;
     }

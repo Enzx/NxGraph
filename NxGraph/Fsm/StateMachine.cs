@@ -1,4 +1,5 @@
-﻿using NxGraph.Graphs;
+﻿using NxGraph.Diagnostics.Replay;
+using NxGraph.Graphs;
 
 namespace NxGraph.Fsm
 {
@@ -27,6 +28,7 @@ namespace NxGraph.Fsm
         private volatile ExecutionStatus _status = ExecutionStatus.Created;
         private bool _autoReset = true;
         private int _executeGate;
+        private readonly Func<string, CancellationToken, ValueTask> _cachedLogReportCallback;
 
         /// <summary>Public execution status (volatile for visibility).</summary>
         public ExecutionStatus Status => _status;
@@ -37,6 +39,7 @@ namespace NxGraph.Fsm
             _observer = observer;
             _initial = graph.StartNode.Id;
             _current = _initial;
+            _cachedLogReportCallback = LogReportCallback;
         }
 
         /// <summary>Enable/disable auto-reset to Ready after a terminal state.</summary>
@@ -150,7 +153,14 @@ namespace NxGraph.Fsm
             while (!ct.IsCancellationRequested)
             {
                 if (!Graph.TryGetNode(_current, out Node? node))
+                {
                     throw new InvalidOperationException($"Node '{_current}' not found.");
+                }
+
+                if (node.Logic is ILogReporter reporter)
+                {
+                    reporter.LogReport = _cachedLogReportCallback;
+                }
 
                 Result result = await node.Logic.ExecuteAsync(ct).ConfigureAwait(false);
                 switch (result)
@@ -217,6 +227,14 @@ namespace NxGraph.Fsm
 
             ct.ThrowIfCancellationRequested();
             return Result.Failure;
+        }
+
+        private async ValueTask LogReportCallback(string message, CancellationToken ct)
+        {
+            if (_observer is not null)
+            {
+                await _observer.OnLogReport(_current, message, ct).ConfigureAwait(false);
+            }
         }
 
         /// <summary>
