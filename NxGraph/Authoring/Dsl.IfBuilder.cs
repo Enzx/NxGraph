@@ -86,17 +86,22 @@ public static partial class Dsl
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        internal BranchEnd To(ILogic logic)
+        internal StateToken To(ILogic logic)
         {
             NodeId next = _b.AddNode(logic);
             _b.AddTransition(_tip, next);
-            return new BranchEnd(_b, next);
+            return new StateToken(next, _b);
         }
 
         // ReSharper disable once UnusedMember.Global
-        public BranchEnd WaitFor(TimeSpan delay)
+        public StateToken WaitFor(TimeSpan delay)
         {
             return To(Wait.For(delay));
+        }
+        
+        public Graph Build(bool throwOnError = false)
+        {
+            return _b.Build(throwOnError);
         }
 
         public StateMachine ToStateMachine()
