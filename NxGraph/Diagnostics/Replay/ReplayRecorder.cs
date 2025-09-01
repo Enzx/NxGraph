@@ -1,31 +1,88 @@
-﻿using NxGraph.Fsm;
+﻿using System.Runtime.CompilerServices;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 namespace NxGraph.Diagnostics.Replay;
 
-public sealed class ReplayRecorder(int initialCapacity = 256) : IAsyncStateMachineObserver
+public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObserver
 {
+    // ReSharper disable UnusedMember.Global
     // ReSharper disable once MemberCanBePrivate.Global
     public int Count { get; private set; }
-    // ReSharper disable once UnusedMember.Global
-    public void Clear() => Count = 0;
-    // ReSharper disable once UnusedMember.Global
-    public ReplayEvent this[int index] => _events[index];
+    public int Capacity => _events.Length;
     
-    private ReplayEvent[] _events = new ReplayEvent[initialCapacity];
-
-    public ReadOnlyMemory<ReplayEvent> GetEvents() => _events.AsMemory(0, Count);
-
-    private void Record(ReplayEvent evt)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Clear()
     {
-        if (Count == _events.Length)
+        Count = 0;
+        _head = 0;
+        _tail = 0;
+    }
+
+
+    public ReplayEvent this[int index]
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
         {
-            Array.Resize(ref _events, _events.Length * 2);
+            if ((uint)index >= (uint)Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            int phys = (_head + index) % _events.Length;
+            return _events[phys];
+        }
+    }
+    // ReSharper restore UnusedMember.Global
+    // ReSharper restore once MemberCanBePrivate.Global
+
+    // Ring buffer storage
+    private readonly ReplayEvent[] _events = new ReplayEvent[Math.Max(1, capacity)];
+
+    // Index of the oldest element
+    private int _head;
+
+    // Index where the next write will occur
+    private int _tail;
+
+    // Returns a copy of the events in chronological order.
+    public ReadOnlyMemory<ReplayEvent> GetEvents()
+    {
+        if (Count == 0) return ReadOnlyMemory<ReplayEvent>.Empty;
+
+        ReplayEvent[] result = new ReplayEvent[Count];//okay for now, could be optimized with ArrayPool if needed
+
+        if (_head < _tail)
+        {
+            Array.Copy(_events, _head, result, 0, Count);
+        }
+        else
+        {
+            // Wrapped: two ranges
+            int first = _events.Length - _head;
+            Array.Copy(_events, _head, result, 0, first);
+            Array.Copy(_events, 0, result, first, _tail);
         }
 
-        _events[Count++] = evt;
+        return result.AsMemory();
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void Record(ReplayEvent evt)
+    {
+        _events[_tail] = evt;
+
+        if (Count == _events.Length)
+        {
+            _head = (_head + 1) % _events.Length;
+        }
+        else
+        {
+            Count++;
+        }
+
+        _tail = (_tail + 1) % _events.Length;
+    }
+
     private static long CurrentTimestamp => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
