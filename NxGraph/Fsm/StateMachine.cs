@@ -20,18 +20,17 @@ namespace NxGraph.Fsm
         protected readonly IGraph Graph;
         private readonly IAsyncStateMachineObserver? _observer;
 
-        private readonly object _lifecycleLock = new();
+        private int _statusInt = (int)ExecutionStatus.Created; // atomic state
 
         private NodeId _current;
         private readonly NodeId _initial;
 
-        private volatile ExecutionStatus _status = ExecutionStatus.Created;
         private bool _autoReset = true;
         private int _executeGate;
         private readonly Func<string, CancellationToken, ValueTask> _cachedLogReportCallback;
 
         /// <summary>Public execution status (volatile for visibility).</summary>
-        public ExecutionStatus Status => _status;
+        public ExecutionStatus Status => (ExecutionStatus)Volatile.Read(ref _statusInt);
 
         public StateMachine(IGraph graph, IAsyncStateMachineObserver? observer = null)
         {
@@ -40,12 +39,17 @@ namespace NxGraph.Fsm
             _initial = graph.StartNode.Id;
             _current = _initial;
             _cachedLogReportCallback = LogReportCallback;
+            ValueTask task = TransitionTo(ExecutionStatus.Created);
+            if (!task.IsCompletedSuccessfully)
+            {
+                task.AsTask().GetAwaiter().GetResult();
+            }
         }
 
         /// <summary>Enable/disable auto-reset to Ready after a terminal state.</summary>
         public void SetAutoReset(bool enabled)
         {
-            lock (_lifecycleLock) _autoReset = enabled;
+            Volatile.Write(ref _autoReset, enabled);
         }
 
         /// <summary>
@@ -54,31 +58,41 @@ namespace NxGraph.Fsm
         /// </summary>
         public async ValueTask<Result> Reset(CancellationToken ct = default)
         {
-            bool notify;
-
-            lock (_lifecycleLock)
+            while (true)
             {
-                switch (_status)
+                ExecutionStatus status = Status;
+                switch (status)
                 {
-                    case ExecutionStatus.Running or ExecutionStatus.Transitioning:
-                        throw new InvalidOperationException("Cannot reset while running or transitioning.");
-                    case ExecutionStatus.Created or ExecutionStatus.Ready:
+                    case ExecutionStatus.Running:
+                    case ExecutionStatus.Transitioning:
+                    case ExecutionStatus.Starting:
+                        throw new InvalidOperationException("Cannot reset while starting, running, or transitioning.");
+                    case ExecutionStatus.Created:
+                    case ExecutionStatus.Ready:
                         return Result.Success;
+                    case ExecutionStatus.Completed:
+                    case ExecutionStatus.Failed:
+                    case ExecutionStatus.Cancelled:
+                    case ExecutionStatus.Resetting:
+                        break;
+                    default:
+                        throw new IndexOutOfRangeException(nameof(status));
                 }
 
-                _status = ExecutionStatus.Resetting;
-                _current = _initial;
-                notify = true;
+                // Own the transition to Resetting from whatever terminal state we observed.
+                if (!TryTransition(status, ExecutionStatus.Resetting, out ExecutionStatus previous))
+                {
+                    continue;
+                }
+
+                await NotifyMachineStatusChangeAsync(previous, ExecutionStatus.Resetting).ConfigureAwait(false);
+                break; // we won; proceed
+                // else: raced with another transition; retry
             }
 
-            if (notify && _observer is not null)
-                await _observer.OnStateMachineReset(Graph.Id, ct).ConfigureAwait(false);
+            _current = _initial;
 
-            lock (_lifecycleLock)
-            {
-                _status = ExecutionStatus.Ready;
-            }
-
+            await TransitionTo(ExecutionStatus.Ready).ConfigureAwait(false);
             return Result.Success;
         }
 
@@ -90,14 +104,14 @@ namespace NxGraph.Fsm
             }
 
             // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
-            await TransitionTo(ExecutionStatus.Starting);
+            await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
             _current = _initial;
             if (_observer is not null)
             {
                 await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
             }
 
-            await TransitionTo(ExecutionStatus.Running);
+            await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
         }
 
         protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
@@ -108,20 +122,27 @@ namespace NxGraph.Fsm
 
                 // If we get here, loop has returned a terminal result already.
                 // Machine completion notification + optional auto-reset-to-Ready.
-                await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+                await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
+                    .ConfigureAwait(false);
 
-                if (_autoReset) await Reset(ct);
+                if (Volatile.Read(ref _autoReset))
+                {
+                    await Reset(ct).ConfigureAwait(false);
+                }
 
                 return result;
             }
             catch (OperationCanceledException)
             {
-                await TransitionTo(ExecutionStatus.Cancelled);
+                await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
 
                 if (_observer is not null)
                     await _observer.OnStateMachineCancelled(Graph.Id, ct).ConfigureAwait(false);
 
-                if (_autoReset) await Reset(ct);
+                if (Volatile.Read(ref _autoReset))
+                {
+                    await Reset(ct).ConfigureAwait(false);
+                }
 
                 throw;
             }
@@ -131,12 +152,15 @@ namespace NxGraph.Fsm
                 if (_observer is not null)
                     await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
 
-                await TransitionTo(ExecutionStatus.Failed);
+                await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
 
                 if (_observer is not null)
                     await _observer.OnStateMachineCompleted(Graph.Id, Result.Failure, ct).ConfigureAwait(false);
 
-                if (_autoReset) await Reset(ct);
+                if (Volatile.Read(ref _autoReset))
+                {
+                    await Reset(ct).ConfigureAwait(false);
+                }
 
                 throw;
             }
@@ -159,6 +183,7 @@ namespace NxGraph.Fsm
 
                 if (node.Logic is ILogReporter reporter)
                 {
+                    //We need to capture the current node in the closure for correct attribution
                     reporter.LogReport = _cachedLogReportCallback;
                 }
 
@@ -168,7 +193,9 @@ namespace NxGraph.Fsm
                     case Result.Success:
                     {
                         if (_observer is not null)
+                        {
                             await _observer.OnStateExited(_current, ct).ConfigureAwait(false);
+                        }
 
                         NodeId next;
 
@@ -204,17 +231,21 @@ namespace NxGraph.Fsm
                             next = edge.Destination;
                         }
 
-                        await TransitionTo(ExecutionStatus.Transitioning);
+                        await TransitionTo(ExecutionStatus.Transitioning).ConfigureAwait(false);
 
                         if (_observer is not null)
+                        {
                             await _observer.OnTransition(_current, next, ct).ConfigureAwait(false);
+                        }
 
                         _current = next;
 
                         if (_observer is not null)
+                        {
                             await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
+                        }
 
-                        await TransitionTo(ExecutionStatus.Running);
+                        await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
 
                         continue;
                     }
@@ -237,24 +268,23 @@ namespace NxGraph.Fsm
             }
         }
 
+        private bool TryTransition(ExecutionStatus from, ExecutionStatus to, out ExecutionStatus prev)
+        {
+            int f = (int)from, t = (int)to;
+            int seen = Interlocked.CompareExchange(ref _statusInt, t, f);
+            prev = (ExecutionStatus)seen;
+
+            return seen == f;
+        }
+
         /// <summary>
         /// Centralized status transition. Sets the status under lock and then
         /// kicks machine-lifecycle notifications outside the lock.
         /// </summary>
-        private async Task TransitionTo(ExecutionStatus next)
+        private async ValueTask TransitionTo(ExecutionStatus next)
         {
-            ExecutionStatus prev;
-            bool changed;
-
-            lock (_lifecycleLock)
-            {
-                prev = _status;
-                if (prev == next) return;
-                _status = next;
-                changed = true;
-            }
-
-            if (changed && _observer is not null)
+            ExecutionStatus prev = (ExecutionStatus)Interlocked.Exchange(ref _statusInt, (int)next);
+            if (prev != next && _observer is not null)
             {
                 await NotifyMachineStatusChangeAsync(prev, next).ConfigureAwait(false);
             }
@@ -262,7 +292,10 @@ namespace NxGraph.Fsm
 
         private async ValueTask NotifyMachineStatusChangeAsync(ExecutionStatus prev, ExecutionStatus next)
         {
-            if (_observer is null) return;
+            if (_observer is null)
+            {
+                return;
+            }
 
             NodeId graphId = Graph.Id;
             await _observer.StateMachineStatusChanged(graphId, prev, next).ConfigureAwait(false);

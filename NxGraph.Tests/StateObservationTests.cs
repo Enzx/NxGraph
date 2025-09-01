@@ -76,7 +76,9 @@ public class StateObservationTests
         "Exited: (1)",
         "FSM:StatusChanged:Running>Completed",
         "FSM:Completed:result: Success",
-        "FSM:Reset"
+        "FSM:StatusChanged:Completed>Resetting",
+        "FSM:Reset",
+        "FSM:StatusChanged:Resetting>Ready"
     ];
 
     [Test]

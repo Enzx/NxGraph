@@ -55,13 +55,6 @@ public class GraphSerializerTestsTextCodec
         });
     }
 
-    
-
-    
-
-
-    
-
     [Test]
     public void SetLogicCodec_throws_on_null()
     {
