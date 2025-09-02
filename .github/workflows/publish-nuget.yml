@@ -3,11 +3,11 @@ name: Publish NuGet Packages
 on:
   push:
     tags:
-      - "v*"            # e.g., v1.2.3 or v1.2.3-beta.1
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Package version (e.g. 1.2.3 or 1.2.3-beta.1). If omitted, uses the tag."
+        description: "1.2.3 or 1.2.3-beta.1 (optional if running on a v* tag)"
         required: false
 
 concurrency:
@@ -18,37 +18,34 @@ env:
   CONFIGURATION: Release
   NUGET_SOURCE: https://api.nuget.org/v3/index.json
   ARTIFACTS_DIR: artifacts
-  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
 jobs:
   pack-and-publish:
     runs-on: ubuntu-latest
+    # environment: release
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Cache NuGet
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+      - name: Preflight — verify NuGet API key is available
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::NUGET_API_KEY is not set or not visible to this workflow run."
+            echo "Check: repo/organization secrets, environment scope, and that this run is not from a forked PR."
+            exit 1
+          fi
+          echo "::add-mask::$NUGET_API_KEY"
+          echo "NuGet API key is present."
 
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore --configuration $CONFIGURATION
-
-      - name: Test
-        run: dotnet test --no-build --configuration $CONFIGURATION --verbosity normal
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration $CONFIGURATION
+      - run: dotnet test  --no-build   --configuration $CONFIGURATION --verbosity normal
 
       - name: Resolve version
         id: ver
@@ -59,58 +56,40 @@ jobs:
           elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
             VER="${GITHUB_REF_NAME#v}"
           else
-            echo "::error::No version provided and no tag context (vX.Y.Z)."
-            exit 1
+            echo "::error::No version provided and no v* tag context."; exit 1
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VER"
 
-      - name: Create artifacts dir
-        run: mkdir -p "$ARTIFACTS_DIR"
+      - run: mkdir -p "$ARTIFACTS_DIR"
 
-      - name: Pack NxGraph
-        run: >-
+      - run: >
           dotnet pack NxGraph/NxGraph.csproj
-          --no-build
-          --configuration $CONFIGURATION
-          -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true
-          -p:Deterministic=true
-          -p:IncludeSymbols=true
-          -p:SymbolPackageFormat=snupkg
+          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - name: Pack NxGraph.Serialization
-        run: >-
+      - run: >
           dotnet pack NxGraph.Serialization/NxGraph.Serialization.csproj
-          --no-build
-          --configuration $CONFIGURATION
-          -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true
-          -p:Deterministic=true
-          -p:IncludeSymbols=true
-          -p:SymbolPackageFormat=snupkg
+          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - name: Pack NxGraph.Serialization.Abstraction
-        run: >-
-          dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
-          --no-build
-          --configuration $CONFIGURATION
-          -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true
-          -p:Deterministic=true
-          -p:IncludeSymbols=true
-          -p:SymbolPackageFormat=snupkg
+      - run: >
+          dotnet pack NxGraph.Serialization.Abstractions/NxGraph.Serialization.Abstractions.csproj
+          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - name: List artifacts
-        run: ls -al "$ARTIFACTS_DIR"
+      - run: ls -al "$ARTIFACTS_DIR"
 
-      - name: Push .nupkg to NuGet.org
+      - name: Push .nupkg to nuget.org
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: >-
+        run: >
           dotnet nuget push "$ARTIFACTS_DIR"/*.nupkg
           --api-key "$NUGET_API_KEY"
           --source "$NUGET_SOURCE"
@@ -120,15 +99,14 @@ jobs:
       - name: Push .snupkg (symbols)
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: >-
+        run: >
           dotnet nuget push "$ARTIFACTS_DIR"/*.snupkg
           --api-key "$NUGET_API_KEY"
           --source "$NUGET_SOURCE"
           --skip-duplicate
 
-      - name: Upload artifacts
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: nuget-${{ steps.ver.outputs.version }}
           path: |
