@@ -1,0 +1,136 @@
+name: Publish NuGet Packages
+
+on:
+  push:
+    tags:
+      - "v*"            # e.g., v1.2.3 or v1.2.3-beta.1
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version (e.g. 1.2.3 or 1.2.3-beta.1). If omitted, uses the tag."
+        required: false
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CONFIGURATION: Release
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+  ARTIFACTS_DIR: artifacts
+
+jobs:
+  pack-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration $CONFIGURATION
+
+      - name: Test
+        run: dotnet test --no-build --configuration $CONFIGURATION --verbosity normal
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VER="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            echo "::error::No version provided and no tag context (vX.Y.Z)."
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VER"
+
+      - name: Create artifacts dir
+        run: mkdir -p "$ARTIFACTS_DIR"
+
+      - name: Pack NxGraph
+        run: >-
+          dotnet pack NxGraph/NxGraph.csproj
+          --no-build
+          --configuration $CONFIGURATION
+          -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -p:IncludeSymbols=true
+          -p:SymbolPackageFormat=snupkg
+          -p:PackageVersion=${{ steps.ver.outputs.version }}
+
+      - name: Pack NxGraph.Serialization
+        run: >-
+          dotnet pack NxGraph.Serialization/NxGraph.Serialization.csproj
+          --no-build
+          --configuration $CONFIGURATION
+          -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -p:IncludeSymbols=true
+          -p:SymbolPackageFormat=snupkg
+          -p:PackageVersion=${{ steps.ver.outputs.version }}
+
+      - name: Pack NxGraph.Serialization.Abstraction
+        run: >-
+          dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
+
+          --no-build
+          --configuration $CONFIGURATION
+          -o $ARTIFACTS_DIR
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -p:IncludeSymbols=true
+          -p:SymbolPackageFormat=snupkg
+          -p:PackageVersion=${{ steps.ver.outputs.version }}
+
+      - name: List artifacts
+        run: ls -al "$ARTIFACTS_DIR"
+
+      - name: Push .nupkg to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: >-
+          dotnet nuget push "$ARTIFACTS_DIR"/*.nupkg
+          --api-key "$NUGET_API_KEY"
+          --source "$NUGET_SOURCE"
+          --skip-duplicate
+          --no-symbols true
+
+      - name: Push .snupkg (symbols)
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: >-
+          dotnet nuget push "$ARTIFACTS_DIR"/*.snupkg
+          --api-key "$NUGET_API_KEY"
+          --source "$NUGET_SOURCE"
+          --skip-duplicate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-${{ steps.ver.outputs.version }}
+          path: |
+            ${{ env.ARTIFACTS_DIR }}/*.nupkg
+            ${{ env.ARTIFACTS_DIR }}/*.snupkg
