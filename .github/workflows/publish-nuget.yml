@@ -91,9 +91,10 @@ jobs:
           -p:SymbolPackageFormat=snupkg
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - name: Pack NxGraph.Serialization.Abstractions
+      - name: Pack NxGraph.Serialization.Abstraction
         run: >-
-          dotnet pack NxGraph.Serialization.Abstractions/NxGraph.Serialization.Abstractions.csproj
+          dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
+
           --no-build
           --configuration $CONFIGURATION
           -o $ARTIFACTS_DIR
