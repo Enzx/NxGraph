@@ -94,7 +94,6 @@ jobs:
       - name: Pack NxGraph.Serialization.Abstraction
         run: >-
           dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
-
           --no-build
           --configuration $CONFIGURATION
           -o $ARTIFACTS_DIR
