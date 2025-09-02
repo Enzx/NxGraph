@@ -40,7 +40,7 @@ public static partial class Dsl
             throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
         }
 
-        graph.Id.WithName(name);
+        graph.Id = graph.Id.WithName(name);
         return graph;
     }
 

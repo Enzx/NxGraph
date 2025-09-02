@@ -36,14 +36,14 @@ public static class SerializationExample
         GraphSerializer.SetLogicCodec(new ExampleLogicSerializer());
         ExampleState start = new() { Data = "start" };
         ExampleState end = new() { Data = "end" };
-        Graph graph = GraphBuilder.StartWith(start).To(end).Build();
-        MemoryStream writeStream = new();
-        MemoryStream readStream = new();
-        await GraphSerializer.ToJsonAsync(graph, writeStream);
-        byte[] bytes = writeStream.ToArray();
+        Graph graph = GraphBuilder.StartWith(start).SetName("Start").To(end).SetName("End").Build().SetName("FSM");
+        MemoryStream stream = new();
+        await GraphSerializer.ToJsonAsync(graph, stream);
+        byte[] bytes = stream.ToArray();
         string json = System.Text.Encoding.UTF8.GetString(bytes);
         Console.WriteLine(json);
-        Graph deserializedGraph = await GraphSerializer.FromJsonAsync(readStream);
+        stream.Position = 0;
+        Graph deserializedGraph = await GraphSerializer.FromJsonAsync(stream);
 
         StateMachine fsm = deserializedGraph.ToStateMachine();
         await fsm.ExecuteAsync();

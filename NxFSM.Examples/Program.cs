@@ -38,7 +38,7 @@ Console.WriteLine();
 AiEnemy aiEnemy = new();
 await aiEnemy.ExecuteAsync();
 
-// await SerializationExample.Run();
+await SerializationExample.Run();
 
 ExportersExample.Run();
 return 0;
