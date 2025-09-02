@@ -29,7 +29,6 @@ StateMachine fsm = GraphBuilder
 
 Result result = await fsm.ExecuteAsync();
 
-await SerializationExample.Run();
 
 Console.WriteLine($"Simple FSM execution result: {result}");
 Console.WriteLine();
@@ -38,6 +37,10 @@ Console.WriteLine("AI Enemy Example");
 Console.WriteLine();
 AiEnemy aiEnemy = new();
 await aiEnemy.ExecuteAsync();
+
+// await SerializationExample.Run();
+
+ExportersExample.Run();
 return 0;
 
 
