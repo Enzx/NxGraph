@@ -9,7 +9,7 @@
         <Authors>Moe Iraji</Authors>
         <Description>A lean, high‑performance finite state machine (FSM) / stateflow library for .NET with a clean authoring DSL, strong validation, first‑class observability, and export tools (Mermaid, tracing, replay). Designed for correctness on hot paths (allocation‑free), production diagnostics, and pleasant authoring.</Description>
         <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
-        <PackageLicenseUrl>https://github.com/Enzx/NxGraph?tab=MIT-1-ov-file</PackageLicenseUrl>
+        <license>https://github.com/Enzx/NxGraph?tab=MIT-1-ov-file</license>
         <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
         <PackageTags>Statemachine, FSM, Performance</PackageTags>
     </PropertyGroup>

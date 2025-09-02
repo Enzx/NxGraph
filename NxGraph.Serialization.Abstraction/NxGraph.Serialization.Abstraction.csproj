@@ -8,7 +8,7 @@
         <Description>NxGraph Serialization Abstraction</Description>
         <Copyright>Moe Iraji</Copyright>
         <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
-        <PackageLicenseUrl>https://github.com/Enzx/NxGraph?tab=MIT-1-ov-file</PackageLicenseUrl>
+        <license>https://github.com/Enzx/NxGraph?tab=MIT-1-ov-file</license>
         <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
         <PackageTags>Statemachine, FSM, Serialization</PackageTags>
     </PropertyGroup>
