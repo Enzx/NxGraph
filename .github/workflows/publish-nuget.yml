@@ -18,6 +18,7 @@ env:
   CONFIGURATION: Release
   NUGET_SOURCE: https://api.nuget.org/v3/index.json
   ARTIFACTS_DIR: artifacts
+  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
 jobs:
   pack-and-publish:
