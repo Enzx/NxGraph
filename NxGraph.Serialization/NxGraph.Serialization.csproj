@@ -4,6 +4,13 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Description>NxGraph Serialization (Json and Binary)</Description>
+        <Copyright>Moe Iraji</Copyright>
+        <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
+        <PackageLicenseUrl>https://github.com/Enzx/NxGraph?tab=MIT-1-ov-file</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
+        <PackageTags>Statemachine, FSM, Serialization</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
