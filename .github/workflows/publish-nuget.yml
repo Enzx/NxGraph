@@ -94,7 +94,7 @@ jobs:
           --api-key "$NUGET_API_KEY"
           --source "$NUGET_SOURCE"
           --skip-duplicate
-          --no-symbols true
+          --no-symbols
 
       - name: Push .snupkg (symbols)
         env:
