@@ -1,3 +1,12 @@
+[![NuGet NxGraph](https://img.shields.io/nuget/v/NxGraph.svg?label=NuGet%20NxGraph)](https://www.nuget.org/packages/NxGraph/)
+[![NuGet NxGraph.Serialization](https://img.shields.io/nuget/v/NxGraph.Serialization.svg?label=Serialization)](https://www.nuget.org/packages/NxGraph.Serialization/)
+[![NuGet NxGraph.Serialization.Abstraction](https://img.shields.io/nuget/v/NxGraph.Serialization.Abstraction.svg?label=Abstraction)](https://www.nuget.org/packages/NxGraph.Serialization.Abstraction/)
+[![Downloads](https://img.shields.io/nuget/dt/NxGraph.svg?label=Downloads)](https://www.nuget.org/packages/NxGraph/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)
+[![Build](https://github.com/Enzx/NxGraph/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/Enzx/NxGraph/actions/workflows/dotnet.yml)
+[![Publish](https://github.com/Enzx/NxGraph/actions/workflows/publish-nuget.yml/badge.svg)](https://github.com/Enzx/NxGraph/actions/workflows/publish-nuget.yml)
+
 # NxGraph
 
 A lean, high‑performance finite state machine (FSM) / stateflow library for .NET with a clean authoring DSL, strong validation, first‑class observability, and export tools (Mermaid, tracing, replay). Designed for correctness on hot paths (allocation‑free), production diagnostics, and pleasant authoring.
@@ -92,8 +101,12 @@ A lean, high‑performance finite state machine (FSM) / stateflow library for .N
 ---
 
 ## Install
+```bash
+dotnet add package NxGraph
+```
 
-> Until published on NuGet, clone the repo and reference projects directly or build a local package.
+>Additionally, you can clone the repository and reference projects directly, or build a local package.
+
 
 ```bash
 # build
