@@ -78,7 +78,7 @@ jobs:
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
       - run: >
-          dotnet pack NxGraph.Serialization.Abstractions/NxGraph.Serialization.Abstractions.csproj
+          dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
           --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
           -p:ContinuousIntegrationBuild=true -p:Deterministic=true
           -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
