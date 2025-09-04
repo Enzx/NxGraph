@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
@@ -12,6 +12,7 @@
         <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
         <PackageTags>Statemachine, FSM, Serialization</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
 
     </PropertyGroup>
 
@@ -22,5 +23,7 @@
     <ItemGroup>
       <ProjectReference Include="..\NxGraph.Serialization.Abstraction\NxGraph.Serialization.Abstraction.csproj" />
     </ItemGroup>
-
+    <ItemGroup>
+        <None Include="Docs\readme.md" Pack="true" PackagePath="Docs\"/>
+    </ItemGroup>
 </Project>
