@@ -44,10 +44,11 @@ public sealed class MermaidGraphExporter : IGraphExporter
             // Shape: Start node gets a "stadium" shape, if IDirector rhombus {}, others are rectangles
             if (node.Logic is IDirector)
             {
-                label = $"{{\"{label}\"}}";
+                label = EscapeLabel(label); 
                 sb.Append("  ").Append(nodeId).Append(label).AppendLine();
                 continue;
             }
+
             string shape = (i == NodeId.Start.Index) ? $"([\"{label}\"])" : $"[\"{label}\"]";
             sb.Append("  ").Append(nodeId).Append(shape).AppendLine();
         }
@@ -128,7 +129,10 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
     private static string EscapeLabel(string s)
     {
-        return s.Replace("\\", @"\\").Replace("\"", "\\\"");
+        return s.Replace("\\", @"\\")
+            .Replace("\"", "\\\"")
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n");
     }
 
     private static string EscapeComment(string s)
