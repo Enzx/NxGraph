@@ -19,15 +19,15 @@ public class MermaidGraphExporterTests
 
         string mmd = exporter.Export(graph);
 
-        StringAssert.Contains("flowchart LR", mmd, "Default direction should be LR.");
+        Assert.That(mmd, Does.Contain("flowchart LR"), "Default direction should be LR.");
         // No space between node id and shape: n0([ not "n0 ([" 
-        StringAssert.Contains("\n  n0([", mmd, "Start node must have no space between id and shape.");
-        StringAssert.DoesNotContain("n0 ([", mmd);
-        StringAssert.DoesNotContain("n0 (", mmd);
+        Assert.That(mmd, Does.Contain("\n  n0(["), "Start node must have no space between id and shape.");
+        Assert.That(mmd, Does.Not.Contain("n0 (["));
+        Assert.That(mmd, Does.Not.Contain("n0 ("));
 
         // Capital End node emitted
-        StringAssert.Contains("\n  End((\"End\"))", mmd);
-        StringAssert.Contains("n0 --> End", mmd);
+        Assert.That(mmd, Does.Contain("\n  End((\"End\"))"));
+        Assert.That(mmd, Does.Contain("n0 --> End"));
         Assert.That(mmd.Contains(" end((") || mmd.Contains(" --> end"), Is.False,
             "Terminal symbol must be capitalized 'End'.");
     }
@@ -44,13 +44,13 @@ public class MermaidGraphExporterTests
 
         string mmd = exporter.Export(graph);
 
-        StringAssert.Contains("\n  n0([", mmd); // start node stadium
-        StringAssert.Contains("\n  n1[", mmd); // rectangle for regular node
-        StringAssert.DoesNotContain("n1 [", mmd); // no space
+        Assert.That(mmd, Does.Contain("\n  n0([")); // start node stadium
+        Assert.That(mmd, Does.Contain("\n  n1[")); // rectangle for regular node
+        Assert.That(mmd, Does.Not.Contain("n1 [")); // no space
 
-        StringAssert.Contains("n0 --> n1", mmd);
-        StringAssert.Contains("n1 --> End", mmd);
-        StringAssert.Contains("\n  End((\"End\"))", mmd);
+        Assert.That(mmd, Does.Contain("n0 --> n1"));
+        Assert.That(mmd, Does.Contain("n1 --> End"));
+        Assert.That(mmd, Does.Contain("\n  End((\"End\"))"));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class MermaidGraphExporterTests
 
         string mmd = exporter.Export(graph, opts);
 
-        StringAssert.Contains("flowchart TB", mmd);
+        Assert.That(mmd, Does.Contain("flowchart TB"));
     }
 
     [Test]
@@ -108,8 +108,8 @@ public class MermaidGraphExporterTests
         string mmd = exporter.Export(graph, opts);
 
         // Label should change, symbol remains "End"
-        StringAssert.Contains("\n  End((\"Done\"))", mmd);
-        StringAssert.Contains("n1 --> End", mmd);
+        Assert.That(mmd, Does.Contain("\n  End((\"Done\"))"));
+        Assert.That(mmd, Does.Contain("n1 --> End"));
     }
 
     [Test]
@@ -147,7 +147,7 @@ public class MermaidGraphExporterTests
 
         string mmd = exporter.Export(graph, opts);
 
-        StringAssert.Contains("%% NxGraph → Mermaid export: Enemy AI FSM", mmd);
+        Assert.That(mmd, Does.Contain("%% NxGraph → Mermaid export: Enemy AI FSM"));
     }
 
     [Test]
@@ -167,12 +167,12 @@ public class MermaidGraphExporterTests
         string mmd = exporter.Export(graph);
 
         // Assert: n1{"..."} with NO space between id and '{'
-        StringAssert.Contains("\n  n3{\"", mmd,
+        Assert.That(mmd, Does.Contain("\n  n3{\""),
             "Director node must use {} shape with quotes and no space after id.");
-        StringAssert.DoesNotContain("n1 {\"", mmd);
+        Assert.That(mmd, Does.Not.Contain("n1 {\""));
 
         // Regular nodes should keep their shapes without spaces
-        StringAssert.Contains("\n  n0([", mmd);
-        StringAssert.DoesNotContain("n0 (", mmd);
+        Assert.That(mmd, Does.Contain("\n  n0(["));
+        Assert.That(mmd, Does.Not.Contain("n0 ("));
     }
 }

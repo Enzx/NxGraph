@@ -413,12 +413,18 @@ await fsm.ExecuteAsync();
 ## Testing
 
 - Unit tests cover reentrancy, cancellation, observers, validation, exporters, replay.
-- Add property tests (FsCheck) if you extend the DSL, especially around director cycles and exporter escaping.
+- Property tests (FsCheck) exercise director branching, exporter escaping, and serialization round-trips.
 
-Run:
+Run all tests:
 
 ```bash
 dotnet test -c Release
+```
+
+Run only property tests:
+
+```bash
+dotnet test -c Release --filter Category=property
 ```
 
 ---
