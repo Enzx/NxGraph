@@ -22,7 +22,6 @@ env:
 jobs:
   pack-and-publish:
     runs-on: ubuntu-latest
-    # environment: release
 
     steps:
       - uses: actions/checkout@v4
@@ -44,8 +43,10 @@ jobs:
           echo "NuGet API key is present."
 
       - run: dotnet restore
+
       - run: dotnet build --no-restore --configuration $CONFIGURATION
-      - run: dotnet test  --no-build   --configuration $CONFIGURATION --verbosity normal
+
+      - run: dotnet test  --no-build --configuration $CONFIGURATION --verbosity normal
 
       - name: Resolve version
         id: ver
@@ -63,28 +64,48 @@ jobs:
 
       - run: mkdir -p "$ARTIFACTS_DIR"
 
-      - run: >
+      # Pack each project with the SAME props that will also produce PDBs
+      - name: Pack NxGraph
+        run: >
           dotnet pack NxGraph/NxGraph.csproj
-          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
           -p:ContinuousIntegrationBuild=true -p:Deterministic=true
           -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
+          -p:DebugType=portable
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - run: >
+      - name: Pack NxGraph.Serialization
+        run: >
           dotnet pack NxGraph.Serialization/NxGraph.Serialization.csproj
-          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
           -p:ContinuousIntegrationBuild=true -p:Deterministic=true
           -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
+          -p:DebugType=portable
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - run: >
+      - name: Pack NxGraph.Serialization.Abstraction
+        run: >
           dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
-          --no-build --configuration $CONFIGURATION -o $ARTIFACTS_DIR
+          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
           -p:ContinuousIntegrationBuild=true -p:Deterministic=true
           -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
+          -p:DebugType=portable
           -p:PackageVersion=${{ steps.ver.outputs.version }}
 
-      - run: ls -al "$ARTIFACTS_DIR"
+      - name: List artifacts
+        run: ls -al "$ARTIFACTS_DIR"
+
+      # Quick validation to catch mismatches before upload
+      - name: Validate package and symbol contents
+        run: |
+          echo "== Listing assemblies in nupkg =="
+          for f in $ARTIFACTS_DIR/*.nupkg; do
+            echo "---- $(basename "$f")"; unzip -l "$f" | grep -E '(^|/)(lib|ref|runtimes)/' || true
+          done
+          echo "== Listing PDBs in snupkg =="
+          for f in $ARTIFACTS_DIR/*.snupkg; do
+            echo "---- $(basename "$f")"; unzip -l "$f" | grep -E '\.pdb$' || true
+          done
 
       - name: Push .nupkg to nuget.org
         env:
@@ -94,7 +115,6 @@ jobs:
           --api-key "$NUGET_API_KEY"
           --source "$NUGET_SOURCE"
           --skip-duplicate
-          --no-symbols
 
       - name: Push .snupkg (symbols)
         env:
