@@ -44,7 +44,7 @@ public sealed class MermaidGraphExporter : IGraphExporter
             // Shape: Start node gets a "stadium" shape, if IDirector rhombus {}, others are rectangles
             if (node.Logic is IDirector)
             {
-                label = EscapeLabel(label); 
+                label = $"{{\"{EscapeLabel( label)}\"}}";
                 sb.Append("  ").Append(nodeId).Append(label).AppendLine();
                 continue;
             }
