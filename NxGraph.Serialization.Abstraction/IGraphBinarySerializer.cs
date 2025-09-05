@@ -11,7 +11,7 @@ public interface IGraphBinarySerializer : IGraphSerializer
     /// <param name="destination">The destination stream.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    static abstract ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default);
+    ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default);
 
     /// <summary>
     /// Deserialize a graph from a binary stream.
@@ -19,5 +19,5 @@ public interface IGraphBinarySerializer : IGraphSerializer
     /// <param name="source">The source stream.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the deserialized graph.</returns>
-    static abstract ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default);
+    ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default);
 }

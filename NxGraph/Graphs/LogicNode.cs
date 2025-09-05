@@ -1,15 +1,19 @@
 ﻿namespace NxGraph.Graphs;
 
+public interface INode
+{
+    NodeId Id { get; }
+}
 
-public sealed class Node(NodeId id, ILogic logic) 
+public class LogicNode(NodeId id, ILogic logic) : INode
 {
     public NodeId Id { get; } = id;
     public ILogic Logic { get; } = logic;
 
-    public static readonly Node Empty = new(NodeId.Default, new EmptyLogicLogic());
+    public static readonly LogicNode Empty = new(NodeId.Default, new EmptyLogic());
 }
 
-public sealed record EmptyLogicLogic : ILogic
+public sealed record EmptyLogic : ILogic
 {
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {

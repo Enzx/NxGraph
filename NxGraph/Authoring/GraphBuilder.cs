@@ -12,7 +12,7 @@ namespace NxGraph.Authoring;
 public sealed partial class GraphBuilder
 {
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
-    private Node? _startNode;
+    private LogicNode? _startNode;
 
     private readonly Dictionary<NodeId, ILogic> _nodes = new(); // non-start nodes only
     private readonly Dictionary<ILogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
@@ -30,7 +30,7 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException("A start node has already been added.");
             }
 
-            _startNode = new Node(NodeId.Start, logic);
+            _startNode = new LogicNode(NodeId.Start, logic);
             _byLogic[logic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
             return NodeId.Start;
         }
@@ -81,7 +81,7 @@ public sealed partial class GraphBuilder
 
         int length = Math.Max(1, maxIndex + 1);
 
-        Node[] nodes = new Node[length];
+        LogicNode[] nodes = new LogicNode[length];
         Transition[] edges = new Transition[length];
 
         for (int i = 0; i < edges.Length; i++)
@@ -107,7 +107,7 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException($"Node slot {idx} already occupied (duplicate NodeId index).");
             }
 
-            nodes[idx] = new Node(id, logic);
+            nodes[idx] = new LogicNode(id, logic);
         }
 
         //transitions > dense array
@@ -168,7 +168,7 @@ public sealed partial class GraphBuilder
 
         if (_startNode != null && _startNode.Id == newId)
         {
-            _startNode = new Node(_startNode.Id.WithName(name), _startNode.Logic);
+            _startNode = new LogicNode(_startNode.Id.WithName(name), _startNode.Logic);
             return;
         }
 

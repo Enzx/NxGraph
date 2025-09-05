@@ -17,7 +17,7 @@ public class StateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? obser
 /// </summary>
 public class StateMachine : State
 {
-    protected readonly IGraph Graph;
+    public readonly IGraph Graph;
     private readonly IAsyncStateMachineObserver? _observer;
 
     private int _statusInt = (int)ExecutionStatus.Created; // atomic state
@@ -176,18 +176,19 @@ public class StateMachine : State
     {
         while (!ct.IsCancellationRequested)
         {
-            if (!Graph.TryGetNode(_current, out Node? node))
+            if (!Graph.TryGetNode(_current, out INode? node))
             {
                 throw new InvalidOperationException($"Node '{_current}' not found.");
             }
 
-            if (node.Logic is ILogReporter reporter)
+            if (node is LogicNode { Logic: ILogReporter reporter })
             {
                 //We need to capture the current node in the closure for correct attribution
                 reporter.LogReport = _cachedLogReportCallback;
             }
 
-            Result result = await node.Logic.ExecuteAsync(ct).ConfigureAwait(false);
+            LogicNode logicLogicNode = (LogicNode)node;
+            Result result = await logicLogicNode.Logic.ExecuteAsync(ct).ConfigureAwait(false);
             switch (result)
             {
                 case Result.Success:
@@ -199,7 +200,7 @@ public class StateMachine : State
 
                     NodeId next;
 
-                    if (node.Logic is IDirector director)
+                    if (logicLogicNode.Logic is IDirector director)
                     {
                         next = director.SelectNext();
                         if (next.Equals(NodeId.Default))

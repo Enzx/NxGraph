@@ -1,10 +1,12 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using FsCheck;
 // ReSharper disable once RedundantUsingDirective
 using FsCheck.NUnit;
 using NxGraph.Authoring;
 using NxGraph.Diagnostics.Export;
 using NxGraph.Diagnostics.Validations;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 using NxGraph.Serialization;
 using NxGraph.Serialization.Abstraction;
@@ -52,7 +54,7 @@ public class PropertyTests
             return true;
         }
 
-        GraphSerializer.SetLogicCodec(new DummyLogicTextCodec());
+        GraphSerializer serializer = new(new DummyLogicTextCodec());
         StateToken token = GraphBuilder.StartWith(new DummyState { Data = labels[0] });
         for (int i = 1; i < labels.Length; i++)
         {
@@ -61,12 +63,20 @@ public class PropertyTests
 
         Graph graph = token.Build();
         using MemoryStream ms = new();
-        await GraphSerializer.ToJsonAsync(graph, ms).ConfigureAwait(false);
+        await serializer.ToJsonAsync(graph, ms).ConfigureAwait(false);
+        string json = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        Console.WriteLine(json);
         ms.Position = 0;
-        Graph round = await GraphSerializer.FromJsonAsync(ms);
+        Graph round = await serializer.FromJsonAsync(ms);
         bool nodesOk = labels.Length == round.NodeCount &&
                        Enumerable.Range(0, labels.Length).All(i =>
-                           ((DummyState)round.GetNodeByIndex(i).Logic).Data == labels[i]);
+                       {
+                           INode n = graph.GetNodeByIndex(i);
+                           LogicNode logicNode = (LogicNode)n;
+                           DummyState state = (DummyState)logicNode.Logic;
+                           string label = labels[i];
+                           return state.Data == label;
+                       });
         bool transitionsOk = Enumerable.Range(0, labels.Length).All(i =>
         {
             Transition tOrig = graph.GetTransitionByIndex(i);
@@ -113,16 +123,22 @@ public class PropertyTests
 internal class DummyState : ILogic
 {
     public string Data { get; init; } = string.Empty;
-    public ValueTask<Result> ExecuteAsync(CancellationToken ct = default) => ResultHelpers.Success;
+   
+
+    public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
+    {
+        return ResultHelpers.Success;
+    }
 }
 
 internal class DummyLogicTextCodec : ILogicCodec<string>
 {
+
     public string Serialize(ILogic logic) =>
-        System.Text.Json.JsonSerializer.Serialize((DummyState)logic);
+        JsonSerializer.Serialize((DummyState)logic);
 
     public ILogic Deserialize(string data) =>
-        System.Text.Json.JsonSerializer.Deserialize<DummyState>(data)
+        JsonSerializer.Deserialize<DummyState>(data)
         ?? new DummyState();
 }
 #pragma warning restore NUnit1027
