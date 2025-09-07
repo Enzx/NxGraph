@@ -7,8 +7,8 @@ namespace NxGraph.Serialization.Tests;
 [Category("serialization")]
 public class GraphSerializerTestsBinaryCodec
 {
-    [SetUp]
-    public void SetUp() => GraphSerializer.SetLogicCodec(new DummyLogicBinaryCodec());
+    private readonly GraphSerializer _serializer = new GraphSerializer(new DummyLogicBinaryCodec());
+
 
     private static Graph BuildPair(string a, string b)
         => GraphBuilder.StartWith(new DummyState { Data = a }).To(new DummyState { Data = b }).Build();
@@ -18,20 +18,22 @@ public class GraphSerializerTestsBinaryCodec
     {
         Graph graph = BuildPair("start", "end");
         await using MemoryStream ms = new();
-
-        await GraphSerializer.ToBinaryAsync(graph, ms);
+        await _serializer.ToBinaryAsync(graph, ms);
         ms.Position = 0;
 
-        Graph roundTripped = await GraphSerializer.FromBinaryAsync(ms);
-
+        Graph roundTripped = await _serializer.FromBinaryAsync(ms);
+        INode startNode = roundTripped.StartNode;
+        LogicNode start = (LogicNode)startNode;
+        INode endNode = roundTripped.GetNodeByIndex(1);
+        LogicNode end = (LogicNode)endNode;
         Assert.Multiple(() =>
         {
             Assert.That(roundTripped.NodeCount, Is.EqualTo(2));
-            Assert.That(((DummyState)roundTripped.StartNode.Logic).Data, Is.EqualTo("start"));
-            Assert.That(((DummyState)roundTripped.GetNodeByIndex(1).Logic).Data, Is.EqualTo("end"));
+            Assert.That(((DummyState)start.Logic).Data, Is.EqualTo("start"));
+            Assert.That(((DummyState)end.Logic).Data, Is.EqualTo("end"));
         });
     }
-    
+
 
     [Test]
     public async Task Streams_are_left_open_after_binary_helpers()
@@ -39,11 +41,11 @@ public class GraphSerializerTestsBinaryCodec
         Graph graph = BuildPair("x", "y");
 
         await using MemoryStream s1 = new();
-        await GraphSerializer.ToBinaryAsync(graph, s1);
+        await _serializer.ToBinaryAsync(graph, s1);
         Assert.DoesNotThrow(() => s1.WriteByte(0x7F)); // still open
 
         s1.Position = 0;
-        await GraphSerializer.FromBinaryAsync(s1);
+        await _serializer.FromBinaryAsync(s1);
         Assert.DoesNotThrow(() => s1.WriteByte(0x01)); // still open
     }
 }

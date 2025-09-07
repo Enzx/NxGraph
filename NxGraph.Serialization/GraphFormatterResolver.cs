@@ -49,6 +49,18 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(SubGraphDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)SubGraphDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(SubGraphDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)SubgraphArrayDtoFormatter.Instance;
+                return;
+            }
+
             Formatter = null;
         }
     }

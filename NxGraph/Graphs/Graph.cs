@@ -6,9 +6,9 @@ namespace NxGraph.Graphs;
 /// <summary>
 /// Represents a directed graph structure used in finite state machines (FSMs) or other graph-based systems.
 /// </summary>
-public sealed class Graph : IGraph
+public sealed class Graph : INode, IGraph
 {
-    private readonly Node[] _nodes; // index = NodeId.Index
+    private readonly INode[] _nodes; // index = NodeId.Index
     private readonly Transition[] _edges; // index = from.Index
 
     /// <summary>
@@ -20,9 +20,14 @@ public sealed class Graph : IGraph
     public NodeId Id { get; internal set; }
 
     /// <summary>
+    ///  The logic associated with the graph.
+    /// </summary>
+    public ILogic Logic { get; }
+
+    /// <summary>
     /// The start node of the graph, which is always NodeId.Start (index 0).
     /// </summary>
-    public Node StartNode { get; }
+    public INode StartNode { get; }
 
     /// <summary>
     /// The number of nodes in the graph, including the start node.
@@ -38,8 +43,9 @@ public sealed class Graph : IGraph
     /// <param name="id">The unique identifier for the graph.</param>
     /// <param name="nodes">The array of nodes in the graph. Must be non-empty and start with the start node at index 0.</param>
     /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
+    /// <param name="logic">The logic associated with the graph. If null, an empty logic is used.</param>
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
-    public Graph(NodeId id, Node[] nodes, Transition[] edges)
+    public Graph(NodeId id, INode[] nodes, Transition[] edges, ILogic? logic = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(edges);
@@ -58,6 +64,7 @@ public sealed class Graph : IGraph
         StartNode = nodes[0];
         _nodes = nodes;
         _edges = edges;
+        Logic = logic ?? new EmptyLogic();
     }
 
     /// <summary>
@@ -79,29 +86,30 @@ public sealed class Graph : IGraph
         return true;
     }
 
+
     /// <summary>
     /// Attempts to retrieve a node by its ID.
     /// </summary>
     /// <param name="id">The unique identifier of the node to retrieve.</param>
-    /// <param name="node">The node corresponding to the given ID, if found; otherwise, <see cref="Node.Empty"/>.</param>
+    /// <param name="node">The node corresponding to the given ID, if found; otherwise, <see cref="LogicNode.Empty"/>.</param>
     /// <returns><c>true</c> if the node exists; otherwise, <c>false</c>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryGetNode(NodeId id, out Node node)
+    public bool TryGetNode(NodeId id, out INode node)
     {
         if ((uint)id.Index >= (uint)_nodes.Length)
         {
-            node = Node.Empty;
+            node = LogicNode.Empty;
             return false;
         }
 
-        Node candidate = _nodes[id.Index];
+        INode candidate = _nodes[id.Index];
         if (candidate.Id == id)
         {
             node = candidate;
             return true;
         }
 
-        node = Node.Empty;
+        node = LogicNode.Empty;
         return false;
     }
 
@@ -121,7 +129,8 @@ public sealed class Graph : IGraph
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
         {
-            ILogic logic = _nodes[i].Logic;
+            if (_nodes[i] is not LogicNode logicNode) continue;
+            ILogic logic = logicNode.Logic;
             if (logic is not IAgentSettable<TAgent> settable)
             {
                 continue;
@@ -137,7 +146,7 @@ public sealed class Graph : IGraph
         }
     }
 
-    public Node GetNodeByIndex(int index)
+    public INode GetNodeByIndex(int index)
     {
         if (index < 0 || index >= _nodes.Length)
         {

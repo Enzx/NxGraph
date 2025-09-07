@@ -37,12 +37,12 @@ public sealed class MermaidGraphExporter : IGraphExporter
         // Nodes
         for (int i = 0; i < graph.NodeCount; i++)
         {
-            Node node = graph.GetNodeByIndex(i);
+            INode node = graph.GetNodeByIndex(i);
             string nodeId = NodeVar(i);
             string label = BuildNodeLabel(node.Id, i, opts);
 
             // Shape: Start node gets a "stadium" shape, if IDirector rhombus {}, others are rectangles
-            if (node.Logic is IDirector)
+            if (node is LogicNode { Logic: IDirector })
             {
                 label = $"{{\"{EscapeLabel( label)}\"}}";
                 sb.Append("  ").Append(nodeId).Append(label).AppendLine();

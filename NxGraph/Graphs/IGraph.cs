@@ -9,7 +9,7 @@ public interface IGraph
     /// <summary>
     /// Represents the start node of the graph, which is the entry point for execution.
     /// </summary>
-    Node StartNode { get; }
+    INode StartNode { get; }
     /// <summary>
     /// Represents the total number of nodes in the graph, including the start node.
     /// </summary>
@@ -30,9 +30,9 @@ public interface IGraph
     /// Attempts to retrieve a node by its ID.
     /// </summary>
     /// <param name="id">The unique identifier of the node to retrieve.</param>
-    /// <param name="node">The node corresponding to the given ID, if found; otherwise, <see cref="Node.Empty"/>.</param>
+    /// <param name="node">The node corresponding to the given ID, if found; otherwise, <see cref="LogicNode.Empty"/>.</param>
     /// <returns><c>true</c> if the node exists; otherwise, <c>false</c>.</returns>
-    bool TryGetNode(NodeId id, out Node node);
+    bool TryGetNode(NodeId id, out INode node);
     /// <summary>
     /// Sets the agent for the graph, allowing it to interact with the graph's nodes and transitions.
     /// </summary>

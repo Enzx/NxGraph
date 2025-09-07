@@ -1,17 +1,22 @@
 ﻿using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using MessagePack;
 using MessagePack.Resolvers;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 using NxGraph.Serialization.Abstraction;
 
 namespace NxGraph.Serialization;
 
-public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializer
+public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializer
 {
-    private static ILogicCodec _codec;
-    private static readonly MessagePackSerializerOptions Options;
+    private readonly ILogicCodec _codec;
+    private readonly MessagePackSerializerOptions _options;
 
-    static GraphSerializer()
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public GraphSerializer(ILogicCodec codec)
     {
         IFormatterResolver resolver = CompositeResolver.Create(
             formatters: [],
@@ -20,63 +25,90 @@ public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerial
                 GraphFormatterResolver.Instance, StandardResolver.Instance
             ]
         );
-        _codec = new NullLogicCodec();
-        Options = MessagePackSerializerOptions.Standard.WithResolver(resolver);
+        _codec = codec;
+        _options = MessagePackSerializerOptions.Standard.WithResolver(resolver);
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
+        DefaultJsonTypeInfoResolver jsonTypeInfo = new()
+        {
+            Modifiers =
+            {
+                ti =>
+                {
+                    if (ti.Type != typeof(INodeDto))
+                    {
+                        return;
+                    }
+
+                    ti.PolymorphismOptions = new JsonPolymorphismOptions
+                    {
+                        TypeDiscriminatorPropertyName = "$type"
+                    };
+                    ti.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(NodeBinaryDto), "bin"));
+                    ti.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(NodeTextDto), "txt"));
+                }
+            }
+        };
+        _jsonOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine(
+            _jsonOptions.TypeInfoResolver,
+            jsonTypeInfo
+        );
     }
 
-    public static void SetLogicCodec<TWire>(ILogicCodec<TWire> codec)
-    {
-        _codec = codec ?? throw new ArgumentNullException(nameof(codec));
-    }
-
-    public static async ValueTask ToJsonAsync(Graph graph, Stream destination, CancellationToken ct = default)
+    public async ValueTask ToJsonAsync(Graph graph, Stream destination, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(destination);
 
         GraphDto dto = ToDto(graph);
 
-        await using StreamWriter writer = new(destination, leaveOpen: true);
+        await using StreamWriter writer = new(destination, new UTF8Encoding(false), leaveOpen: true);
 
-        string json = MessagePackSerializer.SerializeToJson(dto, cancellationToken: ct, options: Options);
+        string json = JsonSerializer.Serialize(dto, _jsonOptions);
         await writer.WriteAsync(json.AsMemory(), ct).ConfigureAwait(false);
         await writer.FlushAsync(ct).ConfigureAwait(false);
     }
 
-    public static async ValueTask<Graph> FromJsonAsync(Stream source, CancellationToken ct = default)
+    public async ValueTask<Graph> FromJsonAsync(Stream source, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        using StreamReader reader = new(source, Encoding.UTF8, leaveOpen: true);
+        using StreamReader reader = new(source,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true,
+            bufferSize: 4096,
+            leaveOpen: true);
         string json = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
 
-        // Convert JSON -> MessagePack bytes -> deserialize with resolvers
-        byte[] mp = MessagePackSerializer.ConvertFromJson(json, options: Options, cancellationToken: ct);
-        GraphDto dto = MessagePackSerializer.Deserialize<GraphDto>(mp, options: Options, cancellationToken: ct);
+        GraphDto dto = JsonSerializer.Deserialize<GraphDto>(json, _jsonOptions) ??
+                       throw new InvalidOperationException("Failed to parse Graph JSON.");
 
         return FromDto(dto);
     }
 
-    public static async ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default)
+    public async ValueTask ToBinaryAsync(Graph graph, Stream destination, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(destination);
 
         GraphDto dto = ToDto(graph);
 
-        await MessagePackSerializer.SerializeAsync(destination, dto, Options, ct);
+        await MessagePackSerializer.SerializeAsync(destination, dto, _options, ct);
 
         await destination.FlushAsync(ct).ConfigureAwait(false);
     }
 
-    public static async ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default)
+    public async ValueTask<Graph> FromBinaryAsync(Stream source, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        GraphDto dto = await MessagePackSerializer.DeserializeAsync<GraphDto>(source, Options, ct);
+        GraphDto dto = await MessagePackSerializer.DeserializeAsync<GraphDto>(source, _options, ct);
         return FromDto(dto);
     }
 
-    private static GraphDto ToDto(Graph graph)
+    private GraphDto ToDto(Graph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
         if (_codec is NullLogicCodec)
@@ -84,87 +116,183 @@ public abstract class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerial
             throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.");
         }
 
-        int n = graph.NodeCount;
-
-        INodeDto[] nodes = new INodeDto[n];
-        for (int i = 0; i < n; i++)
+        int transitionCount = graph.TransitionCount;
+        TransitionDto[] transitions = new TransitionDto[transitionCount];
+        for (int index = 0; index < transitionCount; index++)
         {
-            Node node = graph.GetNodeByIndex(i);
-
-            nodes[i] = _codec switch
-            {
-                ILogicCodec<string> t => new NodeTextDto(node.Id.Name, t.Serialize(node.Logic)),
-                ILogicCodec<ReadOnlyMemory<byte>> b => new NodeBinaryDto(node.Id.Name,
-                    b.Serialize(node.Logic)),
-                _ => throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.")
-            };
-        }
-
-        TransitionDto[] transitions = new TransitionDto[n];
-        for (int i = 0; i < n; i++)
-        {
-            Transition tr = graph.GetTransitionByIndex(i);
+            Transition tr = graph.GetTransitionByIndex(index);
             int dest = tr.IsEmpty ? -1 : tr.Destination.Index;
-            transitions[i] = new TransitionDto(dest);
+            transitions[index] = new TransitionDto(dest);
         }
 
-        return new GraphDto(nodes, transitions, graph.Id.Name);
-    }
-
-
-    private static Graph FromDto(GraphDto dto)
-    {
-        ArgumentNullException.ThrowIfNull(dto);
-
-        int n = dto.Nodes.Length;
-        if (n == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
-
-        Node[] nodes = new Node[n];
-        for (int i = 0; i < n; i++)
+        int nodeCount = graph.NodeCount;
+        List<SubGraphDto> subGraphs = [];
+        INodeDto[] nodes = new INodeDto[nodeCount];
+        for (int index = 0; index < nodeCount; index++)
         {
-            switch (dto.Nodes[i])
+            INode node = graph.GetNodeByIndex(index);
+            switch (node)
             {
-                case NodeTextDto t:
-                    ILogicCodec<string> codec = (ILogicCodec<string>)_codec;
-                    nodes[i] = new Node(i == 0 ? NodeId.Start : new NodeId(i, t.Name),
-                        codec.Deserialize(t.Logic));
-                    break;
+                case LogicNode logicNode:
+                    if (logicNode.Logic is StateMachine stateMachine)
+                    {
+                        // Serialize state machine as sub-graph
+                        GraphDto childDto = ToDto(stateMachine.Graph);
+                        subGraphs.Add(new SubGraphDto(index, childDto));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.StateMachineMarker.Id.Name);
+                        break;
+                    }
 
-                case NodeBinaryDto b:
-                    ILogicCodec<ReadOnlyMemory<byte>> binCodec = (ILogicCodec<ReadOnlyMemory<byte>>)_codec;
-                    nodes[i] = new Node(i == 0 ? NodeId.Start : new NodeId(i, b.Name),
-                        binCodec.Deserialize(b.Logic));
+                    nodes[index] = _codec switch
+                    {
+                        ILogicCodec<string> t => new NodeTextDto(index, node.Id.Name, t.Serialize(logicNode.Logic)),
+                        ILogicCodec<ReadOnlyMemory<byte>> b => new NodeBinaryDto(index, node.Id.Name,
+                            b.Serialize(logicNode.Logic)),
+                        _ => throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.")
+                    };
                     break;
-
-                default:
-                    throw new InvalidOperationException($"Unsupported node type: {dto.Nodes[i].GetType().Name}");
+                case Graph childGraph:
+                {
+                    GraphDto childDto = ToDto(childGraph);
+                    subGraphs.Add(new SubGraphDto(index, childDto));
+                    break;
+                }
             }
         }
 
-        Transition[] edges = new Transition[n]; // default = Empty
-        TransitionDto[] trs = dto.Transitions;
-        int m = Math.Min(n, trs.Length);
+        return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name);
+    }
 
-        for (int i = 0; i < m; i++)
+    private Graph FromDto(GraphDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        int nodesLength = dto.Nodes.Length;
+        if (nodesLength == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
+
+        var binaryCodec = _codec as ILogicCodec<ReadOnlyMemory<byte>>;
+        var textCodec = _codec as ILogicCodec<string>;
+
+        INode[] nodes = new INode[nodesLength];
+        for (int index = 0; index < nodesLength; index++)
         {
-            int dest = trs[i].Destination; // -1 means "no edge"
-            edges[i] = (dest >= 0 && dest < n) ? new Transition(nodes[dest].Id) : Transition.Empty;
+            INodeDto nodeDto = dto.Nodes[index];
+            if (nodeDto.Index < 0 || nodeDto.Index >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Node DTO index {nodeDto.Index} is out of range (0..{nodesLength - 1}).");
+
+            switch (nodeDto)
+            {
+                case NodeTextDto textDto:
+                    if (textCodec is null)
+                        throw new InvalidOperationException(
+                            "GraphSerializer has no ILogicCodec<string> configured, cannot decode text nodes.");
+
+                    if (textDto.Logic == LogicNode.StateMachineMarker.Id.Name)
+                    {
+                        // Keep a marker; we'll replace it after we rebuild subgraphs.
+                        nodes[nodeDto.Index] = LogicNode.StateMachineMarker;
+                        break;
+                    }
+
+                {
+                    ILogic logic = textCodec.Deserialize(textDto.Logic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, textDto.Name), logic);
+                }
+                    break;
+
+                case NodeBinaryDto binaryDto:
+                    if (binaryCodec is null)
+                        throw new InvalidOperationException(
+                            "GraphSerializer has no ILogicCodec<ReadOnlyMemory<byte>> configured, cannot decode binary nodes.");
+                {
+                    ILogic binLogic = binaryCodec.Deserialize(binaryDto.Logic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, binaryDto.Name), binLogic);
+                }
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Unknown node DTO type: {nodeDto.GetType().FullName}");
+            }
         }
 
-        NodeId graphId = new(0, dto.Name ?? string.Empty);
-        return new Graph(graphId, nodes, edges);
-    }
-}
+        Dictionary<int, Graph> ownerToSubGraph = new();
+        int subgraphCount = dto.SubGraphs.Length;
+        for (int i = 0; i < subgraphCount; i++)
+        {
+            SubGraphDto subDto = dto.SubGraphs[i];
 
-public static class GraphSerializerExtensions
-{
-    public static IGraphJsonSerializer AsJsonSerializer(this GraphSerializer serializer)
-    {
-        return serializer;
+            if (subDto.OwnerIndex < 0 || subDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Subgraph DTO owner index {subDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+
+            Graph childGraph = FromDto(subDto.Graph);
+            if (nodes[subDto.OwnerIndex] == LogicNode.StateMachineMarker)
+            {
+                ownerToSubGraph[subDto.OwnerIndex] = childGraph;
+            }
+            else
+            {
+                nodes[subDto.OwnerIndex] = childGraph;
+            }
+        }
+
+        for (int i = 0; i < nodesLength; i++)
+        {
+            if (nodes[i] is not LogicNode marker) continue;
+            if (marker != LogicNode.StateMachineMarker) continue;
+
+            if (!ownerToSubGraph.TryGetValue(i, out Graph? childGraph))
+                throw new InvalidOperationException(
+                    $"Node at index {i} was marked as a StateMachine but has no associated subgraph.");
+
+            string nodeName = dto.Nodes[i] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{i}"
+            };
+
+            ILogic stateMachineLogic = new StateMachine(childGraph);
+            nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineLogic);
+        }
+
+        int transitionsLength = dto.Transitions.Length;
+        Transition[] transitions = new Transition[transitionsLength];
+        for (int i = 0; i < transitionsLength; i++)
+        {
+            TransitionDto trDto = dto.Transitions[i];
+            if (trDto.Destination < -1 || trDto.Destination >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Transition DTO destination index {trDto.Destination} is out of range (-1..{nodesLength - 1}).");
+
+            transitions[i] = trDto.Destination == Transition.Empty.Destination.Index
+                ? Transition.Empty
+                : new Transition(nodes[trDto.Destination].Id);
+        }
+
+        NodeId graphId = new(dto.Index, dto.Name);
+        return new Graph(graphId, nodes, transitions);
     }
 
-    public static IGraphBinarySerializer AsBinarySerializer(this GraphSerializer serializer)
+
+    // ReSharper disable once UnusedMember.Global
+    /// <summary>
+    ///  Gets this instance as a JSON serializer.
+    /// </summary>
+    /// <returns></returns>
+    public IGraphJsonSerializer AsJsonSerializer()
     {
-        return serializer;
+        return this;
+    }
+    
+    // ReSharper disable once UnusedMember.Global
+    /// <summary>
+    ///  Gets this instance as a binary serializer.
+    /// </summary>
+    /// <returns></returns>
+    public IGraphBinarySerializer AsBinarySerializer()
+    {
+        return this;
     }
 }
