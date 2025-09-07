@@ -57,6 +57,7 @@ public readonly struct NodeId(int index) : IEquatable<NodeId>
     /// Represents the default NodeId with an index of -1 and a name of "Default".
     /// </summary>
     public static NodeId Default => new(-1) { Name = "Default" };
+    public static NodeId StateMachineMarker => new(-2) { Name = "StateMachine" };
 
     /// <summary>
     /// Represents the start NodeId with an index of 0 and a name of "Start".

@@ -120,9 +120,9 @@ public class PropertyTests
     }
 }
 
-internal class DummyState : ILogic
+internal class DummyState(string? data = null) : ILogic
 {
-    public string Data { get; init; } = string.Empty;
+    public string Data { get; init; } = data ?? string.Empty;
    
 
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)

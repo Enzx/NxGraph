@@ -17,7 +17,7 @@ public class StateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? obser
 /// </summary>
 public class StateMachine : State
 {
-    public readonly IGraph Graph;
+    public readonly Graph Graph;
     private readonly IAsyncStateMachineObserver? _observer;
 
     private int _statusInt = (int)ExecutionStatus.Created; // atomic state
@@ -32,7 +32,7 @@ public class StateMachine : State
     /// <summary>Public execution status (volatile for visibility).</summary>
     public ExecutionStatus Status => (ExecutionStatus)Volatile.Read(ref _statusInt);
 
-    public StateMachine(IGraph graph, IAsyncStateMachineObserver? observer = null)
+    public StateMachine(Graph graph, IAsyncStateMachineObserver? observer = null)
     {
         Graph = graph;
         _observer = observer;
