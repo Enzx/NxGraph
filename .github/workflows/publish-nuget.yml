@@ -6,6 +6,7 @@ on:
       - "v*"
       - "serialization/v*"
       - "serialization-abstraction/v*"
+      - "nxgraph/v*"
   workflow_dispatch:
     inputs:
       target:
@@ -78,6 +79,7 @@ jobs:
               v*) TARGET=all; VER="${GITHUB_REF_NAME#v}" ;;
               serialization/v*) TARGET=serialization; VER="${GITHUB_REF_NAME#serialization/v}" ;;
               serialization-abstraction/v*) TARGET=serialization-abstraction; VER="${GITHUB_REF_NAME#serialization-abstraction/v}" ;;
+              nxgraph/v*) TARGET=nxgraph; VER="${GITHUB_REF_NAME#nxgraph/v}" ;;
               *) echo "::error::Unsupported tag format '${GITHUB_REF_NAME}'."; exit 1 ;;
             esac
           else
@@ -95,9 +97,9 @@ jobs:
 
       - run: mkdir -p "$ARTIFACTS_DIR"
 
-      # Pack NxGraph (only on 'all')
+      # Pack NxGraph (only on 'all' or 'nxgraph')
       - name: Pack NxGraph
-        if: ${{ steps.ver.outputs.target == 'all' }}
+        if: ${{ steps.ver.outputs.target == 'all' || steps.ver.outputs.target == 'nxgraph' }}
         run: >
           dotnet pack NxGraph/NxGraph.csproj
           --configuration $CONFIGURATION -o $ARTIFACTS_DIR
