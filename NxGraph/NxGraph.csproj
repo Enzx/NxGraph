@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -14,6 +15,13 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
     </PropertyGroup>
+    <ItemGroup>
+        <Compile Remove="Shims\**\*.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <Compile Include="Shims\**\*.cs" />
+        
+    </ItemGroup>
     <ItemGroup>
         <None Include="Docs\readme.md" Pack="true" PackagePath="Docs\" />
     </ItemGroup>

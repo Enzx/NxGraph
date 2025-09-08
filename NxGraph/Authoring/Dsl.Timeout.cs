@@ -1,7 +1,9 @@
 ﻿using NxGraph.Fsm;
 using NxGraph.Graphs;
 using Timeout = NxGraph.Fsm.Timeout;
-
+#if NETSTANDARD2_1
+using ArgumentNullException = System.ArgumentNullExceptionShim;
+#endif
 namespace NxGraph.Authoring;
 
 public static partial class Dsl

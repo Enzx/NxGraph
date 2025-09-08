@@ -28,7 +28,11 @@ public sealed class NodeStatusTracker
     /// </summary>
     public void Initialize(Graph graph)
     {
-        ArgumentNullException.ThrowIfNull(graph);
+#if NETSTANDARD2_1
+        ArgumentNullExceptionShim.ThrowIfNull(graph);
+#else
+         ArgumentNullException.ThrowIfNull(graph);
+#endif
 
         int n = graph.NodeCount;
         if (_statuses.Length != n)
@@ -39,9 +43,9 @@ public sealed class NodeStatusTracker
         }
         else
         {
-            Array.Clear(_statuses);
-            Array.Clear(_enterTicks);
-            Array.Clear(_exitTicks);
+            Array.Clear(_statuses, 0, _statuses.Length);
+            Array.Clear(_enterTicks, 0, _enterTicks.Length);
+            Array.Clear(_exitTicks, 0, _exitTicks.Length);
         }
 
         _length = n;
@@ -143,9 +147,9 @@ public sealed class NodeStatusTracker
             return;
         }
 
-        Array.Clear(_statuses);
-        Array.Clear(_enterTicks);
-        Array.Clear(_exitTicks);
+        Array.Clear(_statuses, 0, _statuses.Length);
+        Array.Clear(_enterTicks, 0, _enterTicks.Length);
+        Array.Clear(_exitTicks, 0, _exitTicks.Length);
     }
 }
 
@@ -160,13 +164,13 @@ public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsy
     public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
     {
         _tracker.MarkEntered(id);
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
     {
         _tracker.MarkExited(id, true);
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateFailed(NodeId id, Exception? ex, CancellationToken ct = default)
@@ -174,16 +178,16 @@ public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsy
         if (ex is OperationCanceledException or TaskCanceledException)
         {
             _tracker.MarkCancelled(id);
-            return ValueTask.CompletedTask;
+            return ResultHelpers.CompletedTask;
         }
 
         _tracker.MarkExited(id, false);
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default)
     {
         _tracker.MarkTransitioned(from, to);
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 }

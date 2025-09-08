@@ -4,7 +4,6 @@ public interface INode
 {
     NodeId Id { get; }
     public ILogic Logic { get; }
-
 }
 
 public class LogicNode(NodeId id, ILogic logic) : INode
@@ -20,6 +19,6 @@ public sealed record EmptyLogic : ILogic
 {
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
-        return ValueTask.FromResult(Result.Success);
+        return ResultHelpers.Success;
     }
 }

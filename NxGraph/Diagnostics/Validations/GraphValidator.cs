@@ -1,5 +1,7 @@
 ﻿using NxGraph.Graphs;
-
+#if NETSTANDARD2_1
+using ArgumentNullException = System.ArgumentNullExceptionShim;
+#endif
 namespace NxGraph.Diagnostics.Validations;
 
 public static class GraphValidator

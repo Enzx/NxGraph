@@ -1,5 +1,8 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using NxGraph.Fsm;
+#if NETSTANDARD2_1
+using ArgumentNullException = System.ArgumentNullExceptionShim;
+#endif
 
 namespace NxGraph.Authoring;
 

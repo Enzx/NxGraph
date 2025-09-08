@@ -10,7 +10,7 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
     // ReSharper disable once MemberCanBePrivate.Global
     public int Count { get; private set; }
     public int Capacity => _events.Length;
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Clear()
     {
@@ -49,7 +49,7 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
     {
         if (Count == 0) return ReadOnlyMemory<ReplayEvent>.Empty;
 
-        ReplayEvent[] result = new ReplayEvent[Count];//okay for now, could be optimized with ArrayPool if needed
+        ReplayEvent[] result = new ReplayEvent[Count]; //okay for now, could be optimized with ArrayPool if needed
 
         if (_head < _tail)
         {
@@ -65,7 +65,7 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
 
         return result.AsMemory();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Record(ReplayEvent evt)
     {
@@ -88,61 +88,61 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
     public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateEntered, id, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateExited, id, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.Transition, from, to, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateFailed, id, null, ex.ToString(), CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateMachineReset(NodeId graphId, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateMachineReset, graphId, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateMachineStarted(NodeId graphId, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateMachineStarted, graphId, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateMachineCompleted(NodeId graphId, Result result, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateMachineCompleted, graphId, null, result.ToString(), CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnStateMachineCancelled(NodeId graphId, CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StateMachineCancelled, graphId, timestamp: CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask StateMachineStatusChanged(NodeId graphId, ExecutionStatus prev, ExecutionStatus next,
         CancellationToken ct = default)
     {
         Record(new ReplayEvent(EventType.StatusChanged, graphId, null, $"{prev}->{next}", CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     public ValueTask OnLogReport(NodeId nodeId, string message, CancellationToken ct)
     {
         Record(new ReplayEvent(EventType.Log, nodeId, null, message, CurrentTimestamp));
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 }
