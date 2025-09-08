@@ -14,4 +14,6 @@ public static class ResultHelpers
     /// Represents a failed result.
     /// </summary>
     public static readonly ValueTask<Result> Failure = new(Result.Failure);
+
+    public static readonly ValueTask CompletedTask = default;
 }

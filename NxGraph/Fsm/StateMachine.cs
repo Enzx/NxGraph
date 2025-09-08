@@ -169,7 +169,7 @@ public class StateMachine : State
     protected override ValueTask OnExitAsync(CancellationToken ct)
     {
         Volatile.Write(ref _executeGate, 0);
-        return ValueTask.CompletedTask;
+        return ResultHelpers.CompletedTask;
     }
 
     private async ValueTask<Result> InternalRunAsync(CancellationToken ct)

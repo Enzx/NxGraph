@@ -1,7 +1,9 @@
 ﻿using System.Runtime.CompilerServices;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
-
+#if NETSTANDARD2_1
+using ArgumentNullException = System.ArgumentNullExceptionShim;
+#endif
 // ReSharper disable UnusedMethodReturnValue.Global
 
 namespace NxGraph.Authoring;

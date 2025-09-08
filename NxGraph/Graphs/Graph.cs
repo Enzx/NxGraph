@@ -1,5 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using NxGraph.Fsm;
+#if NETSTANDARD2_1
+using ArgumentNullException = System.ArgumentNullExceptionShim;
+#endif
 
 namespace NxGraph.Graphs;
 
@@ -121,10 +124,8 @@ public sealed class Graph : INode, IGraph
     /// <exception cref="ArgumentNullException">Thrown when the <paramref name="agent"/> is null.</exception>
     public void SetAgent<TAgent>(TAgent agent)
     {
-        if (agent is null)
-        {
-            throw new ArgumentNullException(nameof(agent));
-        }
+        ArgumentNullException.ThrowIfNull(agent);
+
 
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
