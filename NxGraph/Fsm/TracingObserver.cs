@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿#if NET8_0_OR_GREATER
+using System.Diagnostics;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
@@ -160,3 +161,4 @@ public sealed class TracingObserver : IAsyncStateMachineObserver
         return ValueTask.CompletedTask;
     }
 }
+#endif

@@ -35,7 +35,11 @@ public class TimeoutState : ILogic
         CancellationTokenRegistration reg = default;
         if (ct.CanBeCanceled)
         {
+#if NET6_0_OR_GREATER
             reg = ct.UnsafeRegister(_cachedCancelCallback, cts);
+#else
+            reg = ct.Register(static s => ((Action)s!).Invoke(), _cachedCancelCallback);
+#endif
         }
 
         try
@@ -85,11 +89,19 @@ public class TimeoutState : ILogic
             {
                 return new CancellationTokenSource();
             }
-
+#if NET8_0_OR_GREATER
             if (cts.TryReset())
             {
                 return cts;
             }
+#else
+            // No TryReset in .NET Standard 2.1, so just dispose and create new.
+            if (!cts.IsCancellationRequested)
+            {
+                cts = new CancellationTokenSource(); 
+                return cts;
+            }
+#endif
 
             // Could not reset safely; dispose and fall through to new
             cts.Dispose();
@@ -99,7 +111,11 @@ public class TimeoutState : ILogic
 
         public static void Return(CancellationTokenSource cts)
         {
+#if NET6_0_OR_GREATER
             if (cts.TryReset())
+#else
+            if (!cts.IsCancellationRequested)
+#endif
             {
                 Bag.Add(cts);
             }
@@ -107,6 +123,7 @@ public class TimeoutState : ILogic
             {
                 cts.Dispose();
             }
+            
         }
     }
 }
