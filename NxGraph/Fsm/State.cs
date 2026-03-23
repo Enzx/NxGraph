@@ -1,67 +1,59 @@
-﻿using System.Runtime.CompilerServices;
-using NxGraph.Diagnostics.Replay;
+﻿using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
 
 /// <summary>
-/// Synchronous counterpart of <see cref="AsyncState"/>.
-/// All lifecycle methods are plain, non-virtual, zero-allocation calls.
-/// No <c>CancellationToken</c>, no <c>ValueTask</c>, no threading primitives.
-/// <para>
-/// When placed in a <see cref="Graph"/>, the authoring layer wraps this in a
-/// <see cref="SyncLogicAdapter"/> so that async runtimes can execute it via
-/// <see cref="IAsyncLogic.ExecuteAsync"/> (zero-allocation on .NET 8+).
-/// </para>
+/// Base class for all states in a finite state machine.
 /// </summary>
 public abstract class State : ILogic, ILogReporter
 {
     /// <summary>
-    /// Callback set by the sync runtime so the state can emit log messages.
-    /// Uses <see cref="Action{String}"/> instead of an async delegate.
+    /// Executes the state asynchronously, entering and exiting the state as needed.
     /// </summary>
-    public Action<string>? SyncLogReport { get; set; }
-
-    /// <summary>
-    /// Async log report callback (used when the state is executed via the async <see cref="AsyncStateMachine"/>).
-    /// </summary>
-    Func<string, CancellationToken, ValueTask>? ILogReporter.LogReport { get; set; }
-
-    /// <summary>
-    /// Executes the full enter → run → exit lifecycle synchronously.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Result Execute()
+    /// <param name="ct">The cancellation token to observe while executing the state.</param>
+    /// <returns>A <see cref="ValueTask{Result}"/> representing the<see cref="Result"/> of the state execution.</returns>
+    public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
-        OnEnter();
+        await OnEnterAsync(ct).ConfigureAwait(false);
         try
         {
-            return OnRun();
+            Result result = await OnRunAsync(ct).ConfigureAwait(false);
+            return result;
         }
         finally
         {
-            OnExit();
+            await OnExitAsync(ct).ConfigureAwait(false);
         }
     }
 
+    public Func<string, CancellationToken, ValueTask>? LogReport { get; set; }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    protected void Log(string message)
+    protected async ValueTask LogAsync(string message, CancellationToken ct = default)
     {
-        SyncLogReport?.Invoke(message);
+        if (LogReport != null)
+        {
+            await LogReport(message, ct);
+        }
     }
 
-    protected virtual void OnEnter() { }
+    protected virtual ValueTask OnEnterAsync(CancellationToken ct)
+    {
+        return default;
+    }
 
-    protected abstract Result OnRun();
+    protected abstract ValueTask<Result> OnRunAsync(CancellationToken ct);
 
-    protected virtual void OnExit() { }
+    protected virtual ValueTask OnExitAsync(CancellationToken ct)
+    {
+        return default;
+    }
 }
 
 /// <summary>
-/// Synchronous counterpart of <see cref="AsyncState{TAgent}"/>.
+/// Base class for states that can be set with an agent.
 /// </summary>
-/// <typeparam name="TAgent">The type of agent available during execution.</typeparam>
+/// <typeparam name="TAgent">The type of the agent to be used in the state.</typeparam>
 public abstract class State<TAgent> : State, IAgentSettable<TAgent>
 {
     // ReSharper disable once NullableWarningSuppressionIsUsed

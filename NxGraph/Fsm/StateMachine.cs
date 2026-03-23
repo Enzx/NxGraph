@@ -1,206 +1,201 @@
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
 
 /// <summary>
-/// A synchronous state machine with an agent, mirroring <see cref="AStateMachine{TAgent}"/>.
+/// A state machine that executes a graph of nodes with full lifecycle/observer support.
 /// </summary>
-public class StateMachine<TAgent> : StateMachine, IAgentSettable<TAgent>
+public class StateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? observer = null)
+    : StateMachine(graph, observer), IAgentSettable<TAgent>
 {
-    public StateMachine(Graph graph, IStateMachineObserver? observer = null)
-        : base(graph, observer) { }
-
     public void SetAgent(TAgent agent) => Graph.SetAgent(agent);
 }
 
 /// <summary>
-/// Synchronous, zero-allocation counterpart of <see cref="AStateMachine"/>.
-/// <para>
-/// All threading overhead has been removed:
-/// <list type="bullet">
-///   <item><c>_status</c> is a plain field (no <see cref="Volatile"/>/<see cref="Interlocked"/>).</item>
-///   <item><c>_executeGate</c> is a plain <see langword="bool"/>.</item>
-///   <item><c>_autoReset</c> is a plain <see langword="bool"/>.</item>
-///   <item>No <see cref="CancellationToken"/>, no <c>async</c>/<c>await</c>, no <c>ValueTask</c>.</item>
-///   <item>Observer callbacks are <c>void</c> (see <see cref="IStateMachineObserver"/>).</item>
-/// </list>
-/// </para>
-/// Node logic is executed via <see cref="ILogic.Execute"/> — every node in the graph
-/// must have its <see cref="INode.Logic"/> populated (i.e. implement <see cref="ILogic"/>).
+/// Non-generic StateMachine.
 /// </summary>
-public class StateMachine
+public class StateMachine : State
 {
     public readonly Graph Graph;
-    private readonly IStateMachineObserver? _observer;
+    private readonly IAsyncStateMachineObserver? _observer;
 
-    private ExecutionStatus _status = ExecutionStatus.Created;
+    private int _statusInt = (int)ExecutionStatus.Created; // atomic state
 
     private NodeId _current;
     private readonly NodeId _initial;
 
-    private bool _autoReset = true;
-    private bool _executeGate;
-    private readonly Action<string> _cachedLogReportCallback;
+    private int _autoReset = 1; // 1 = true, 0 = false (int for lock-free Volatile/Interlocked use)
+    private int _executeGate;
+    private readonly Func<string, CancellationToken, ValueTask> _cachedLogReportCallback;
 
-    /// <summary>Public execution status.</summary>
-    public ExecutionStatus Status
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _status;
-    }
+    /// <summary>Public execution status (volatile for visibility).</summary>
+    public ExecutionStatus Status => (ExecutionStatus)Volatile.Read(ref _statusInt);
 
-    public StateMachine(Graph graph, IStateMachineObserver? observer = null)
+    public StateMachine(Graph graph, IAsyncStateMachineObserver? observer = null)
     {
         Graph = graph;
         _observer = observer;
         _initial = graph.StartNode.Id;
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
+        // _statusInt already initialized to Created at field declaration; no transition needed.
     }
 
     /// <summary>Enable/disable auto-reset to Ready after a terminal state.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetAutoReset(bool enabled)
     {
-        _autoReset = enabled;
+        Volatile.Write(ref _autoReset, enabled ? 1 : 0);
     }
 
     /// <summary>
     /// Reset to the initial node. Disallowed while Running/Transitioning.
-    /// Status moves: (any non-running) → Resetting → Ready.
+    /// Status moves: (any non-running) -> Resetting -> Ready.
     /// </summary>
-    public Result Reset()
+    public async ValueTask<Result> Reset(CancellationToken ct = default)
     {
-        ExecutionStatus status = _status;
-        switch (status)
+        while (true)
         {
-            case ExecutionStatus.Running:
-            case ExecutionStatus.Transitioning:
-            case ExecutionStatus.Starting:
-                throw new InvalidOperationException("Cannot reset while starting, running, or transitioning.");
-            case ExecutionStatus.Created:
-            case ExecutionStatus.Ready:
-                return Result.Success;
-            case ExecutionStatus.Completed:
-            case ExecutionStatus.Failed:
-            case ExecutionStatus.Cancelled:
-            case ExecutionStatus.Resetting:
-                break;
-            default:
-                throw new IndexOutOfRangeException(nameof(status));
+            ExecutionStatus status = Status;
+            switch (status)
+            {
+                case ExecutionStatus.Running:
+                case ExecutionStatus.Transitioning:
+                case ExecutionStatus.Starting:
+                    throw new InvalidOperationException("Cannot reset while starting, running, or transitioning.");
+                case ExecutionStatus.Created:
+                case ExecutionStatus.Ready:
+                    return Result.Success;
+                case ExecutionStatus.Completed:
+                case ExecutionStatus.Failed:
+                case ExecutionStatus.Cancelled:
+                case ExecutionStatus.Resetting:
+                    break;
+                default:
+                    throw new IndexOutOfRangeException(nameof(status));
+            }
+
+            // Own the transition to Resetting from whatever terminal state we observed.
+            if (!TryTransition(status, ExecutionStatus.Resetting, out ExecutionStatus previous))
+            {
+                continue;
+            }
+
+            await NotifyMachineStatusChangeAsync(previous, ExecutionStatus.Resetting).ConfigureAwait(false);
+            break; // we won; proceed
+            // else: raced with another transition; retry
         }
 
-        TransitionTo(ExecutionStatus.Resetting);
         _current = _initial;
-        TransitionTo(ExecutionStatus.Ready);
+
+        await TransitionTo(ExecutionStatus.Ready).ConfigureAwait(false);
         return Result.Success;
     }
 
-    /// <summary>
-    /// Executes the full state machine synchronously: enter → run loop → exit.
-    /// </summary>
-    public Result Execute()
+    protected override async ValueTask OnEnterAsync(CancellationToken ct)
     {
-        OnEnter();
-        try
-        {
-            return OnRun();
-        }
-        finally
-        {
-            OnExit();
-        }
-    }
-
-    private void OnEnter()
-    {
-        if (_executeGate)
+        if (Interlocked.Exchange(ref _executeGate, 1) == 1) // Prevent re-entrance
         {
             throw new InvalidOperationException("StateMachine is already executing.");
         }
 
-        _executeGate = true;
-
-        TransitionTo(ExecutionStatus.Starting);
+        // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
+        await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
         _current = _initial;
+        if (_observer is not null)
+        {
+            await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
+        }
 
-        _observer?.OnStateEntered(_current);
-
-        TransitionTo(ExecutionStatus.Running);
+        await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
     }
 
-    private Result OnRun()
+    protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
     {
         try
         {
-            Result result = InternalRun();
+            Result result = await InternalRunAsync(ct).ConfigureAwait(false);
 
-            TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+            // If we get here, loop has returned a terminal result already.
+            // Machine completion notification + optional auto-reset-to-Ready.
+            await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
+                .ConfigureAwait(false);
 
-            if (_autoReset)
+            if (Volatile.Read(ref _autoReset) != 0)
             {
-                Reset();
+                await Reset(ct).ConfigureAwait(false);
             }
 
             return result;
         }
+        catch (OperationCanceledException)
+        {
+            // TransitionTo(Cancelled) already fires OnStateMachineCancelled via NotifyMachineStatusChangeAsync.
+            await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
+
+            if (Volatile.Read(ref _autoReset) != 0)
+            {
+                // Use default token — ct is already cancelled at this point.
+                await Reset(default).ConfigureAwait(false);
+            }
+
+            throw;
+        }
         catch (Exception ex)
         {
-            _observer?.OnStateFailed(_current, ex);
+            // Unexpected error outside node execution (node failures are returned as Failure below)
+            if (_observer is not null)
+                await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
 
-            TransitionTo(ExecutionStatus.Failed);
+            // TransitionTo(Failed) already fires OnStateMachineCompleted(Failure) via NotifyMachineStatusChangeAsync.
+            await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
 
-            if (_autoReset)
+            if (Volatile.Read(ref _autoReset) != 0)
             {
-                Reset();
+                // Use default token — ct may be cancelled or faulted at this point.
+                await Reset(default).ConfigureAwait(false);
             }
 
             throw;
         }
     }
 
-    private void OnExit()
+    protected override ValueTask OnExitAsync(CancellationToken ct)
     {
-        _executeGate = false;
+        Volatile.Write(ref _executeGate, 0);
+        return ResultHelpers.CompletedTask;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private Result InternalRun()
+    private async ValueTask<Result> InternalRunAsync(CancellationToken ct)
     {
-        while (true)
+        while (!ct.IsCancellationRequested)
         {
             if (!Graph.TryGetNode(_current, out INode? node))
             {
                 throw new InvalidOperationException($"Node '{_current}' not found.");
             }
 
-            LogicNode logicNode = (LogicNode)node;
-
-            // Wire log-report callback for nodes that support it.
-            if (logicNode.Logic is State stateForLog)
+            if (node is LogicNode { Logic: ILogReporter reporter })
             {
-                stateForLog.SyncLogReport = _cachedLogReportCallback;
+                //We need to capture the current node in the closure for correct attribution
+                reporter.LogReport = _cachedLogReportCallback;
             }
 
-            // Execute the node synchronously.
-            ILogic syncLogic = logicNode.Logic
-                ?? throw new InvalidOperationException(
-                    $"Node '{_current}' logic ({logicNode.AsyncLogic.GetType().Name}) does not implement ILogic. " +
-                    "All nodes in a StateMachine must implement ILogic.");
-
-            Result result = syncLogic.Execute();
-
+            LogicNode logicLogicNode = (LogicNode)node;
+            Result result = await logicLogicNode.Logic.ExecuteAsync(ct).ConfigureAwait(false);
             switch (result)
             {
                 case Result.Success:
                 {
-                    _observer?.OnStateExited(_current);
+                    if (_observer is not null)
+                    {
+                        await _observer.OnStateExited(_current, ct).ConfigureAwait(false);
+                    }
 
                     NodeId next;
 
-                    if (logicNode.Logic is IDirector director)
+                    if (logicLogicNode.Logic is IDirector director)
                     {
                         next = director.SelectNext();
                         if (next.Equals(NodeId.Default))
@@ -212,9 +207,14 @@ public class StateMachine
                     {
                         if (!Graph.TryGetTransition(_current, out Transition edge))
                         {
-                            _observer?.OnStateFailed(
-                                _current,
-                                new InvalidOperationException($"No transition found for state '{_current}'."));
+                            if (_observer is not null)
+                            {
+                                await _observer.OnStateFailed(
+                                    _current,
+                                    new InvalidOperationException($"No transition found for state '{_current}'."),
+                                    ct
+                                ).ConfigureAwait(false);
+                            }
 
                             return Result.Failure;
                         }
@@ -227,15 +227,21 @@ public class StateMachine
                         next = edge.Destination;
                     }
 
-                    TransitionTo(ExecutionStatus.Transitioning);
+                    await TransitionTo(ExecutionStatus.Transitioning).ConfigureAwait(false);
 
-                    _observer?.OnTransition(_current, next);
+                    if (_observer is not null)
+                    {
+                        await _observer.OnTransition(_current, next, ct).ConfigureAwait(false);
+                    }
 
                     _current = next;
 
-                    _observer?.OnStateEntered(_current);
+                    if (_observer is not null)
+                    {
+                        await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
+                    }
 
-                    TransitionTo(ExecutionStatus.Running);
+                    await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
 
                     continue;
                 }
@@ -245,31 +251,50 @@ public class StateMachine
                     throw new InvalidOperationException("Unknown node result.");
             }
         }
+
+        ct.ThrowIfCancellationRequested();
+        return Result.Failure;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void LogReportCallback(string message)
+    private async ValueTask LogReportCallback(string message, CancellationToken ct)
     {
-        _observer?.OnLogReport(_current, message);
-    }
-
-    /// <summary>
-    /// Plain field write + observer notification. No Interlocked, no Volatile.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void TransitionTo(ExecutionStatus next)
-    {
-        ExecutionStatus prev = _status;
-        Debug.Assert(prev != next, $"Redundant status transition: {prev} -> {next}");
-        _status = next;
-        if (prev != next)
+        if (_observer is not null)
         {
-            NotifyMachineStatusChange(prev, next);
+            await _observer.OnLogReport(_current, message, ct).ConfigureAwait(false);
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void NotifyMachineStatusChange(ExecutionStatus prev, ExecutionStatus next)
+    private bool TryTransition(ExecutionStatus from, ExecutionStatus to, out ExecutionStatus prev)
+    {
+        int f = (int)from, t = (int)to;
+        int seen = Interlocked.CompareExchange(ref _statusInt, t, f);
+        prev = (ExecutionStatus)seen;
+
+        return seen == f;
+    }
+
+    /// <summary>
+    /// Centralized status transition. Sets the status unconditionally and then
+    /// kicks machine-lifecycle notifications outside the lock.
+    /// </summary>
+    /// <remarks>
+    /// Uses <see cref="Interlocked.Exchange(ref int, int)"/> (unconditional) rather than CAS.
+    /// Only call this when the caller owns the execution context (i.e. from the
+    /// run-loop or enter/exit methods that are guarded by <see cref="_executeGate"/>).
+    /// For external transitions that must validate the predecessor state, use
+    /// <see cref="TryTransition"/> instead.
+    /// </remarks>
+    private async ValueTask TransitionTo(ExecutionStatus next)
+    {
+        ExecutionStatus prev = (ExecutionStatus)Interlocked.Exchange(ref _statusInt, (int)next);
+        Debug.Assert(prev != next, $"Redundant status transition: {prev} -> {next}");
+        if (prev != next && _observer is not null)
+        {
+            await NotifyMachineStatusChangeAsync(prev, next).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask NotifyMachineStatusChangeAsync(ExecutionStatus prev, ExecutionStatus next)
     {
         if (_observer is null)
         {
@@ -277,24 +302,27 @@ public class StateMachine
         }
 
         NodeId graphId = Graph.Id;
-        _observer.StateMachineStatusChanged(graphId, prev, next);
-
+        await _observer.StateMachineStatusChanged(graphId, prev, next).ConfigureAwait(false);
         switch (next)
         {
             case ExecutionStatus.Starting:
-                _observer.OnStateMachineStarted(graphId);
+                await _observer.OnStateMachineStarted(graphId).ConfigureAwait(false);
                 break;
 
             case ExecutionStatus.Completed:
-                _observer.OnStateMachineCompleted(graphId, Result.Success);
+                await _observer.OnStateMachineCompleted(graphId, Result.Success).ConfigureAwait(false);
                 break;
 
             case ExecutionStatus.Failed:
-                _observer.OnStateMachineCompleted(graphId, Result.Failure);
+                await _observer.OnStateMachineCompleted(graphId, Result.Failure).ConfigureAwait(false);
+                break;
+
+            case ExecutionStatus.Cancelled:
+                await _observer.OnStateMachineCancelled(graphId).ConfigureAwait(false);
                 break;
 
             case ExecutionStatus.Resetting:
-                _observer.OnStateMachineReset(graphId);
+                await _observer.OnStateMachineReset(graphId).ConfigureAwait(false);
                 break;
 
             case ExecutionStatus.Ready:
@@ -302,10 +330,8 @@ public class StateMachine
             case ExecutionStatus.Running:
             case ExecutionStatus.Transitioning:
                 break;
-
             default:
                 throw new ArgumentOutOfRangeException(nameof(next), next, null);
         }
     }
 }
-
