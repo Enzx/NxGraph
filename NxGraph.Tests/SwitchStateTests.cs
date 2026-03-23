@@ -46,6 +46,7 @@ public class SwitchStateTests
             .End()
             .ToAsyncStateMachine();
 
+
         Result result = await fsm.ExecuteAsync();
         Assert.That(result, Is.EqualTo(Result.Success));
     }

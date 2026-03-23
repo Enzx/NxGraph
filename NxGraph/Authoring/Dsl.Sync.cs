@@ -11,12 +11,12 @@ public static partial class Dsl
     // ── StateToken overloads accepting Func<Result> ──────────────────────
 
     /// <summary>
-    /// Chains a synchronous state (wrapping <paramref name="run"/> in a <see cref="SyncRelayState"/>).
+    /// Chains a synchronous state (wrapping <paramref name="run"/> in a <see cref="RelayState"/>).
     /// </summary>
     public static StateToken To(this StateToken prev, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return prev.To(new SyncRelayState(run));
+        return prev.To(new RelayState(run));
     }
 
     // ── StartToken overloads accepting Func<Result> ─────────────────────
@@ -27,7 +27,7 @@ public static partial class Dsl
     public static StateToken To(this StartToken token, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return token.To(new SyncRelayState(run));
+        return token.To(new RelayState(run));
     }
 
     // ── IfBuilder / BranchBuilder / BranchEnd overloads ─────────────────
@@ -38,7 +38,7 @@ public static partial class Dsl
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return ifBuilder.Then(new SyncRelayState(run));
+        return ifBuilder.Then(new RelayState(run));
     }
 
     /// <summary>
@@ -47,7 +47,7 @@ public static partial class Dsl
     public static BranchEnd Else(this BranchBuilder branch, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branch.Else(new SyncRelayState(run));
+        return branch.Else(new RelayState(run));
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ public static partial class Dsl
     public static BranchBuilder To(this BranchBuilder branch, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branch.To(new SyncRelayState(run));
+        return branch.To(new RelayState(run));
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public static partial class Dsl
     public static StateToken To(this BranchEnd branchEnd, Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branchEnd.To(new SyncRelayState(run));
+        return branchEnd.To(new RelayState(run));
     }
 
     // ── SwitchBuilder overloads accepting Func<Result> ──────────────────
@@ -77,7 +77,7 @@ public static partial class Dsl
         Func<Result> run) where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        return switchBuilder.Case(key, new SyncRelayState(run));
+        return switchBuilder.Case(key, new RelayState(run));
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public static partial class Dsl
         Func<Result> run) where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        return switchBuilder.Default(new SyncRelayState(run));
+        return switchBuilder.Default(new RelayState(run));
     }
 
     // ── GraphBuilder.StartWith overload for Func<Result> ────────────────
@@ -98,7 +98,7 @@ public static partial class Dsl
     public static StateToken StartWithSync(Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return GraphBuilder.StartWith(new SyncRelayState(run));
+        return GraphBuilder.StartWith(new RelayState(run));
     }
 }
 
