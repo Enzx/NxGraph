@@ -187,7 +187,7 @@ public sealed partial class GraphBuilder
     public static StateToken StartWith(Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return StartWith((ILogic)new SyncRelayState(run));
+        return StartWith((ILogic)new RelayState(run));
     }
 
     /// <summary>
