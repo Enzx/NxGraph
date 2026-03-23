@@ -1,4 +1,5 @@
-﻿using NxGraph.Diagnostics.Replay;
+﻿using System.Diagnostics;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
@@ -25,7 +26,7 @@ public class StateMachine : State
     private NodeId _current;
     private readonly NodeId _initial;
 
-    private bool _autoReset = true;
+    private int _autoReset = 1; // 1 = true, 0 = false (int for lock-free Volatile/Interlocked use)
     private int _executeGate;
     private readonly Func<string, CancellationToken, ValueTask> _cachedLogReportCallback;
 
@@ -39,17 +40,13 @@ public class StateMachine : State
         _initial = graph.StartNode.Id;
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
-        ValueTask task = TransitionTo(ExecutionStatus.Created);
-        if (!task.IsCompletedSuccessfully)
-        {
-            task.AsTask().GetAwaiter().GetResult();
-        }
+        // _statusInt already initialized to Created at field declaration; no transition needed.
     }
 
     /// <summary>Enable/disable auto-reset to Ready after a terminal state.</summary>
     public void SetAutoReset(bool enabled)
     {
-        Volatile.Write(ref _autoReset, enabled);
+        Volatile.Write(ref _autoReset, enabled ? 1 : 0);
     }
 
     /// <summary>
@@ -125,7 +122,7 @@ public class StateMachine : State
             await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
                 .ConfigureAwait(false);
 
-            if (Volatile.Read(ref _autoReset))
+            if (Volatile.Read(ref _autoReset) != 0)
             {
                 await Reset(ct).ConfigureAwait(false);
             }
@@ -134,14 +131,13 @@ public class StateMachine : State
         }
         catch (OperationCanceledException)
         {
+            // TransitionTo(Cancelled) already fires OnStateMachineCancelled via NotifyMachineStatusChangeAsync.
             await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
 
-            if (_observer is not null)
-                await _observer.OnStateMachineCancelled(Graph.Id, ct).ConfigureAwait(false);
-
-            if (Volatile.Read(ref _autoReset))
+            if (Volatile.Read(ref _autoReset) != 0)
             {
-                await Reset(ct).ConfigureAwait(false);
+                // Use default token — ct is already cancelled at this point.
+                await Reset(default).ConfigureAwait(false);
             }
 
             throw;
@@ -152,14 +148,13 @@ public class StateMachine : State
             if (_observer is not null)
                 await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
 
+            // TransitionTo(Failed) already fires OnStateMachineCompleted(Failure) via NotifyMachineStatusChangeAsync.
             await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
 
-            if (_observer is not null)
-                await _observer.OnStateMachineCompleted(Graph.Id, Result.Failure, ct).ConfigureAwait(false);
-
-            if (Volatile.Read(ref _autoReset))
+            if (Volatile.Read(ref _autoReset) != 0)
             {
-                await Reset(ct).ConfigureAwait(false);
+                // Use default token — ct may be cancelled or faulted at this point.
+                await Reset(default).ConfigureAwait(false);
             }
 
             throw;
@@ -279,12 +274,20 @@ public class StateMachine : State
     }
 
     /// <summary>
-    /// Centralized status transition. Sets the status under lock and then
+    /// Centralized status transition. Sets the status unconditionally and then
     /// kicks machine-lifecycle notifications outside the lock.
     /// </summary>
+    /// <remarks>
+    /// Uses <see cref="Interlocked.Exchange(ref int, int)"/> (unconditional) rather than CAS.
+    /// Only call this when the caller owns the execution context (i.e. from the
+    /// run-loop or enter/exit methods that are guarded by <see cref="_executeGate"/>).
+    /// For external transitions that must validate the predecessor state, use
+    /// <see cref="TryTransition"/> instead.
+    /// </remarks>
     private async ValueTask TransitionTo(ExecutionStatus next)
     {
         ExecutionStatus prev = (ExecutionStatus)Interlocked.Exchange(ref _statusInt, (int)next);
+        Debug.Assert(prev != next, $"Redundant status transition: {prev} -> {next}");
         if (prev != next && _observer is not null)
         {
             await NotifyMachineStatusChangeAsync(prev, next).ConfigureAwait(false);

@@ -16,9 +16,15 @@ public abstract class State : ILogic, ILogReporter
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
         await OnEnterAsync(ct).ConfigureAwait(false);
-        Result result = await OnRunAsync(ct).ConfigureAwait(false);
-        await OnExitAsync(ct).ConfigureAwait(false);
-        return result;
+        try
+        {
+            Result result = await OnRunAsync(ct).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            await OnExitAsync(ct).ConfigureAwait(false);
+        }
     }
 
     public Func<string, CancellationToken, ValueTask>? LogReport { get; set; }
