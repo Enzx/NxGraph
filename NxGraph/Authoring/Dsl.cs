@@ -17,8 +17,8 @@ public static partial class Dsl
     public static StateToken To(this StateToken prev, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        IAsyncLogic asyncLogic = new AsyncRelayState(run);
-        return prev.To(asyncLogic);
+        ILogic logic = new RelayState(run);
+        return prev.To(logic);
     }
 
     public static StateToken SetName(this StateToken prev, string name)
@@ -30,7 +30,7 @@ public static partial class Dsl
         }
 
         prev.Builder.SetName(prev.Id, name);
-        return new StateToken(prev.Id.WithName(name), prev.Builder);
+        return prev;
     }
 
     public static Graph SetName(this Graph graph, string name)
@@ -81,8 +81,8 @@ public static partial class Dsl
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        AsyncRelayState asyncRelay = new(run);
-        return ifBuilder.Then(asyncRelay);
+        RelayState relay = new(run);
+        return ifBuilder.Then(relay);
     }
 
     /// <summary>
@@ -94,8 +94,8 @@ public static partial class Dsl
     public static BranchEnd Else(this BranchBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        AsyncRelayState asyncRelay = new(run);
-        return ifBuilder.Else(asyncRelay);
+        RelayState relay = new(run);
+        return ifBuilder.Else(relay);
     }
 
 
@@ -112,8 +112,8 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        AsyncRelayState asyncRelay = new(run);
-        return switchBuilder.Case(key, asyncRelay);
+        RelayState relay = new(run);
+        return switchBuilder.Case(key, relay);
     }
 
     /// <summary>
@@ -128,8 +128,8 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        AsyncRelayState asyncRelay = new(run);
-        return switchBuilder.Default(asyncRelay);
+        RelayState relay = new(run);
+        return switchBuilder.Default(relay);
     }
 
     public static Graph Build(this BranchBuilder branch)
@@ -145,7 +145,7 @@ public static partial class Dsl
     public static BranchBuilder To(this BranchBuilder branch, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branch.To(new AsyncRelayState(run));
+        return branch.To(new RelayState(run));
     }
 
     /// <summary>
@@ -154,11 +154,6 @@ public static partial class Dsl
     public static BranchBuilder SetName(this BranchBuilder branch, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
-        }
-
         branch.Builder.SetName(branch.Tip, name);
         return branch;
     }
@@ -171,7 +166,7 @@ public static partial class Dsl
     public static StateToken To(this BranchEnd branchEnd, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branchEnd.To(new AsyncRelayState(run));
+        return branchEnd.To(new RelayState(run));
     }
 
     /// <summary>
@@ -180,11 +175,6 @@ public static partial class Dsl
     public static BranchEnd SetName(this BranchEnd branchEnd, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
-        }
-
         branchEnd.Builder.SetName(branchEnd.Tip, name);
         return branchEnd;
     }
