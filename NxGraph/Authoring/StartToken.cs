@@ -28,13 +28,24 @@ public readonly struct StartToken
     }
 
     /// <summary>
+    /// Adds the first (start) node with the given sync logic and returns a <see cref="StateToken"/>.
+    /// </summary>
+    /// <param name="syncLogic">The synchronous logic to run as the start node.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
+    public StateToken To(ILogic syncLogic)
+    {
+        NodeId id = Builder.AddNode(syncLogic, true);
+        return new StateToken(id, Builder);
+    }
+
+    /// <summary>
     /// Adds the first (start) node that executes <paramref name="run"/> and returns a <see cref="StateToken"/>.
     /// </summary>
     /// <param name="run">The function to execute in the start node.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
     public StateToken To(Func<CancellationToken, ValueTask<Result>> run)
     {
-        return To(new RelayState(run));
+        return To(new AsyncRelayState(run));
     }
 
     /// <summary>

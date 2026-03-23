@@ -17,7 +17,7 @@ public static partial class Dsl
     public static StateToken To(this StateToken prev, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        IAsyncLogic asyncLogic = new RelayState(run);
+        IAsyncLogic asyncLogic = new AsyncRelayState(run);
         return prev.To(asyncLogic);
     }
 
@@ -81,8 +81,8 @@ public static partial class Dsl
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return ifBuilder.Then(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return ifBuilder.Then(asyncRelay);
     }
 
     /// <summary>
@@ -94,8 +94,8 @@ public static partial class Dsl
     public static BranchEnd Else(this BranchBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return ifBuilder.Else(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return ifBuilder.Else(asyncRelay);
     }
 
 
@@ -112,8 +112,8 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return switchBuilder.Case(key, relay);
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.Case(key, asyncRelay);
     }
 
     /// <summary>
@@ -128,8 +128,8 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return switchBuilder.Default(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.Default(asyncRelay);
     }
 
     public static Graph Build(this BranchBuilder branch)
@@ -145,7 +145,7 @@ public static partial class Dsl
     public static BranchBuilder To(this BranchBuilder branch, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branch.To(new RelayState(run));
+        return branch.To(new AsyncRelayState(run));
     }
 
     /// <summary>
@@ -166,7 +166,7 @@ public static partial class Dsl
     public static StateToken To(this BranchEnd branchEnd, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return branchEnd.To(new RelayState(run));
+        return branchEnd.To(new AsyncRelayState(run));
     }
 
     /// <summary>

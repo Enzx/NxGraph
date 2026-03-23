@@ -414,9 +414,9 @@ public class StateMachineTests
     [Test]
     public void should_throw_when_node_does_not_implement_ISyncLogic()
     {
-        // RelayState (async only) does not implement ISyncLogic.
+        // AsyncRelayState (async only) does not implement ILogic.
         StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(_ => ResultHelpers.Success))
+            .StartWith(new AsyncRelayState(_ => ResultHelpers.Success))
             .ToStateMachine();
 
         Assert.Throws<InvalidOperationException>(() => fsm.Execute());

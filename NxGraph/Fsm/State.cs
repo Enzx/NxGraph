@@ -9,13 +9,12 @@ namespace NxGraph.Fsm;
 /// All lifecycle methods are plain, non-virtual, zero-allocation calls.
 /// No <c>CancellationToken</c>, no <c>ValueTask</c>, no threading primitives.
 /// <para>
-/// Also implements <see cref="IAsyncLogic"/> so the same <see cref="Graph"/> can be used by
-/// both <see cref="AsyncStateMachine"/> (async) and <see cref="StateMachine"/> (sync).
-/// The <see cref="IAsyncLogic.ExecuteAsync"/> path wraps the synchronous result in a
-/// completed <see cref="ValueTask{Result}"/> (zero-allocation on .NET 8+).
+/// When placed in a <see cref="Graph"/>, the authoring layer wraps this in a
+/// <see cref="SyncLogicAdapter"/> so that async runtimes can execute it via
+/// <see cref="IAsyncLogic.ExecuteAsync"/> (zero-allocation on .NET 8+).
 /// </para>
 /// </summary>
-public abstract class State : ILogic, IAsyncLogic, ILogReporter
+public abstract class State : ILogic, ILogReporter
 {
     /// <summary>
     /// Callback set by the sync runtime so the state can emit log messages.
@@ -45,16 +44,6 @@ public abstract class State : ILogic, IAsyncLogic, ILogReporter
         }
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// Bridges the sync execution into the async <see cref="IAsyncLogic"/> contract.
-    /// Returns a completed <see cref="ValueTask{Result}"/> — zero-allocation.
-    /// </remarks>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    ValueTask<Result> IAsyncLogic.ExecuteAsync(CancellationToken ct)
-    {
-        return new ValueTask<Result>(Execute());
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void Log(string message)

@@ -28,6 +28,11 @@ public sealed class Graph : INode, IGraph
     public IAsyncLogic AsyncLogic { get; }
 
     /// <summary>
+    /// Synchronous logic is not applicable for a Graph node; always <c>null</c>.
+    /// </summary>
+    public ILogic? Logic => null;
+
+    /// <summary>
     /// The start node of the graph, which is always NodeId.Start (index 0).
     /// </summary>
     public INode StartNode { get; }
@@ -131,8 +136,13 @@ public sealed class Graph : INode, IGraph
         for (int i = 0; i < _nodes.Length; i++)
         {
             if (_nodes[i] is not LogicNode logicNode) continue;
-            IAsyncLogic asyncLogic = logicNode.AsyncLogic;
-            if (asyncLogic is not IAgentSettable<TAgent> settable)
+
+            // Check the async logic first, then the sync logic (for States wrapped in SyncLogicAdapter).
+            IAgentSettable<TAgent>? settable =
+                logicNode.AsyncLogic as IAgentSettable<TAgent>
+                ?? logicNode.Logic as IAgentSettable<TAgent>;
+
+            if (settable is null)
             {
                 continue;
             }

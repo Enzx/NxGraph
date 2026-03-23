@@ -143,11 +143,19 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
+                    // Unwrap SyncLogicAdapter so the codec receives the actual IAsyncLogic/ILogic,
+                    // not the adapter wrapper. If the inner ILogic also implements IAsyncLogic, use it.
+                    IAsyncLogic logicForCodec = logicNode.AsyncLogic;
+                    if (logicForCodec is SyncLogicAdapter sla && sla.Logic is IAsyncLogic innerAsync)
+                    {
+                        logicForCodec = innerAsync;
+                    }
+
                     nodes[index] = _codec switch
                     {
-                        ILogicCodec<string> t => new NodeTextDto(index, node.Id.Name, t.Serialize(logicNode.AsyncLogic)),
+                        ILogicCodec<string> t => new NodeTextDto(index, node.Id.Name, t.Serialize(logicForCodec)),
                         ILogicCodec<ReadOnlyMemory<byte>> b => new NodeBinaryDto(index, node.Id.Name,
-                            b.Serialize(logicNode.AsyncLogic)),
+                            b.Serialize(logicForCodec)),
                         _ => throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.")
                     };
                     break;

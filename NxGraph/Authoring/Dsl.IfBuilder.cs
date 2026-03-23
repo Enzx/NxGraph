@@ -17,24 +17,31 @@ public static partial class Dsl
         internal IfBuilder(StateToken prev, Func<bool> predicate)
         {
             _builder = prev.Builder;
-            _truePad = _builder.AddNode(new EmptyAsyncLogic());
-            _falsePad = _builder.AddNode(new EmptyAsyncLogic());
-            NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
+            _truePad = _builder.AddNode((ILogic)new EmptyLogic());
+            _falsePad = _builder.AddNode((ILogic)new EmptyLogic());
+            NodeId choiceId = _builder.AddNode((ILogic)new ChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
 
         internal IfBuilder(StartToken root, Func<bool> predicate)
         {
             _builder = root.Builder;
-            _truePad = _builder.AddNode(new EmptyAsyncLogic());
-            _falsePad = _builder.AddNode(new EmptyAsyncLogic());
-            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
+            _truePad = _builder.AddNode((ILogic)new EmptyLogic());
+            _falsePad = _builder.AddNode((ILogic)new EmptyLogic());
+            _builder.AddNode((ILogic)new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
 
         public BranchBuilder Then(IAsyncLogic asyncLogic)
         {
             NodeId firstTrue = _builder.AddNode(asyncLogic);
+            _builder.AddTransition(_truePad, firstTrue);
+            return new BranchBuilder(_builder, firstTrue, _falsePad);
+        }
+
+        public BranchBuilder Then(ILogic syncLogic)
+        {
+            NodeId firstTrue = _builder.AddNode(syncLogic);
             _builder.AddTransition(_truePad, firstTrue);
             return new BranchBuilder(_builder, firstTrue, _falsePad);
         }
@@ -63,6 +70,13 @@ public static partial class Dsl
             return new BranchBuilder(Builder, next, _falsePad);
         }
 
+        public BranchBuilder To(ILogic syncLogic)
+        {
+            NodeId next = Builder.AddNode(syncLogic);
+            Builder.AddTransition(Tip, next);
+            return new BranchBuilder(Builder, next, _falsePad);
+        }
+
         public BranchBuilder WaitFor(TimeSpan delay)
         {
             return To(Wait.For(delay));
@@ -71,6 +85,13 @@ public static partial class Dsl
         public BranchEnd Else(IAsyncLogic asyncLogic)
         {
             NodeId firstElse = Builder.AddNode(asyncLogic);
+            Builder.AddTransition(_falsePad, firstElse);
+            return new BranchEnd(Builder, firstElse);
+        }
+
+        public BranchEnd Else(ILogic syncLogic)
+        {
+            NodeId firstElse = Builder.AddNode(syncLogic);
             Builder.AddTransition(_falsePad, firstElse);
             return new BranchEnd(Builder, firstElse);
         }
@@ -93,6 +114,14 @@ public static partial class Dsl
         public StateToken To(IAsyncLogic asyncLogic)
         {
             NodeId next = Builder.AddNode(asyncLogic);
+            Builder.AddTransition(Tip, next);
+            return new StateToken(next, Builder);
+        }
+
+        /// <summary>Adds a new sync state and wires a transition from the "else" tip.</summary>
+        public StateToken To(ILogic syncLogic)
+        {
+            NodeId next = Builder.AddNode(syncLogic);
             Builder.AddTransition(Tip, next);
             return new StateToken(next, Builder);
         }

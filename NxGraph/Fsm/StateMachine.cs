@@ -28,7 +28,7 @@ public class StateMachine<TAgent> : StateMachine, IAgentSettable<TAgent>
 /// </list>
 /// </para>
 /// Node logic is executed via <see cref="ILogic.Execute"/> — every node in the graph
-/// must have its <see cref="INode.AsyncLogic"/> implement <see cref="ILogic"/>.
+/// must have its <see cref="INode.Logic"/> populated (i.e. implement <see cref="ILogic"/>).
 /// </summary>
 public class StateMachine
 {
@@ -179,18 +179,16 @@ public class StateMachine
             LogicNode logicNode = (LogicNode)node;
 
             // Wire log-report callback for nodes that support it.
-            if (logicNode.AsyncLogic is State stateForLog)
+            if (logicNode.Logic is State stateForLog)
             {
                 stateForLog.SyncLogReport = _cachedLogReportCallback;
             }
 
             // Execute the node synchronously.
-            if (logicNode.AsyncLogic is not ILogic syncLogic)
-            {
-                throw new InvalidOperationException(
-                    $"Node '{_current}' logic ({logicNode.AsyncLogic.GetType().Name}) does not implement ISyncLogic. " +
-                    "All nodes in a StateMachine must implement ISyncLogic.");
-            }
+            ILogic syncLogic = logicNode.Logic
+                ?? throw new InvalidOperationException(
+                    $"Node '{_current}' logic ({logicNode.AsyncLogic.GetType().Name}) does not implement ILogic. " +
+                    "All nodes in a StateMachine must implement ILogic.");
 
             Result result = syncLogic.Execute();
 
@@ -202,7 +200,7 @@ public class StateMachine
 
                     NodeId next;
 
-                    if (logicNode.AsyncLogic is IDirector director)
+                    if (logicNode.Logic is IDirector director)
                     {
                         next = director.SelectNext();
                         if (next.Equals(NodeId.Default))
