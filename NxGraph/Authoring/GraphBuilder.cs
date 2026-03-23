@@ -4,7 +4,6 @@ using NxGraph.Graphs;
 #if NETSTANDARD2_1
 using ArgumentNullException = System.ArgumentNullExceptionShim;
 #endif
-// ReSharper disable UnusedMethodReturnValue.Global
 
 namespace NxGraph.Authoring;
 
@@ -130,28 +129,36 @@ public sealed partial class GraphBuilder
 
 
     /// <summary>
-    /// Creates a new state token that starts with the given node.
+    /// Creates a new graph whose first (start) node runs <paramref name="startLogic"/>.
     /// </summary>
-    /// <param name="startLogic">The node that will be the starting point of the state token.</param>
-    /// <returns>A new StateToken initialized with the specified start node.</returns>
+    /// <param name="startLogic">The logic that will be the starting point of the graph.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
     public static StateToken StartWith(ILogic startLogic)
     {
-        return FsmDsl.StartWith(startLogic);
-    }
-
-    public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
-    {
-        ILogic startLogic = new RelayState(run);
-        return FsmDsl.StartWith(startLogic);
+        GraphBuilder builder = new();
+        NodeId id = builder.AddNode(startLogic, true);
+        return new StateToken(id, builder);
     }
 
     /// <summary>
-    /// Creates a new state token that starts with the default start node.
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/>.
     /// </summary>
-    /// <returns>A new StateToken initialized with the default start node.</returns>
+    /// <param name="run">The function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return StartWith(new RelayState(run));
+    }
+
+    /// <summary>
+    /// Begins building a new graph without adding a start node yet.
+    /// Chain with <c>.If()</c>, <c>.Switch()</c>, <c>.WaitFor()</c>, or <c>.To()</c> to define the start.
+    /// </summary>
+    /// <returns>A <see cref="StartToken"/> that allows fluent configuration of the first state.</returns>
     public static StartToken Start()
     {
-        return FsmDsl.Start();
+        return new StartToken(new GraphBuilder());
     }
 
     /// <summary>

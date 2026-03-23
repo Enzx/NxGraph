@@ -1,10 +1,8 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using NxGraph.Fsm;
+﻿using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
 
-[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public static partial class Dsl
 {
     /// <summary>

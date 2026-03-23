@@ -15,7 +15,7 @@ public static partial class Dsl
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return FsmDsl.StartWith(Timeout.For(timeout, run, behavior));
+        return GraphBuilder.StartWith(Timeout.For(timeout, run, behavior));
     }
 
     /// <summary>

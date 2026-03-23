@@ -3,7 +3,6 @@ using NxGraph.Graphs;
 #if NETSTANDARD2_1
 using ArgumentNullException = System.ArgumentNullExceptionShim;
 #endif
-// ReSharper disable UnusedMember.Global
 
 namespace NxGraph.Authoring;
 
@@ -89,10 +88,9 @@ public static partial class Dsl
     /// <summary>
     /// Creates an "else" branch in the FSM graph that executes the specified logic.
     /// </summary>
-    /// <param name="ifBuilder">The ThenElseBuilder that represents the conditional branch.</param>
+    /// <param name="ifBuilder">The BranchBuilder that represents the conditional branch.</param>
     /// <param name="run">A function that defines the logic to be executed in the "else" branch.</param>
-    /// <returns>A TerminalBuilder that allows chaining further actions.
-    /// (i.e. Building the final state of the FSM graph)</returns>
+    /// <returns>A <see cref="BranchEnd"/> that allows building the graph or continuing to chain states.</returns>
     public static BranchEnd Else(this BranchBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -137,5 +135,47 @@ public static partial class Dsl
     public static Graph Build(this BranchBuilder branch)
     {
         return branch.Builder.Build();
+    }
+
+    // ── BranchBuilder convenience overloads ─────────────────────────────
+
+    /// <summary>
+    /// Chains a new state onto the "then" branch using a lambda.
+    /// </summary>
+    public static BranchBuilder To(this BranchBuilder branch, Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return branch.To(new RelayState(run));
+    }
+
+    /// <summary>
+    /// Sets the display name for the current tip node of the "then" branch.
+    /// </summary>
+    public static BranchBuilder SetName(this BranchBuilder branch, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        branch.Builder.SetName(branch.Tip, name);
+        return branch;
+    }
+
+    // ── BranchEnd convenience overloads ─────────────────────────────────
+
+    /// <summary>
+    /// Chains a new state after the "else" branch using a lambda.
+    /// </summary>
+    public static StateToken To(this BranchEnd branchEnd, Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return branchEnd.To(new RelayState(run));
+    }
+
+    /// <summary>
+    /// Sets the display name for the current tip node of the "else" branch.
+    /// </summary>
+    public static BranchEnd SetName(this BranchEnd branchEnd, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        branchEnd.Builder.SetName(branchEnd.Tip, name);
+        return branchEnd;
     }
 }

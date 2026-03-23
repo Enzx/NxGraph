@@ -42,22 +42,24 @@ public static partial class Dsl
 
     public readonly struct BranchBuilder
     {
-        private readonly NodeId _tip;
         private readonly NodeId _falsePad;
 
         internal BranchBuilder(GraphBuilder builder, NodeId tip, NodeId falsePad)
         {
             Builder = builder;
-            _tip = tip;
+            Tip = tip;
             _falsePad = falsePad;
         }
 
         public GraphBuilder Builder { get; }
 
+        /// <summary>The last node added on the "then" branch.</summary>
+        public NodeId Tip { get; }
+
         public BranchBuilder To(ILogic logic)
         {
             NodeId next = Builder.AddNode(logic);
-            Builder.AddTransition(_tip, next);
+            Builder.AddTransition(Tip, next);
             return new BranchBuilder(Builder, next, _falsePad);
         }
 
@@ -76,42 +78,44 @@ public static partial class Dsl
 
     public readonly struct BranchEnd
     {
-        private readonly GraphBuilder _b;
-        private readonly NodeId _tip;
-
         internal BranchEnd(GraphBuilder b, NodeId tip)
         {
-            _b = b;
-            _tip = tip;
+            Builder = b;
+            Tip = tip;
         }
 
-        // ReSharper disable once MemberCanBePrivate.Global
-        internal StateToken To(ILogic logic)
+        public GraphBuilder Builder { get; }
+
+        /// <summary>The last node added on the "else" branch.</summary>
+        public NodeId Tip { get; }
+
+        /// <summary>Adds a new state and wires a transition from the "else" tip.</summary>
+        public StateToken To(ILogic logic)
         {
-            NodeId next = _b.AddNode(logic);
-            _b.AddTransition(_tip, next);
-            return new StateToken(next, _b);
+            NodeId next = Builder.AddNode(logic);
+            Builder.AddTransition(Tip, next);
+            return new StateToken(next, Builder);
         }
 
-        // ReSharper disable once UnusedMember.Global
+        /// <summary>Adds a wait state after the "else" branch.</summary>
         public StateToken WaitFor(TimeSpan delay)
         {
             return To(Wait.For(delay));
         }
-        
+
         public Graph Build(bool throwOnError = false)
         {
-            return _b.Build(throwOnError);
+            return Builder.Build(throwOnError);
         }
 
-        public StateMachine ToStateMachine()
+        public StateMachine ToStateMachine(IAsyncStateMachineObserver? observer = null)
         {
-            return _b.Build().ToStateMachine();
+            return Builder.Build().ToStateMachine(observer);
         }
 
-        public StateMachine<T> ToStateMachine<T>()
+        public StateMachine<T> ToStateMachine<T>(IAsyncStateMachineObserver? observer = null)
         {
-            return new StateMachine<T>(_b.Build());
+            return new StateMachine<T>(Builder.Build(), observer);
         }
     }
 }
