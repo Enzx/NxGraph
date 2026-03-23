@@ -3,7 +3,7 @@ using NxGraph.Graphs;
 
 namespace NxGraph.Serialization.Tests;
 
-public class DummyState : ILogic
+public class DummyState : IAsyncLogic
 {
     public string Data { get; init; } = string.Empty;
 

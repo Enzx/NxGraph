@@ -6,7 +6,7 @@ using NxGraph.Serialization;
 
 namespace NxFSM.Examples;
 
-public class ExampleState : ILogic
+public class ExampleState : IAsyncLogic
 {
     public string Data { get; set; } = string.Empty;
 
@@ -18,12 +18,12 @@ public class ExampleState : ILogic
 
 public class ExampleLogicSerializer : ILogicTextCodec
 {
-    public ILogic Deserialize(string s)
+    public IAsyncLogic Deserialize(string s)
     {
         return System.Text.Json.JsonSerializer.Deserialize<ExampleState>(s) ?? throw new InvalidOperationException();
     }
 
-    public string Serialize(ILogic data)
+    public string Serialize(IAsyncLogic data)
     {
         return System.Text.Json.JsonSerializer.Serialize((ExampleState)data);
     }
@@ -45,7 +45,7 @@ public static class SerializationExample
         // stream.Position = 0;
         // Graph deserializedGraph = await GraphSerializer.FromJsonAsync(stream);
         //
-        // StateMachine fsm = deserializedGraph.ToStateMachine();
+        // AsyncStateMachine fsm = deserializedGraph.ToAsyncStateMachine();
         // await fsm.ExecuteAsync();
 
 

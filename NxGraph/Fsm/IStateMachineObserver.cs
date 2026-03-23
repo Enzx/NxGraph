@@ -7,7 +7,7 @@ namespace NxGraph.Fsm;
 /// Every callback is <c>void</c> – no allocations, no async machinery.
 /// All methods have default no-op implementations so consumers only override what they need.
 /// </summary>
-public interface ISyncStateMachineObserver
+public interface IStateMachineObserver
 {
     void OnStateEntered(NodeId id) { }
 

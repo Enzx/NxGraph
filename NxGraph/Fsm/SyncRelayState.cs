@@ -1,10 +1,10 @@
-﻿namespace NxGraph.Fsm;
+namespace NxGraph.Fsm;
 
 /// <summary>
 /// Synchronous counterpart of <see cref="RelayState"/>.
 /// Wraps plain delegates (<see cref="Func{Result}"/>) for zero-allocation inline execution.
 /// </summary>
-public sealed class SyncRelayState : SyncState
+public sealed class SyncRelayState : State
 {
     private readonly Func<Result> _run;
     private readonly Action? _onEnter;
@@ -31,7 +31,7 @@ public sealed class SyncRelayState : SyncState
 /// Synchronous counterpart of <see cref="RelayState{TAgent}"/>.
 /// </summary>
 /// <typeparam name="TAgent">The type of agent available during execution.</typeparam>
-public sealed class SyncRelayState<TAgent> : SyncState<TAgent>
+public sealed class SyncRelayState<TAgent> : State<TAgent>
 {
     private readonly Func<TAgent, Result> _run;
     private readonly Action<TAgent>? _onEnter;

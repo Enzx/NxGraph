@@ -36,9 +36,9 @@ public static partial class Dsl
         /// <summary>
         /// Adds a case to the switch statement.
         /// </summary>
-        public SwitchBuilder<TKey> Case(TKey key, ILogic logic)
+        public SwitchBuilder<TKey> Case(TKey key, IAsyncLogic asyncLogic)
         {
-            NodeId id = _builder.AddNode(logic);
+            NodeId id = _builder.AddNode(asyncLogic);
             _map[key] = id;
             return this;
         }
@@ -46,11 +46,11 @@ public static partial class Dsl
         /// <summary>
         /// Adds a default case to the switch statement.
         /// </summary>
-        /// <param name="logic">The logic to execute if no case matches.</param>
+        /// <param name="asyncLogic">The logic to execute if no case matches.</param>
         /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>
-        public SwitchBuilder<TKey> Default(ILogic logic)
+        public SwitchBuilder<TKey> Default(IAsyncLogic asyncLogic)
         {
-            NodeId defaultNode = _builder.AddNode(logic);
+            NodeId defaultNode = _builder.AddNode(asyncLogic);
             _switchNode.SetDefault(defaultNode);
             return this;
         }

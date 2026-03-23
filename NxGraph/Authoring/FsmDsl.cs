@@ -11,6 +11,6 @@ public static class FsmDsl
     /// <summary>Create the first state of the graph and mark it as <c>Start</c>.</summary>
     public static StartToken Start() => GraphBuilder.Start();
 
-    /// <summary>Create the first state of the graph with <paramref name="logic"/> as the start node.</summary>
-    public static StateToken StartWith(ILogic logic) => GraphBuilder.StartWith(logic);
+    /// <summary>Create the first state of the graph with <paramref name="asyncLogic"/> as the start node.</summary>
+    public static StateToken StartWith(IAsyncLogic asyncLogic) => GraphBuilder.StartWith(asyncLogic);
 }

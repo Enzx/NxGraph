@@ -17,8 +17,8 @@ public static partial class Dsl
     public static StateToken To(this StateToken prev, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        ILogic logic = new RelayState(run);
-        return prev.To(logic);
+        IAsyncLogic asyncLogic = new RelayState(run);
+        return prev.To(asyncLogic);
     }
 
     public static StateToken SetName(this StateToken prev, string name)

@@ -19,11 +19,11 @@ public readonly struct StartToken
     /// <summary>
     /// Adds the first (start) node with the given logic and returns a <see cref="StateToken"/>.
     /// </summary>
-    /// <param name="logic">The logic to run as the start node.</param>
+    /// <param name="asyncLogic">The logic to run as the start node.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
-    public StateToken To(ILogic logic)
+    public StateToken To(IAsyncLogic asyncLogic)
     {
-        NodeId id = Builder.AddNode(logic, true);
+        NodeId id = Builder.AddNode(asyncLogic, true);
         return new StateToken(id, Builder);
     }
 
@@ -61,7 +61,7 @@ public readonly struct StartToken
 
     /// <summary>
     /// Builds the graph. Only valid if a start node has already been added
-    /// (e.g. via <see cref="To(ILogic)"/>, <see cref="Dsl.WaitFor(StartToken, TimeSpan)"/>, etc.).
+    /// (e.g. via <see cref="To(IAsyncLogic)"/>, <see cref="Dsl.WaitFor(StartToken, TimeSpan)"/>, etc.).
     /// </summary>
     public Graph Build()
     {

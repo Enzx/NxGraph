@@ -19,7 +19,7 @@ public class CancellationTests
         }), true);
         Graph graph = builder.Build();
 
-        StateMachine fsm = new(graph);
+        AsyncStateMachine fsm = new(graph);
 
         using CancellationTokenSource cts = new(50);
 

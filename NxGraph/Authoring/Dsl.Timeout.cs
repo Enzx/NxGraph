@@ -25,7 +25,7 @@ public static partial class Dsl
     /// GraphBuilder.Start()
     ///     .ToWithTimeout(2.Seconds(), _ => ResultHelpers.Success)
     ///     .To(_ => ResultHelpers.Success)
-    ///     .ToStateMachine();
+    ///     .ToAsyncStateMachine();
     /// </code>
     /// </summary>
     public static StateToken ToWithTimeout(this StateToken prev,
@@ -34,32 +34,32 @@ public static partial class Dsl
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         ArgumentNullException.ThrowIfNull(run);
-        ILogic wrapped = Timeout.Wrap(new RelayState(run), timeout, behavior);
+        IAsyncLogic wrapped = Timeout.Wrap(new RelayState(run), timeout, behavior);
         return prev.To(wrapped);
     }
 
     /// <summary>
     /// Utility to wrap an existing node logic in-place with a timeout (when you already have a node instance).
     /// </summary>
-    public static StateToken ToWithTimeout(this StateToken prev, ILogic nextStateLogic, TimeSpan timeout,
+    public static StateToken ToWithTimeout(this StateToken prev, IAsyncLogic nextStateAsyncLogic, TimeSpan timeout,
         TimeoutBehavior behavior)
     {
-        return prev.To(Timeout.Wrap(nextStateLogic, timeout, behavior));
+        return prev.To(Timeout.Wrap(nextStateAsyncLogic, timeout, behavior));
     }
 
     /// <summary>
     /// Wraps the next state logic in a timeout and returns a new state token.
     /// </summary>
     /// <param name="prev"> The previous state token, which is the source of the transition.</param>
-    /// <param name="nextStateLogic">  The logic for the next state, which will be wrapped in a timeout.</param>
+    /// <param name="nextStateAsyncLogic">  The logic for the next state, which will be wrapped in a timeout.</param>
     /// <param name="timeout">The duration of the timeout for the next state logic.</param>
     /// <param name="behavior">The behavior to apply when the timeout occurs, such as failing or skipping.</param>
     /// <returns>A new state token that represents the next state logic wrapped in a timeout.</returns>
-    public static StateToken ToWithTimeout(this StartToken prev, ILogic nextStateLogic, TimeSpan timeout,
+    public static StateToken ToWithTimeout(this StartToken prev, IAsyncLogic nextStateAsyncLogic, TimeSpan timeout,
         TimeoutBehavior behavior)
     {
-        ArgumentNullException.ThrowIfNull(nextStateLogic);
-        ILogic wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
+        ArgumentNullException.ThrowIfNull(nextStateAsyncLogic);
+        IAsyncLogic wrapped = Timeout.Wrap(nextStateAsyncLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }
@@ -78,8 +78,8 @@ public static partial class Dsl
         TimeoutBehavior behavior)
     {
         ArgumentNullException.ThrowIfNull(run);
-        ILogic nextStateLogic = new RelayState(run);
-        ILogic wrapped = Timeout.Wrap(nextStateLogic, timeout, behavior);
+        IAsyncLogic nextStateAsyncLogic = new RelayState(run);
+        IAsyncLogic wrapped = Timeout.Wrap(nextStateAsyncLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
     }

@@ -10,7 +10,7 @@ public sealed class RelayState(
     Func<CancellationToken, ValueTask<Result>> run,
     Func<CancellationToken, ValueTask>? onEnter = null,
     Func<CancellationToken, ValueTask>? onExit = null)
-    : State
+    : AsyncState
 {
     private readonly Func<CancellationToken, ValueTask<Result>> _run =
         run ?? throw new ArgumentNullException(nameof(run));
@@ -42,7 +42,7 @@ public sealed class RelayState<TAgent>(
     Func<TAgent, CancellationToken, ValueTask<Result>> run,
     Func<TAgent, CancellationToken, ValueTask>? onEnter = null,
     Func<TAgent, CancellationToken, ValueTask>? onExit = null)
-    : State<TAgent>
+    : AsyncState<TAgent>
 {
     private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run =
         run ?? throw new ArgumentNullException(nameof(run));

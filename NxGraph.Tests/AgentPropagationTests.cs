@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 
 namespace NxGraph.Tests;
@@ -22,9 +22,9 @@ public class AgentPropagationTests
         });
 
         DummyAgent agent = new();
-        StateMachine<DummyAgent> fsm = GraphBuilder
+        AsyncStateMachine<DummyAgent> fsm = GraphBuilder
             .StartWith(node)
-            .ToStateMachine<DummyAgent>()
+            .ToAsyncStateMachine<DummyAgent>()
             .Add(agent);
         await fsm.ExecuteAsync();
 
@@ -35,9 +35,9 @@ public class AgentPropagationTests
     public void agent_should_throw_exception_if_fsm_has_no_generic_state()
     {
         DummyAgent agent = new();
-        StateMachine<DummyAgent> fsm = GraphBuilder
+        AsyncStateMachine<DummyAgent> fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
-            .ToStateMachine<DummyAgent>();
+            .ToAsyncStateMachine<DummyAgent>();
 
         Assert.Throws<InvalidOperationException>(() => fsm.SetAgent(agent));
     }

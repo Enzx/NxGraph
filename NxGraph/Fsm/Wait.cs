@@ -9,13 +9,13 @@ public static class Wait
     /// Creates a state that waits for a specified delay before completing.
     /// </summary>
     /// <param name="delay">The duration to wait before completing the state.</param>
-    /// <returns>A new instance of <see cref="State"/> that represents the delay state.</returns>
-    public static State For(TimeSpan delay)
+    /// <returns>A new instance of <see cref="AsyncState"/> that represents the delay state.</returns>
+    public static AsyncState For(TimeSpan delay)
     {
         return new DelayState(delay);
     }
 
-    private sealed class DelayState(TimeSpan delay) : State
+    private sealed class DelayState(TimeSpan delay) : AsyncState
     {
         protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
         {

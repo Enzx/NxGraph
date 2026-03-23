@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 
 namespace NxGraph.Tests;
@@ -13,11 +13,11 @@ public class ChoiceStateTests
     {
         const bool flag = true;
 
-        StateMachine fsm = GraphBuilder.Start()
+        AsyncStateMachine fsm = GraphBuilder.Start()
             .If(() => flag)
             .Then(_ => ResultHelpers.Success)
             .Else(_ => ResultHelpers.Failure)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();
         Assert.That(result, Is.EqualTo(Result.Success));
@@ -28,12 +28,12 @@ public class ChoiceStateTests
     {
         const bool flag = false;
 
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start()
             .If(() => flag)
             .Then(_ => ResultHelpers.Failure)
             .Else(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();
         Assert.That(result, Is.EqualTo(Result.Success));

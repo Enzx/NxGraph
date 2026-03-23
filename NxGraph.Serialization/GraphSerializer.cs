@@ -134,7 +134,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             switch (node)
             {
                 case LogicNode logicNode:
-                    if (logicNode.Logic is StateMachine stateMachine)
+                    if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
                         // Serialize state machine as sub-graph
                         GraphDto childDto = ToDto(stateMachine.Graph);
@@ -145,9 +145,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
                     nodes[index] = _codec switch
                     {
-                        ILogicCodec<string> t => new NodeTextDto(index, node.Id.Name, t.Serialize(logicNode.Logic)),
+                        ILogicCodec<string> t => new NodeTextDto(index, node.Id.Name, t.Serialize(logicNode.AsyncLogic)),
                         ILogicCodec<ReadOnlyMemory<byte>> b => new NodeBinaryDto(index, node.Id.Name,
-                            b.Serialize(logicNode.Logic)),
+                            b.Serialize(logicNode.AsyncLogic)),
                         _ => throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.")
                     };
                     break;
@@ -196,8 +196,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     }
 
                 {
-                    ILogic logic = textCodec.Deserialize(textDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, textDto.Name), logic);
+                    IAsyncLogic asyncLogic = textCodec.Deserialize(textDto.Logic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, textDto.Name), asyncLogic);
                 }
                     break;
 
@@ -206,8 +206,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         throw new InvalidOperationException(
                             "GraphSerializer has no ILogicCodec<ReadOnlyMemory<byte>> configured, cannot decode binary nodes.");
                 {
-                    ILogic binLogic = binaryCodec.Deserialize(binaryDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, binaryDto.Name), binLogic);
+                    IAsyncLogic binAsyncLogic = binaryCodec.Deserialize(binaryDto.Logic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, binaryDto.Name), binAsyncLogic);
                 }
                     break;
 
@@ -253,8 +253,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 _ => $"Node_{i}"
             };
 
-            ILogic stateMachineLogic = new StateMachine(childGraph);
-            nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineLogic);
+            IAsyncLogic stateMachineAsyncLogic = new AsyncStateMachine(childGraph);
+            nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineAsyncLogic);
         }
 
         int transitionsLength = dto.Transitions.Length;

@@ -12,14 +12,14 @@ public class SwitchDefaultCaseTests
     {
         const string key = "nope";
 
-        StateMachine? fsm = GraphBuilder
+        AsyncStateMachine? fsm = GraphBuilder
             .Start()
             .Switch(() => key)
             .Case("a", _ => ResultHelpers.Failure)
             .Case("b", _ => ResultHelpers.Failure)
             .Default(_ => ResultHelpers.Success)
             .End()
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();
         Assert.That(result, Is.EqualTo(Result.Success));

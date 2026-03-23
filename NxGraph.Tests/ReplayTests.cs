@@ -1,4 +1,4 @@
-﻿using NxGraph.Diagnostics.Replay;
+using NxGraph.Diagnostics.Replay;
 
 namespace NxGraph.Tests;
 
@@ -61,10 +61,10 @@ public class ReplayTests
         ReplayRecorder recorder = new();
 
         // Act
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(recorder);
+            .ToAsyncStateMachine(recorder);
 
         await fsm.ExecuteAsync();
 
@@ -87,10 +87,10 @@ public class ReplayTests
     {
         // Arrange
         ReplayRecorder recorder = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(recorder);
+            .ToAsyncStateMachine(recorder);
 
         // Act    
         await fsm.ExecuteAsync();
@@ -132,10 +132,10 @@ public class ReplayTests
     {
         // Arrange
         ReplayRecorder recorder = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(recorder);
+            .ToAsyncStateMachine(recorder);
 
         // Act
         await fsm.ExecuteAsync();
@@ -175,10 +175,10 @@ public class ReplayTests
     {
         // Arrange
         ReplayRecorder recorder = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .WaitFor(1.Seconds())
-            .ToStateMachine(recorder);
+            .ToAsyncStateMachine(recorder);
 
         // Act - Execute with cancellation
         CancellationTokenSource cts = new();
@@ -212,12 +212,12 @@ public class ReplayTests
     {
         // Arrange - complex state machine with multiple transitions
         ReplayRecorder recorder = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(recorder);
+            .ToAsyncStateMachine(recorder);
 
         // Act
         await fsm.ExecuteAsync();
@@ -261,11 +261,11 @@ public class ReplayTests
         ReplayRecorder recorder = new();
 
         LoggingTestState loggingState = new("Test log message 1", "Test log message 2");
-        StateMachine stateMachine = GraphBuilder.StartWith(loggingState).ToStateMachine(recorder);
+        AsyncStateMachine fsm = GraphBuilder.StartWith(loggingState).ToAsyncStateMachine(recorder);
 
 
         // Act
-        await stateMachine.ExecuteAsync();
+        await fsm.ExecuteAsync();
 
         // Assert
         ReplayEvent[] events = recorder.GetEvents().ToArray();
@@ -294,7 +294,7 @@ public class ReplayTests
     }
 
 // Test state that logs messages
-    private class LoggingTestState(params string[] messages) : State
+    private class LoggingTestState(params string[] messages) : AsyncState
     {
         protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
         {

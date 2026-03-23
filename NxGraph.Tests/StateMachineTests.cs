@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -6,16 +6,16 @@ namespace NxGraph.Tests;
 
 [TestFixture]
 [Category("sync_state_machine")]
-public class SyncStateMachineTests
+public class StateMachineTests
 {
     // ── Core execution ──────────────────────────────────────────────────
 
     [Test]
     public void should_return_success_when_single_state_succeeds()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result result = fsm.Execute();
 
@@ -25,9 +25,9 @@ public class SyncStateMachineTests
     [Test]
     public void should_return_failure_when_single_state_fails()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result result = fsm.Execute();
 
@@ -39,10 +39,10 @@ public class SyncStateMachineTests
     [Test]
     public void should_traverse_two_states_and_succeed()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .To(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result result = fsm.Execute();
 
@@ -52,10 +52,10 @@ public class SyncStateMachineTests
     [Test]
     public void should_stop_on_failure_of_second_state()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .To(() => Result.Failure)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result result = fsm.Execute();
 
@@ -66,11 +66,11 @@ public class SyncStateMachineTests
     public void should_traverse_three_states()
     {
         int counter = 0;
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .To(() => { counter++; return Result.Success; })
             .To(() => { counter++; return Result.Success; })
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result result = fsm.Execute();
 
@@ -83,9 +83,9 @@ public class SyncStateMachineTests
     [Test]
     public void status_should_be_created_before_execution()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Created));
     }
@@ -93,9 +93,9 @@ public class SyncStateMachineTests
     [Test]
     public void status_should_be_ready_after_successful_execution_with_auto_reset()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(true);
 
         fsm.Execute();
@@ -106,9 +106,9 @@ public class SyncStateMachineTests
     [Test]
     public void status_should_be_completed_after_execution_without_auto_reset()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(false);
 
         fsm.Execute();
@@ -119,9 +119,9 @@ public class SyncStateMachineTests
     [Test]
     public void status_should_be_failed_after_failure_without_auto_reset()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(false);
 
         fsm.Execute();
@@ -134,9 +134,9 @@ public class SyncStateMachineTests
     [Test]
     public void reset_from_completed_should_move_to_ready()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(false);
         fsm.Execute();
 
@@ -149,9 +149,9 @@ public class SyncStateMachineTests
     [Test]
     public void reset_from_created_should_succeed_immediately()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Result resetResult = fsm.Reset();
 
@@ -163,9 +163,9 @@ public class SyncStateMachineTests
     public void can_execute_again_after_reset()
     {
         int counter = 0;
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(false);
 
         fsm.Execute();
@@ -182,7 +182,7 @@ public class SyncStateMachineTests
     [Test]
     public void should_throw_on_re_entrance()
     {
-        SyncStateMachine? fsm = null;
+        StateMachine? fsm = null;
         fsm = GraphBuilder
             .StartWith(() =>
             {
@@ -190,7 +190,7 @@ public class SyncStateMachineTests
                 Assert.Throws<InvalidOperationException>(() => fsm!.Execute());
                 return Result.Success;
             })
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         fsm.Execute();
     }
@@ -202,10 +202,10 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .To(() => Result.Success)
-            .ToSyncStateMachine(observer);
+            .ToStateMachine(observer);
 
         fsm.Execute();
 
@@ -220,10 +220,10 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .To(() => Result.Success)
-            .ToSyncStateMachine(observer);
+            .ToStateMachine(observer);
 
         fsm.Execute();
 
@@ -235,9 +235,9 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine(observer);
+            .ToStateMachine(observer);
 
         fsm.Execute();
 
@@ -250,9 +250,9 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
-            .ToSyncStateMachine(observer);
+            .ToStateMachine(observer);
 
         fsm.Execute();
 
@@ -264,9 +264,9 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
-            .ToSyncStateMachine(observer);
+            .ToStateMachine(observer);
         fsm.SetAutoReset(false);
 
         fsm.Execute();
@@ -283,9 +283,9 @@ public class SyncStateMachineTests
     {
         var observer = new RecordingObserver();
 
-        SyncStateMachine fsm = GraphBuilder
-            .StartWith(new LoggingSyncState("hello"))
-            .ToSyncStateMachine(observer);
+        StateMachine fsm = GraphBuilder
+            .StartWith(new LoggingState("hello"))
+            .ToStateMachine(observer);
 
         fsm.Execute();
 
@@ -300,11 +300,11 @@ public class SyncStateMachineTests
     {
         int thenCalled = 0, elseCalled = 0;
 
-        SyncStateMachine fsm = GraphBuilder.Start()
+        StateMachine fsm = GraphBuilder.Start()
             .If(() => true)
             .Then(() => { thenCalled++; return Result.Success; })
             .Else(() => { elseCalled++; return Result.Success; })
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         fsm.Execute();
 
@@ -317,11 +317,11 @@ public class SyncStateMachineTests
     {
         int thenCalled = 0, elseCalled = 0;
 
-        SyncStateMachine fsm = GraphBuilder.Start()
+        StateMachine fsm = GraphBuilder.Start()
             .If(() => false)
             .Then(() => { thenCalled++; return Result.Success; })
             .Else(() => { elseCalled++; return Result.Success; })
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         fsm.Execute();
 
@@ -336,12 +336,12 @@ public class SyncStateMachineTests
     {
         int aCalled = 0, bCalled = 0;
 
-        SyncStateMachine fsm = GraphBuilder.Start()
+        StateMachine fsm = GraphBuilder.Start()
             .Switch(() => "B")
             .Case("A", () => { aCalled++; return Result.Success; })
             .Case("B", () => { bCalled++; return Result.Success; })
             .End()
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         fsm.Execute();
 
@@ -354,12 +354,12 @@ public class SyncStateMachineTests
     {
         int aCalled = 0, defaultCalled = 0;
 
-        SyncStateMachine fsm = GraphBuilder.Start()
+        StateMachine fsm = GraphBuilder.Start()
             .Switch(() => "X")
             .Case("A", () => { aCalled++; return Result.Success; })
             .Default(() => { defaultCalled++; return Result.Success; })
             .End()
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         fsm.Execute();
 
@@ -373,9 +373,9 @@ public class SyncStateMachineTests
     public void should_propagate_agent_to_typed_states()
     {
         string? captured = null;
-        SyncStateMachine<string> fsm = GraphBuilder
+        StateMachine<string> fsm = GraphBuilder
             .StartWith(new AgentCapturingSyncState(v => captured = v))
-            .ToSyncStateMachine<string>()
+            .ToStateMachine<string>()
             .WithAgent("TestAgent");
 
         fsm.Execute();
@@ -388,9 +388,9 @@ public class SyncStateMachineTests
     [Test]
     public void should_propagate_exception_from_state()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(false);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
@@ -400,9 +400,9 @@ public class SyncStateMachineTests
     [Test]
     public void should_auto_reset_after_exception()
     {
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(true);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
@@ -415,9 +415,9 @@ public class SyncStateMachineTests
     public void should_throw_when_node_does_not_implement_ISyncLogic()
     {
         // RelayState (async only) does not implement ISyncLogic.
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(_ => ResultHelpers.Success))
-            .ToSyncStateMachine();
+            .ToStateMachine();
 
         Assert.Throws<InvalidOperationException>(() => fsm.Execute());
     }
@@ -428,9 +428,9 @@ public class SyncStateMachineTests
     public void should_support_multiple_sequential_runs()
     {
         int counter = 0;
-        SyncStateMachine fsm = GraphBuilder
+        StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
-            .ToSyncStateMachine();
+            .ToStateMachine();
         fsm.SetAutoReset(true);
 
         for (int i = 0; i < 100; i++)
@@ -444,7 +444,7 @@ public class SyncStateMachineTests
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private sealed class RecordingObserver : ISyncStateMachineObserver
+    private sealed class RecordingObserver : IStateMachineObserver
     {
         public readonly List<NodeId> EnteredIds = new();
         public readonly List<NodeId> ExitedIds = new();
@@ -469,7 +469,7 @@ public class SyncStateMachineTests
     }
 
     /// <summary>A sync state that emits a log message.</summary>
-    private sealed class LoggingSyncState(string message) : SyncState
+    private sealed class LoggingState(string message) : State
     {
         protected override Result OnRun()
         {
@@ -479,7 +479,7 @@ public class SyncStateMachineTests
     }
 
     /// <summary>A typed sync state that captures the agent value.</summary>
-    private sealed class AgentCapturingSyncState(Action<string> capture) : SyncState<string>
+    private sealed class AgentCapturingSyncState(Action<string> capture) : State<string>
     {
         protected override Result OnRun()
         {

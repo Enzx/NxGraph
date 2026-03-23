@@ -25,7 +25,7 @@ public sealed class Graph : INode, IGraph
     /// <summary>
     ///  The logic associated with the graph.
     /// </summary>
-    public ILogic Logic { get; }
+    public IAsyncLogic AsyncLogic { get; }
 
     /// <summary>
     /// The start node of the graph, which is always NodeId.Start (index 0).
@@ -48,7 +48,7 @@ public sealed class Graph : INode, IGraph
     /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
     /// <param name="logic">The logic associated with the graph. If null, an empty logic is used.</param>
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
-    public Graph(NodeId id, INode[] nodes, Transition[] edges, ILogic? logic = null)
+    public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null)
     {
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(edges);
@@ -67,7 +67,7 @@ public sealed class Graph : INode, IGraph
         StartNode = nodes[0];
         _nodes = nodes;
         _edges = edges;
-        Logic = logic ?? new EmptyLogic();
+        AsyncLogic = logic ?? new EmptyAsyncLogic();
     }
 
     /// <summary>
@@ -131,8 +131,8 @@ public sealed class Graph : INode, IGraph
         for (int i = 0; i < _nodes.Length; i++)
         {
             if (_nodes[i] is not LogicNode logicNode) continue;
-            ILogic logic = logicNode.Logic;
-            if (logic is not IAgentSettable<TAgent> settable)
+            IAsyncLogic asyncLogic = logicNode.AsyncLogic;
+            if (asyncLogic is not IAgentSettable<TAgent> settable)
             {
                 continue;
             }

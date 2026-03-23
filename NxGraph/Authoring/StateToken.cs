@@ -26,9 +26,9 @@ public readonly struct StateToken
     }
 
     /// <summary> Adds a brand-new state and immediately wires a transition to it. </summary>
-    public StateToken To(ILogic nextStateLogic)
+    public StateToken To(IAsyncLogic nextStateAsyncLogic)
     {
-        NodeId next = Builder.AddNode(nextStateLogic);
+        NodeId next = Builder.AddNode(nextStateAsyncLogic);
         Builder.AddTransition(Id, next);
         return new StateToken(next, Builder);
     }
