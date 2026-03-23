@@ -15,10 +15,15 @@ public class LogicNode(NodeId id, ILogic logic) : INode
     public static readonly LogicNode StateMachineMarker = new(NodeId.Default, new EmptyLogic());
 }
 
-public sealed record EmptyLogic : ILogic
+public sealed record EmptyLogic : ILogic, ISyncLogic
 {
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
         return ResultHelpers.Success;
+    }
+
+    public Result Execute()
+    {
+        return Result.Success;
     }
 }

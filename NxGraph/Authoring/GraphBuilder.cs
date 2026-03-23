@@ -152,6 +152,17 @@ public sealed partial class GraphBuilder
     }
 
     /// <summary>
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/> synchronously.
+    /// </summary>
+    /// <param name="run">The synchronous function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(Func<Result> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return StartWith(new SyncRelayState(run));
+    }
+
+    /// <summary>
     /// Begins building a new graph without adding a start node yet.
     /// Chain with <c>.If()</c>, <c>.Switch()</c>, <c>.WaitFor()</c>, or <c>.To()</c> to define the start.
     /// </summary>
@@ -280,6 +291,29 @@ public static class GraphBuilderExtensions
     }
 
     public static StateMachine<TAgent> Add<TAgent>(this StateMachine<TAgent> sm, TAgent agent)
+    {
+        sm.SetAgent(agent);
+        return sm;
+    }
+
+    /// <summary>
+    /// Converts a Graph to a synchronous SyncStateMachine.
+    /// </summary>
+    public static SyncStateMachine ToSyncStateMachine(this Graph graph, ISyncStateMachineObserver? observer = null)
+    {
+        return new SyncStateMachine(graph, observer);
+    }
+
+    /// <summary>
+    /// Converts a Graph to a typed synchronous SyncStateMachine.
+    /// </summary>
+    public static SyncStateMachine<TAgent> ToSyncStateMachine<TAgent>(this Graph graph,
+        ISyncStateMachineObserver? observer = null)
+    {
+        return new SyncStateMachine<TAgent>(graph, observer);
+    }
+
+    public static SyncStateMachine<TAgent> Add<TAgent>(this SyncStateMachine<TAgent> sm, TAgent agent)
     {
         sm.SetAgent(agent);
         return sm;

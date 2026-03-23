@@ -6,7 +6,7 @@ namespace NxGraph.Fsm;
 /// Executes a predicate and immediately returns <see cref="Result.Success"/>; the
 /// destination is selected by the single transition wired to this node.
 /// </summary>
-public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId falseNode) : State, IDirector
+public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId falseNode) : State, IDirector, ISyncLogic
 {
     private readonly Func<bool> _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
 
@@ -15,6 +15,9 @@ public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId fa
     {
         return ResultHelpers.Success;
     }
+
+    /// <inheritdoc />
+    public Result Execute() => Result.Success;
 
     /// <summary>
     /// Selects the next node based on the predicate.

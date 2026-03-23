@@ -17,8 +17,8 @@ public static partial class Dsl
         internal IfBuilder(StateToken prev, Func<bool> predicate)
         {
             _builder = prev.Builder;
-            _truePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-            _falsePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
             NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
@@ -26,8 +26,8 @@ public static partial class Dsl
         internal IfBuilder(StartToken root, Func<bool> predicate)
         {
             _builder = root.Builder;
-            _truePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-            _falsePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
             _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
@@ -116,6 +116,16 @@ public static partial class Dsl
         public StateMachine<T> ToStateMachine<T>(IAsyncStateMachineObserver? observer = null)
         {
             return new StateMachine<T>(Builder.Build(), observer);
+        }
+
+        public SyncStateMachine ToSyncStateMachine(ISyncStateMachineObserver? observer = null)
+        {
+            return Builder.Build().ToSyncStateMachine(observer);
+        }
+
+        public SyncStateMachine<T> ToSyncStateMachine<T>(ISyncStateMachineObserver? observer = null)
+        {
+            return Builder.Build().ToSyncStateMachine<T>(observer);
         }
     }
 }

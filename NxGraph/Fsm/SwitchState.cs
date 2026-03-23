@@ -10,7 +10,7 @@ public sealed class SwitchState<TKey>(
     Func<TKey> selector,
     IReadOnlyDictionary<TKey, NodeId> cases,
     NodeId defaultNode = default)
-    : State, IDirector
+    : State, IDirector, ISyncLogic
     where TKey : notnull
 {
     private readonly Func<TKey> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
@@ -30,6 +30,9 @@ public sealed class SwitchState<TKey>(
     {
         return ResultHelpers.Success;
     }
+
+    /// <inheritdoc />
+    public Result Execute() => Result.Success;
 
     /// <summary>
     /// Sets the default node to be used when no case matches the selector's key.
