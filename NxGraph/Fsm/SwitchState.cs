@@ -10,7 +10,7 @@ public sealed class SwitchState<TKey>(
     Func<TKey> selector,
     IReadOnlyDictionary<TKey, NodeId> cases,
     NodeId defaultNode = default)
-    : State, IDirector, ISyncLogic
+    : AsyncState, IDirector, ILogic
     where TKey : notnull
 {
     private readonly Func<TKey> _selector = selector ?? throw new ArgumentNullException(nameof(selector));

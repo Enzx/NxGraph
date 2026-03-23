@@ -34,7 +34,7 @@ public static partial class Dsl
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         ArgumentNullException.ThrowIfNull(run);
-        IAsyncLogic wrapped = Timeout.Wrap(new AsyncRelayState(run), timeout, behavior);
+        IAsyncLogic wrapped = Timeout.Wrap(new RelayState(run), timeout, behavior);
         return prev.To(wrapped);
     }
 
@@ -78,7 +78,7 @@ public static partial class Dsl
         TimeoutBehavior behavior)
     {
         ArgumentNullException.ThrowIfNull(run);
-        IAsyncLogic nextStateAsyncLogic = new AsyncRelayState(run);
+        IAsyncLogic nextStateAsyncLogic = new RelayState(run);
         IAsyncLogic wrapped = Timeout.Wrap(nextStateAsyncLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);

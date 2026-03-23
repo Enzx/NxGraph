@@ -6,7 +6,7 @@ namespace NxGraph.Fsm;
 /// Executes a predicate and immediately returns <see cref="Result.Success"/>; the
 /// destination is selected by the single transition wired to this node.
 /// </summary>
-public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId falseNode) : State, IDirector, ISyncLogic
+public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId falseNode) : AsyncState, IDirector, ILogic
 {
     private readonly Func<bool> _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
 

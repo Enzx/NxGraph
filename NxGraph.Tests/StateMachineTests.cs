@@ -367,7 +367,6 @@ public class StateMachineTests
         Assert.That(defaultCalled, Is.EqualTo(1));
     }
 
-
     // ── Typed agent ─────────────────────────────────────────────────────
 
     [Test]
@@ -410,191 +409,14 @@ public class StateMachineTests
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
     }
 
-    // ── Relay state lifecycle ──────────────────────────────────────────
-
-    [Test]
-    public void relay_state_should_call_on_enter_and_on_exit()
-    {
-        bool entered = false, exited = false;
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => Result.Success,
-                onEnter: () => entered = true,
-                onExit: () => exited = true))
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(entered, Is.True);
-        Assert.That(exited, Is.True);
-    }
-
-    [Test]
-    public void relay_state_on_exit_should_run_even_on_failure()
-    {
-        bool exited = false;
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => Result.Failure,
-                onExit: () => exited = true))
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(exited, Is.True);
-    }
-
-    [Test]
-    public void relay_state_on_exit_should_run_even_on_exception()
-    {
-        bool exited = false;
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => throw new ApplicationException("boom"),
-                onExit: () => exited = true))
-            .ToStateMachine();
-
-        Assert.Throws<ApplicationException>(() => fsm.Execute());
-        Assert.That(exited, Is.True);
-    }
-
-    [Test]
-    public void relay_state_lifecycle_order_should_be_enter_run_exit()
-    {
-        List<string> log = [];
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => { log.Add("run"); return Result.Success; },
-                onEnter: () => log.Add("enter"),
-                onExit: () => log.Add("exit")))
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(log, Is.EqualTo(new[] { "enter", "run", "exit" }));
-    }
-
-    [Test]
-    public void should_propagate_exception_from_on_enter_sync()
-    {
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => Result.Success,
-                onEnter: () => throw new InvalidOperationException("enter boom")))
-            .ToStateMachine();
-
-        Assert.Throws<InvalidOperationException>(() => fsm.Execute());
-    }
-
-    [Test]
-    public void should_propagate_exception_from_on_exit_sync()
-    {
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
-                run: () => Result.Success,
-                onExit: () => throw new NotSupportedException("exit boom")))
-            .ToStateMachine();
-
-        Assert.Throws<NotSupportedException>(() => fsm.Execute());
-    }
-
-    // ── Observer: OnStateFailed ────────────────────────────────────────
-
-    [Test]
-    public void observer_should_receive_on_state_failed_on_exception()
-    {
-        var observer = new FailRecordingObserver();
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => throw new ApplicationException("boom"))
-            .ToStateMachine(observer);
-        fsm.SetAutoReset(false);
-
-        Assert.Throws<ApplicationException>(() => fsm.Execute());
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(observer.FailedExceptions, Has.Count.EqualTo(1));
-            Assert.That(observer.FailedExceptions[0], Is.TypeOf<ApplicationException>());
-        });
-    }
-
-    // ── Observer: exception bubbling ───────────────────────────────────
-
-    [Test]
-    public void observer_exception_in_on_entered_should_bubble_to_caller()
-    {
-        var observer = new ExplosiveSyncObserver();
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .ToStateMachine(observer);
-
-        Assert.Throws<InvalidOperationException>(() => fsm.Execute());
-    }
-
-    // ── Reset from failed ──────────────────────────────────────────────
-
-    [Test]
-    public void reset_from_failed_should_move_to_ready()
-    {
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Failure)
-            .ToStateMachine();
-        fsm.SetAutoReset(false);
-        fsm.Execute();
-
-        Result resetResult = fsm.Reset();
-
-        Assert.That(resetResult, Is.EqualTo(Result.Success));
-        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
-    }
-
-    [Test]
-    public void should_auto_reset_to_ready_after_failure()
-    {
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Failure)
-            .ToStateMachine();
-        fsm.SetAutoReset(true);
-
-        fsm.Execute();
-
-        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
-    }
-
-    // ── Status change order with two states ────────────────────────────
-
-    [Test]
-    public void observer_should_receive_full_status_lifecycle_for_two_states()
-    {
-        var observer = new RecordingObserver();
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .To(() => Result.Success)
-            .ToStateMachine(observer);
-        fsm.SetAutoReset(false);
-
-        fsm.Execute();
-
-        // Created→Starting→Running→Transitioning→Running→Completed
-        (ExecutionStatus, ExecutionStatus)[] expected =
-        [
-            (ExecutionStatus.Created, ExecutionStatus.Starting),
-            (ExecutionStatus.Starting, ExecutionStatus.Running),
-            (ExecutionStatus.Running, ExecutionStatus.Transitioning),
-            (ExecutionStatus.Transitioning, ExecutionStatus.Running),
-            (ExecutionStatus.Running, ExecutionStatus.Completed),
-        ];
-        Assert.That(observer.StatusChanges, Is.EqualTo(expected));
-    }
-
     // ── Mixed sync + ILogic nodes ───────────────────────────────────────
 
     [Test]
     public void should_throw_when_node_does_not_implement_ISyncLogic()
     {
-        // AsyncRelayState (async only) does not implement ILogic.
+        // RelayState (async only) does not implement ISyncLogic.
         StateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => ResultHelpers.Success))
+            .StartWith(new RelayState(_ => ResultHelpers.Success))
             .ToStateMachine();
 
         Assert.Throws<InvalidOperationException>(() => fsm.Execute());
@@ -618,44 +440,6 @@ public class StateMachineTests
         }
 
         Assert.That(counter, Is.EqualTo(100));
-    }
-
-    [Test]
-    public void should_preserve_names_when_fluent_set_name_is_used_for_later_wiring()
-    {
-        RecordingObserver observer = new();
-
-        StateToken explore = GraphBuilder
-            .StartWith(() => Result.Success).SetName("Start")
-            .To(() => Result.Success).SetName("Explore");
-
-        GraphBuilder builder = explore.Builder;
-
-        NodeId victoryId = builder.AddNode(new RelayState(() => Result.Success));
-        builder.SetName(victoryId, "Victory");
-        victoryId = victoryId.WithName("Victory");
-
-        ChoiceState chooseVictory = new(() => true, victoryId, explore.Id);
-        NodeId choiceId = builder.AddNode(chooseVictory);
-        builder.SetName(choiceId, "Decision");
-        choiceId = choiceId.WithName("Decision");
-
-        builder.AddTransition(explore.Id, choiceId);
-
-        StateMachine fsm = builder.Build().ToStateMachine(observer);
-
-        Result result = fsm.Execute();
-
-        Assert.That(result, Is.EqualTo(Result.Success));
-        Assert.That(observer.EnteredIds.Select(id => id.Name).ToArray(),
-            Is.EqualTo(new[] { "Start", "Explore", "Decision", "Victory" }));
-        Assert.That(observer.Transitions.Select(t => (t.From.Name, t.To.Name)).ToArray(),
-            Is.EqualTo(new[]
-            {
-                ("Start", "Explore"),
-                ("Explore", "Decision"),
-                ("Decision", "Victory")
-            }));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -702,18 +486,6 @@ public class StateMachineTests
             capture(Agent);
             return Result.Success;
         }
-    }
-
-    private sealed class FailRecordingObserver : IStateMachineObserver
-    {
-        public readonly List<Exception> FailedExceptions = [];
-        public void OnStateFailed(NodeId id, Exception ex) => FailedExceptions.Add(ex);
-    }
-
-    private sealed class ExplosiveSyncObserver : IStateMachineObserver
-    {
-        public void OnStateEntered(NodeId id) =>
-            throw new InvalidOperationException("sync observer boom");
     }
 }
 

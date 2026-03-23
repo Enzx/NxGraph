@@ -33,14 +33,6 @@ public readonly struct StateToken
         return new StateToken(next, Builder);
     }
 
-    /// <summary> Adds a brand-new sync state and immediately wires a transition to it. </summary>
-    public StateToken To(ILogic nextStateSyncLogic)
-    {
-        NodeId next = Builder.AddNode(nextStateSyncLogic);
-        Builder.AddTransition(Id, next);
-        return new StateToken(next, Builder);
-    }
-
     /// <summary> Finishes the DSL and produces an immutable <see cref="Graph"/>. </summary>
     public Graph Build()
     {

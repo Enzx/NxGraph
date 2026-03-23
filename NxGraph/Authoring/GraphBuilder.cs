@@ -15,14 +15,14 @@ public sealed partial class GraphBuilder
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private LogicNode? _startNode;
 
-    private readonly Dictionary<NodeId, ILogic> _nodes = new(); // non-start nodes only
-    private readonly Dictionary<ILogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<NodeId, IAsyncLogic> _nodes = new(); // non-start nodes only
+    private readonly Dictionary<IAsyncLogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
-    public NodeId AddNode(ILogic logic, bool isStart = false)
+    public NodeId AddNode(IAsyncLogic asyncLogic, bool isStart = false)
     {
-        ArgumentNullException.ThrowIfNull(logic);
+        ArgumentNullException.ThrowIfNull(asyncLogic);
 
         if (isStart)
         {
@@ -31,25 +31,25 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException("A start node has already been added.");
             }
 
-            _startNode = new LogicNode(NodeId.Start, logic);
-            _byLogic[logic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
+            _startNode = new LogicNode(NodeId.Start, asyncLogic);
+            _byLogic[asyncLogic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
             return NodeId.Start;
         }
 
-        if (_startNode?.Logic == logic)
+        if (_startNode?.AsyncLogic == asyncLogic)
         {
             return NodeId.Start;
         }
 
-        if (_byLogic.TryGetValue(logic, out NodeId existing))
+        if (_byLogic.TryGetValue(asyncLogic, out NodeId existing))
         {
             return existing;
         }
 
 
         _next = _next.Next();
-        _nodes[_next] = logic;
-        _byLogic[logic] = _next;
+        _nodes[_next] = asyncLogic;
+        _byLogic[asyncLogic] = _next;
         return _next;
     }
 
@@ -94,7 +94,7 @@ public sealed partial class GraphBuilder
             _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
 
         // Place the rest (null-safe checks)
-        foreach ((NodeId id, ILogic logic) in _nodes)
+        foreach ((NodeId id, IAsyncLogic logic) in _nodes)
         {
             int idx = id.Index;
 
@@ -129,14 +129,14 @@ public sealed partial class GraphBuilder
 
 
     /// <summary>
-    /// Creates a new graph whose first (start) node runs <paramref name="startLogic"/>.
+    /// Creates a new graph whose first (start) node runs <paramref name="startAsyncLogic"/>.
     /// </summary>
-    /// <param name="startLogic">The logic that will be the starting point of the graph.</param>
+    /// <param name="startAsyncLogic">The logic that will be the starting point of the graph.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
-    public static StateToken StartWith(ILogic startLogic)
+    public static StateToken StartWith(IAsyncLogic startAsyncLogic)
     {
         GraphBuilder builder = new();
-        NodeId id = builder.AddNode(startLogic, true);
+        NodeId id = builder.AddNode(startAsyncLogic, true);
         return new StateToken(id, builder);
     }
 
@@ -188,11 +188,11 @@ public sealed partial class GraphBuilder
 
         if (_startNode != null && _startNode.Id == newId)
         {
-            _startNode = new LogicNode(_startNode.Id.WithName(name), _startNode.Logic);
+            _startNode = new LogicNode(_startNode.Id.WithName(name), _startNode.AsyncLogic);
             return;
         }
 
-        if (_nodes.Remove(newId, out ILogic? node))
+        if (_nodes.Remove(newId, out IAsyncLogic? node))
         {
             newId = newId.WithName(name);
 
@@ -267,53 +267,53 @@ internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
 public static class GraphBuilderExtensions
 {
     /// <summary>
-    /// Converts a Graph to a StateMachine.
+    /// Converts a Graph to an AsyncStateMachine.
     /// </summary>
     /// <param name="graph">The Graph to be converted.</param>
     /// <param name="observer">Optional observer for state changes.</param>
-    /// <returns>A StateMachine instance.</returns>
-    public static StateMachine ToStateMachine(this Graph graph, IAsyncStateMachineObserver? observer = null)
+    /// <returns>An AsyncStateMachine instance.</returns>
+    public static AsyncStateMachine ToAsyncStateMachine(this Graph graph, IAsyncStateMachineObserver? observer = null)
     {
-        return new StateMachine(graph, observer);
+        return new AsyncStateMachine(graph, observer);
     }
 
     /// <summary>
-    ///  Converts a Graph to a StateMachine with a specific agent type.
+    ///  Converts a Graph to an AsyncStateMachine with a specific agent type.
     /// </summary>
     /// <param name="graph">The Graph to be converted.</param>
     /// <param name="observer">Optional observer for state changes.</param>
     /// <typeparam name="TAgent">The type of the agent to be used in the state machine.</typeparam>
-    /// <returns>A StateMachine instance with the specified agent type.</returns>
-    public static StateMachine<TAgent> ToStateMachine<TAgent>(this Graph graph,
+    /// <returns>An AsyncStateMachine instance with the specified agent type.</returns>
+    public static AsyncStateMachine<TAgent> ToAsyncStateMachine<TAgent>(this Graph graph,
         IAsyncStateMachineObserver? observer = null)
     {
-        return new StateMachine<TAgent>(graph, observer);
+        return new AsyncStateMachine<TAgent>(graph, observer);
     }
 
-    public static StateMachine<TAgent> Add<TAgent>(this StateMachine<TAgent> sm, TAgent agent)
+    public static AsyncStateMachine<TAgent> Add<TAgent>(this AsyncStateMachine<TAgent> sm, TAgent agent)
     {
         sm.SetAgent(agent);
         return sm;
     }
 
     /// <summary>
-    /// Converts a Graph to a synchronous SyncStateMachine.
+    /// Converts a Graph to a StateMachine.
     /// </summary>
-    public static SyncStateMachine ToSyncStateMachine(this Graph graph, ISyncStateMachineObserver? observer = null)
+    public static StateMachine ToStateMachine(this Graph graph, IStateMachineObserver? observer = null)
     {
-        return new SyncStateMachine(graph, observer);
+        return new StateMachine(graph, observer);
     }
 
     /// <summary>
-    /// Converts a Graph to a typed synchronous SyncStateMachine.
+    /// Converts a Graph to a typed StateMachine.
     /// </summary>
-    public static SyncStateMachine<TAgent> ToSyncStateMachine<TAgent>(this Graph graph,
-        ISyncStateMachineObserver? observer = null)
+    public static StateMachine<TAgent> ToStateMachine<TAgent>(this Graph graph,
+        IStateMachineObserver? observer = null)
     {
-        return new SyncStateMachine<TAgent>(graph, observer);
+        return new StateMachine<TAgent>(graph, observer);
     }
 
-    public static SyncStateMachine<TAgent> Add<TAgent>(this SyncStateMachine<TAgent> sm, TAgent agent)
+    public static StateMachine<TAgent> Add<TAgent>(this StateMachine<TAgent> sm, TAgent agent)
     {
         sm.SetAgent(agent);
         return sm;
