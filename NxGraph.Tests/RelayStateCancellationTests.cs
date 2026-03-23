@@ -12,7 +12,7 @@ public class RelayStateCancellationTests
     {
         CancellationTokenSource cts = new(10);
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(async ct =>
+            .StartWith(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(1000, ct);
                 return Result.Success;

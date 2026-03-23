@@ -140,6 +140,6 @@ public static class Timeout
     public static IAsyncLogic For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutState(new RelayState(run), timeout, behavior);
+        return new TimeoutState(new AsyncRelayState(run), timeout, behavior);
     }
 }

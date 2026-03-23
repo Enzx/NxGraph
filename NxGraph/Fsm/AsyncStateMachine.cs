@@ -176,10 +176,14 @@ public class AsyncStateMachine : AsyncState
                 throw new InvalidOperationException($"Node '{_current}' not found.");
             }
 
-            if (node is LogicNode { AsyncLogic: ILogReporter reporter })
+            if (node is LogicNode logicNode)
             {
-                //We need to capture the current node in the closure for correct attribution
-                reporter.LogReport = _cachedLogReportCallback;
+                ILogReporter? reporter = logicNode.AsyncLogic as ILogReporter ?? logicNode.Logic as ILogReporter;
+                if (reporter is not null)
+                {
+                    //We need to capture the current node in the closure for correct attribution
+                    reporter.LogReport = _cachedLogReportCallback;
+                }
             }
 
             LogicNode logicLogicNode = (LogicNode)node;
@@ -195,7 +199,8 @@ public class AsyncStateMachine : AsyncState
 
                     NodeId next;
 
-                    if (logicLogicNode.AsyncLogic is IDirector director)
+                    IDirector? director = logicLogicNode.AsyncLogic as IDirector ?? logicLogicNode.Logic as IDirector;
+                    if (director is not null)
                     {
                         next = director.SelectNext();
                         if (next.Equals(NodeId.Default))

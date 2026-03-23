@@ -16,7 +16,7 @@ public sealed partial class GraphBuilder
     private LogicNode? _startNode;
 
     private readonly Dictionary<NodeId, IAsyncLogic> _nodes = new(); // non-start nodes only
-    private readonly Dictionary<IAsyncLogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<object, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
@@ -62,6 +62,22 @@ public sealed partial class GraphBuilder
         }
 
         return this;
+    }
+
+    /// <summary>Add a sync-only node. Wraps it in a <see cref="SyncLogicAdapter"/>.</summary>
+    public NodeId AddNode(ILogic syncLogic, bool isStart = false)
+    {
+        ArgumentNullException.ThrowIfNull(syncLogic);
+
+        // Deduplicate by the original ILogic instance.
+        if (_byLogic.TryGetValue(syncLogic, out NodeId existing))
+        {
+            return existing;
+        }
+
+        NodeId id = AddNode(new SyncLogicAdapter(syncLogic), isStart);
+        _byLogic[syncLogic] = id; // also track by original logic for dedup
+        return id;
     }
 
     /// <summary>
@@ -141,6 +157,18 @@ public sealed partial class GraphBuilder
     }
 
     /// <summary>
+    /// Creates a new graph whose first (start) node runs <paramref name="startSyncLogic"/>.
+    /// </summary>
+    /// <param name="startSyncLogic">The synchronous logic that will be the starting point of the graph.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(ILogic startSyncLogic)
+    {
+        GraphBuilder builder = new();
+        NodeId id = builder.AddNode(startSyncLogic, true);
+        return new StateToken(id, builder);
+    }
+
+    /// <summary>
     /// Creates a new graph whose first (start) node executes <paramref name="run"/>.
     /// </summary>
     /// <param name="run">The function to execute in the start state.</param>
@@ -148,7 +176,7 @@ public sealed partial class GraphBuilder
     public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return StartWith(new RelayState(run));
+        return StartWith(new AsyncRelayState(run));
     }
 
     /// <summary>
@@ -159,7 +187,7 @@ public sealed partial class GraphBuilder
     public static StateToken StartWith(Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return StartWith(new SyncRelayState(run));
+        return StartWith((ILogic)new SyncRelayState(run));
     }
 
     /// <summary>

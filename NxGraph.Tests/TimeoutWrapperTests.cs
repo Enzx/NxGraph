@@ -12,7 +12,7 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeout(new RelayState(
+            .ToWithTimeout(new AsyncRelayState(
                     async ct =>
                     {
                         await Task.Delay(1000, ct);
@@ -31,7 +31,7 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine throwing = GraphBuilder
             .Start()
-            .ToWithTimeout(new RelayState(async ct =>
+            .ToWithTimeout(new AsyncRelayState(async ct =>
                 {
                     await Task.Delay(1000, ct);
                     return Result.Success;

@@ -15,7 +15,7 @@ public class AgentPropagationTests
     [Test]
     public async Task agent_should_be_injected_into_generic_state()
     {
-        RelayState<DummyAgent> node = new((agent, _) =>
+        AsyncRelayState<DummyAgent> node = new((agent, _) =>
         {
             agent.Visited = true;
             return ResultHelpers.Success;

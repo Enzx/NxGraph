@@ -45,7 +45,7 @@ public class StatusTransitionTests
     public void status_sets_failed_on_exception()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(_ => throw new InvalidOperationException("boom")))
+            .StartWith(new AsyncRelayState(_ => throw new InvalidOperationException("boom")))
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());

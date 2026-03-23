@@ -42,7 +42,7 @@ public sealed class MermaidGraphExporter : IGraphExporter
             string label = BuildNodeLabel(node.Id, i, opts);
 
             // Shape: Start node gets a "stadium" shape, if IDirector rhombus {}, others are rectangles
-            if (node is LogicNode { AsyncLogic: IDirector })
+            if (node is LogicNode ln && (ln.AsyncLogic is IDirector || ln.Logic is IDirector))
             {
                 label = $"{{\"{EscapeLabel( label)}\"}}";
                 sb.Append("  ").Append(nodeId).Append(label).AppendLine();
