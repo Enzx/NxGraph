@@ -36,9 +36,19 @@ public static partial class Dsl
         /// <summary>
         /// Adds a case to the switch statement.
         /// </summary>
-        public SwitchBuilder<TKey> Case(TKey key, ILogic logic)
+        public SwitchBuilder<TKey> Case(TKey key, IAsyncLogic asyncLogic)
         {
-            NodeId id = _builder.AddNode(logic);
+            NodeId id = _builder.AddNode(asyncLogic);
+            _map[key] = id;
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a case with synchronous logic to the switch statement.
+        /// </summary>
+        public SwitchBuilder<TKey> Case(TKey key, ILogic syncLogic)
+        {
+            NodeId id = _builder.AddNode(syncLogic);
             _map[key] = id;
             return this;
         }
@@ -46,11 +56,23 @@ public static partial class Dsl
         /// <summary>
         /// Adds a default case to the switch statement.
         /// </summary>
-        /// <param name="logic">The logic to execute if no case matches.</param>
+        /// <param name="asyncLogic">The logic to execute if no case matches.</param>
         /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>
-        public SwitchBuilder<TKey> Default(ILogic logic)
+        public SwitchBuilder<TKey> Default(IAsyncLogic asyncLogic)
         {
-            NodeId defaultNode = _builder.AddNode(logic);
+            NodeId defaultNode = _builder.AddNode(asyncLogic);
+            _switchNode.SetDefault(defaultNode);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a default case with synchronous logic to the switch statement.
+        /// </summary>
+        /// <param name="syncLogic">The synchronous logic to execute if no case matches.</param>
+        /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>
+        public SwitchBuilder<TKey> Default(ILogic syncLogic)
+        {
+            NodeId defaultNode = _builder.AddNode(syncLogic);
             _switchNode.SetDefault(defaultNode);
             return this;
         }
@@ -61,7 +83,7 @@ public static partial class Dsl
         /// <returns>Returns a <see cref="StateToken"/> representing the switch state.</returns>
         public StateToken End()
         {
-            NodeId switchId = _builder.AddNode(_switchNode, _isStart);
+            NodeId switchId = _builder.AddNode((ILogic)_switchNode, _isStart);
             if (_prev.Id != NodeId.Default)
             {
                 _builder.AddTransition(_prev.Id, switchId);

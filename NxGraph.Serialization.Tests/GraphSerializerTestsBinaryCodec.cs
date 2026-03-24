@@ -29,8 +29,8 @@ public class GraphSerializerTestsBinaryCodec
         Assert.Multiple(() =>
         {
             Assert.That(roundTripped.NodeCount, Is.EqualTo(2));
-            Assert.That(((DummyState)start.Logic).Data, Is.EqualTo("start"));
-            Assert.That(((DummyState)end.Logic).Data, Is.EqualTo("end"));
+            Assert.That(((DummyState)start.AsyncLogic).Data, Is.EqualTo("start"));
+            Assert.That(((DummyState)end.AsyncLogic).Data, Is.EqualTo("end"));
         });
     }
 

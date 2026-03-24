@@ -20,9 +20,9 @@ public class ObserverExceptionTests
     public void observer_exception_should_bubble_to_caller()
     {
         ExplosiveObserver? observer = new();
-        StateMachine? fsm = GraphBuilder
+        AsyncStateMachine? fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
-            .ToStateMachine(observer);
+            .ToAsyncStateMachine(observer);
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
     }

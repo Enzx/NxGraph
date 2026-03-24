@@ -2,23 +2,15 @@ using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
 
+/// <summary>
+/// <b>Obsolete.</b> Use <see cref="GraphBuilder"/> static methods instead.
+/// </summary>
+[Obsolete("Use GraphBuilder.Start() / GraphBuilder.StartWith() instead.")]
 public static class FsmDsl
 {
     /// <summary>Create the first state of the graph and mark it as <c>Start</c>.</summary>
-    public static StartToken Start()
-    {
-        return new StartToken(new GraphBuilder());
-    }
+    public static StartToken Start() => GraphBuilder.Start();
 
-    /// <summary>
-    /// Create the first state of the graph and mark it as <c>Start</c>.
-    /// </summary>
-    /// <param name="logic">The logic to be executed in the start state.</param>
-    /// <returns>A <see cref="StateToken"/> representing the start state of the FSM graph.</returns>
-    public static StateToken StartWith(ILogic logic)
-    {
-        GraphBuilder builder = new();
-        NodeId id = builder.AddNode(logic, true);
-        return new StateToken(id, builder);
-    }
+    /// <summary>Create the first state of the graph with <paramref name="asyncLogic"/> as the start node.</summary>
+    public static StateToken StartWith(IAsyncLogic asyncLogic) => GraphBuilder.StartWith(asyncLogic);
 }

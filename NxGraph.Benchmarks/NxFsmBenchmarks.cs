@@ -14,12 +14,12 @@ namespace NxGraph.Benchmarks;
 public class NxFsmBenchmarks
 {
     // ReSharper disable NullableWarningSuppressionIsUsed
-    private StateMachine _singleSuccess = null!;
-    private StateMachine _chain10 = null!;
-    private StateMachine _chain50 = null!;
-    private StateMachine _withObserver = null!;
-    private StateMachine _withTimeoutWrapper = null!;
-    private StateMachine _directorLinear10 = null!;
+    private AsyncStateMachine _singleSuccess = null!;
+    private AsyncStateMachine _chain10 = null!;
+    private AsyncStateMachine _chain50 = null!;
+    private AsyncStateMachine _withObserver = null!;
+    private AsyncStateMachine _withTimeoutWrapper = null!;
+    private AsyncStateMachine _directorLinear10 = null!;
     // ReSharper restore NullableWarningSuppressionIsUsed
 
     private sealed class NoopObserver : IAsyncStateMachineObserver
@@ -50,7 +50,7 @@ public class NxFsmBenchmarks
     {
         _singleSuccess = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         StateToken gb10 = GraphBuilder.StartWith(_ => ResultHelpers.Success);
         for (int i = 0; i < 9; i++)
@@ -58,7 +58,7 @@ public class NxFsmBenchmarks
             gb10 = gb10.To(_ => ResultHelpers.Success);
         }
 
-        _chain10 = gb10.ToStateMachine();
+        _chain10 = gb10.ToAsyncStateMachine();
 
         StateToken gb50 = GraphBuilder.StartWith(_ => ResultHelpers.Success);
         for (int i = 0; i < 49; i++)
@@ -66,16 +66,16 @@ public class NxFsmBenchmarks
             gb50 = gb50.To(_ => ResultHelpers.Success);
         }
 
-        _chain50 = gb50.ToStateMachine();
+        _chain50 = gb50.ToAsyncStateMachine();
 
         _withObserver = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
-            .ToStateMachine(new NoopObserver());
+            .ToAsyncStateMachine(new NoopObserver());
 
         _withTimeoutWrapper = GraphBuilder
             .Start()
             .ToWithTimeout(_ => ValueTask.FromResult(Result.Success), 1.Seconds(), TimeoutBehavior.Fail)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         // Director that sequences through 10 nodes
         StateToken builder = GraphBuilder.StartWith(_ => ResultHelpers.Success);
@@ -84,7 +84,7 @@ public class NxFsmBenchmarks
             builder = builder.To(_ => ResultHelpers.Success);
         }
 
-        _directorLinear10 = builder.To(new LinearDirector(10)).ToStateMachine();
+        _directorLinear10 = builder.To(new LinearDirector(10)).ToAsyncStateMachine();
     }
 
     // ---- Benchmarks ----
@@ -132,7 +132,7 @@ public class NxFsmBenchmarks
     }
 }
 
-file sealed class LinearDirector(int max) : State, IDirector
+file sealed class LinearDirector(int max) : AsyncState, IDirector
 {
     private int _counter;
 

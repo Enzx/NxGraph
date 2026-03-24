@@ -1,14 +1,18 @@
-﻿namespace NxGraph.Graphs;
+﻿using System.Runtime.CompilerServices;
+
+namespace NxGraph.Graphs;
 
 /// <summary>
-/// Interface representing the logic of a node in a graph.
+/// Synchronous counterpart of <see cref="IAsyncLogic"/>.
+/// Implementations must be entirely synchronous – no <c>Task</c>, no <c>ValueTask</c>,
+/// no <c>CancellationToken</c>.  Designed for hot-path, zero-allocation execution.
 /// </summary>
 public interface ILogic
 {
     /// <summary>
-    /// Executes the logic of the node asynchronously.
+    /// Executes the logic synchronously and returns a <see cref="Result"/>.
     /// </summary>
-    /// <param name="ct">Cancellation token to cancel the operation.</param>
-    /// <returns>A <see cref="ValueTask{Result}"/> representing the asynchronous operation.</returns>
-    ValueTask<Result> ExecuteAsync(CancellationToken ct = default);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    Result Execute();
 }
+

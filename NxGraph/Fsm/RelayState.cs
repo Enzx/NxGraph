@@ -1,64 +1,56 @@
-﻿namespace NxGraph.Fsm;
+namespace NxGraph.Fsm;
 
 /// <summary>
-/// RelayState is a state that can be used to encapsulate a function that returns a Result.
+/// Synchronous counterpart of <see cref="AsyncRelayState"/>.
+/// Wraps plain delegates (<see cref="Func{Result}"/>) for zero-allocation inline execution.
 /// </summary>
-/// <param name="run">The function to run when the state is executed. It should return a <see cref="Result"/>.</param>
-/// <param name="onEnter">Optional function to run when the state is entered. It can be used for initialization or setup.</param>
-/// <param name="onExit">Optional function to run when the state is exited. It can be used for cleanup or finalization.</param>
-public sealed class RelayState(
-    Func<CancellationToken, ValueTask<Result>> run,
-    Func<CancellationToken, ValueTask>? onEnter = null,
-    Func<CancellationToken, ValueTask>? onExit = null)
-    : State
+public sealed class RelayState : State
 {
-    private readonly Func<CancellationToken, ValueTask<Result>> _run =
-        run ?? throw new ArgumentNullException(nameof(run));
+    private readonly Func<Result> _run;
+    private readonly Action? _onEnter;
+    private readonly Action? _onExit;
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    public RelayState(
+        Func<Result> run,
+        Action? onEnter = null,
+        Action? onExit = null)
     {
-        return onEnter?.Invoke(ct) ?? default;
+        _run = run ?? throw new ArgumentNullException(nameof(run));
+        _onEnter = onEnter;
+        _onExit = onExit;
     }
 
-    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
-    {
-        return _run(ct);
-    }
+    protected override void OnEnter() => _onEnter?.Invoke();
 
-    protected override ValueTask OnExitAsync(CancellationToken ct)
-    {
-        return onExit?.Invoke(ct) ?? default;
-    }
+    protected override Result OnRun() => _run();
+
+    protected override void OnExit() => _onExit?.Invoke();
 }
 
 /// <summary>
-/// RelayState is a state that can be used to encapsulate a function that returns a Result.
+/// Synchronous counterpart of <see cref="AsyncRelayState{TAgent}"/>.
 /// </summary>
-/// <param name="run">The function to run when the state is executed. It should return a <see cref="Result"/>.</param>
-/// <param name="onEnter">Optional function to run when the state is entered. It can be used for initialization or setup.</param>
-/// <param name="onExit">Optional function to run when the state is exited. It can be used for cleanup or finalization.</param>
-/// <typeparam name="TAgent">The type of the agent that this state operates on.</typeparam>
-public sealed class RelayState<TAgent>(
-    Func<TAgent, CancellationToken, ValueTask<Result>> run,
-    Func<TAgent, CancellationToken, ValueTask>? onEnter = null,
-    Func<TAgent, CancellationToken, ValueTask>? onExit = null)
-    : State<TAgent>
+/// <typeparam name="TAgent">The type of agent available during execution.</typeparam>
+public sealed class RelayState<TAgent> : State<TAgent>
 {
-    private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run =
-        run ?? throw new ArgumentNullException(nameof(run));
+    private readonly Func<TAgent, Result> _run;
+    private readonly Action<TAgent>? _onEnter;
+    private readonly Action<TAgent>? _onExit;
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    public RelayState(
+        Func<TAgent, Result> run,
+        Action<TAgent>? onEnter = null,
+        Action<TAgent>? onExit = null)
     {
-        return onEnter?.Invoke(Agent, ct) ?? default;
+        _run = run ?? throw new ArgumentNullException(nameof(run));
+        _onEnter = onEnter;
+        _onExit = onExit;
     }
 
-    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
-    {
-        return _run(Agent, ct);
-    }
+    protected override void OnEnter() => _onEnter?.Invoke(Agent);
 
-    protected override ValueTask OnExitAsync(CancellationToken ct)
-    {
-        return onExit?.Invoke(Agent, ct) ?? default;
-    }
+    protected override Result OnRun() => _run(Agent);
+
+    protected override void OnExit() => _onExit?.Invoke(Agent);
 }
+

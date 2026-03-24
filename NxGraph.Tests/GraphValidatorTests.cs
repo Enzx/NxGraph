@@ -12,8 +12,8 @@ public class GraphValidatorTests
     private static Graph BuildSimpleGraph(out GraphBuilder builder)
     {
         builder = new GraphBuilder();
-        NodeId start = builder.AddNode(new RelayState(_ => ResultHelpers.Success), isStart: true);
-        NodeId end = builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId end = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
         builder.AddTransition(start, end);
         return builder.Build(throwOnError: false);
     }
@@ -37,9 +37,9 @@ public class GraphValidatorTests
     public void UnreachableNode_ShouldBeReported_AsWarning()
     {
         GraphBuilder builder = new();
-        NodeId start = builder.AddNode(new RelayState(_ => ResultHelpers.Success), true);
-        NodeId end = builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-        NodeId unreachable = builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), true);
+        NodeId end = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId unreachable = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
 
         builder.AddTransition(start, end);
         Graph graph = builder.Build(throwOnError: false);
@@ -57,8 +57,8 @@ public class GraphValidatorTests
     public void DuplicateNames_ShouldBeReported_AsWarnings()
     {
         GraphBuilder builder = new();
-        NodeId a1 = builder.AddNode(new RelayState(_ => ResultHelpers.Success), isStart: true);
-        NodeId a2 = builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+        NodeId a1 = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId a2 = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
 
         builder.SetName(a1, "A");
         builder.SetName(a2, "A"); // duplicate name
@@ -80,7 +80,7 @@ public class GraphValidatorTests
     public void SelfLoop_ShouldBeWarning_WhenEnabled()
     {
         GraphBuilder builder = new();
-        NodeId loop = builder.AddNode(new RelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId loop = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
         builder.AddTransition(loop, loop); // self-loop
 
         Graph graph = builder.Build(throwOnError: false);
@@ -98,8 +98,8 @@ public class GraphValidatorTests
     public void NoTerminalPath_ShouldWarnOrError_BasedOnOption()
     {
         GraphBuilder builder = new();
-        NodeId n1 = builder.AddNode(new RelayState(_ => ResultHelpers.Success), isStart: true);
-        NodeId n2 = builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+        NodeId n1 = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId n2 = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
         builder.AddTransition(n1, n2);
         builder.AddTransition(n2, n1); // cycle; no terminal
 

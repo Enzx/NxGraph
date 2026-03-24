@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using NxFSM.Examples;
+using NxFSM.Examples.DungeonCrawler;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
@@ -9,7 +10,7 @@ using NxGraph.Graphs;
 IAsyncStateMachineObserver observer = new ConsoleStateObserver();
 Console.WriteLine("Simple FSM Example");
 Console.WriteLine();
-StateMachine fsm = GraphBuilder
+AsyncStateMachine fsm = GraphBuilder
     .StartWith(_ =>
     {
         Console.WriteLine("Initializing workflow...");
@@ -25,7 +26,7 @@ StateMachine fsm = GraphBuilder
         Console.WriteLine("Running second step...");
         return ResultHelpers.Success;
     }).SetName("End")
-    .ToStateMachine(observer);
+    .ToAsyncStateMachine(observer);
 
 Result result = await fsm.ExecuteAsync();
 
@@ -41,6 +42,13 @@ await aiEnemy.ExecuteAsync();
 await SerializationExample.Run();
 
 ExportersExample.Run();
+
+Console.WriteLine();
+Console.WriteLine();
+Console.WriteLine("Dungeon Crawler Example (Sync FSM)");
+Console.WriteLine();
+DungeonCrawlerExample.Run();
+
 return 0;
 
 
@@ -90,7 +98,7 @@ namespace NxFSM.Examples
     public class AiEnemy
     {
         public Player Target { get; set; } = new();
-        private StateMachine<AiEnemy> StateMachine { get; set; }
+        private AsyncStateMachine<AiEnemy> StateMachine { get; set; }
 
         public AiEnemy()
         {
@@ -102,7 +110,7 @@ namespace NxFSM.Examples
                 .If(() => Target.IsTargetInRange)
                 .Then(attackState).WaitFor(1.Seconds()).To(idleState)
                 .Else(patrolState)
-                .ToStateMachine<AiEnemy>()
+                .ToAsyncStateMachine<AiEnemy>()
                 .WithAgent(this);
         }
 
@@ -113,7 +121,7 @@ namespace NxFSM.Examples
         }
     }
 
-    public class IdleState : State<AiEnemy>
+    public class IdleState : AsyncState<AiEnemy>
     {
         protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
         {
@@ -123,7 +131,7 @@ namespace NxFSM.Examples
         }
     }
 
-    public class PatrolState : State<AiEnemy>
+    public class PatrolState : AsyncState<AiEnemy>
     {
         protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
         {
@@ -132,7 +140,7 @@ namespace NxFSM.Examples
         }
     }
 
-    public class AttackState : State<AiEnemy>
+    public class AttackState : AsyncState<AiEnemy>
     {
         protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
         {

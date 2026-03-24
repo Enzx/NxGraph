@@ -10,11 +10,11 @@ public class ExceptionPropagationTests
     [Test]
     public void should_bubble_exception_from_on_enter()
     {
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(
                 _ => ResultHelpers.Success,
                 _ => throw new InvalidOperationException("enter boom")))
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
     }
@@ -22,10 +22,10 @@ public class ExceptionPropagationTests
     [Test]
     public void should_bubble_exception_from_on_run()
     {
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(
                 _ => throw new ApplicationException("run boom")))
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
     }
@@ -33,11 +33,11 @@ public class ExceptionPropagationTests
     [Test]
     public void should_bubble_exception_from_on_exit()
     {
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(
                 _ => ResultHelpers.Success,
                 onExit: _ => throw new NotSupportedException("exit boom")))
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<NotSupportedException>(async () => await fsm.ExecuteAsync());
     }

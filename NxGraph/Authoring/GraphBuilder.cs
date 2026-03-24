@@ -4,7 +4,6 @@ using NxGraph.Graphs;
 #if NETSTANDARD2_1
 using ArgumentNullException = System.ArgumentNullExceptionShim;
 #endif
-// ReSharper disable UnusedMethodReturnValue.Global
 
 namespace NxGraph.Authoring;
 
@@ -16,14 +15,14 @@ public sealed partial class GraphBuilder
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private LogicNode? _startNode;
 
-    private readonly Dictionary<NodeId, ILogic> _nodes = new(); // non-start nodes only
-    private readonly Dictionary<ILogic, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<NodeId, IAsyncLogic?> _nodes = new(); // non-start nodes only
+    private readonly Dictionary<object, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
-    public NodeId AddNode(ILogic logic, bool isStart = false)
+    public NodeId AddNode(IAsyncLogic asyncLogic, bool isStart = false)
     {
-        ArgumentNullException.ThrowIfNull(logic);
+        ArgumentNullException.ThrowIfNull(asyncLogic);
 
         if (isStart)
         {
@@ -32,25 +31,25 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException("A start node has already been added.");
             }
 
-            _startNode = new LogicNode(NodeId.Start, logic);
-            _byLogic[logic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
+            _startNode = new LogicNode(NodeId.Start, asyncLogic);
+            _byLogic[asyncLogic] = NodeId.Start; // so future AddNode(sameLogic) returns Start
             return NodeId.Start;
         }
 
-        if (_startNode?.Logic == logic)
+        if (_startNode?.AsyncLogic == asyncLogic)
         {
             return NodeId.Start;
         }
 
-        if (_byLogic.TryGetValue(logic, out NodeId existing))
+        if (_byLogic.TryGetValue(asyncLogic, out NodeId existing))
         {
             return existing;
         }
 
 
         _next = _next.Next();
-        _nodes[_next] = logic;
-        _byLogic[logic] = _next;
+        _nodes[_next] = asyncLogic;
+        _byLogic[asyncLogic] = _next;
         return _next;
     }
 
@@ -65,12 +64,28 @@ public sealed partial class GraphBuilder
         return this;
     }
 
+    /// <summary>Add a sync-only node. Wraps it in a <see cref="SyncLogicAdapter"/>.</summary>
+    public NodeId AddNode(ILogic syncLogic, bool isStart = false)
+    {
+        ArgumentNullException.ThrowIfNull(syncLogic);
+
+        // Deduplicate by the original ILogic instance.
+        if (_byLogic.TryGetValue(syncLogic, out NodeId existing))
+        {
+            return existing;
+        }
+
+        NodeId id = AddNode(new SyncLogicAdapter(syncLogic), isStart);
+        _byLogic[syncLogic] = id; // also track by original logic for dedup
+        return id;
+    }
+
     /// <summary>
     ///  Builds the graph from the added nodes and transitions.
     /// </summary>
     /// <returns>A <see cref="Graph"/> instance of a graph with the defined nodes and transitions.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no start node has been added or if there are inconsistencies in the graph structure.</exception>
-    public Graph InternalBuild()
+    private Graph InternalBuild()
     {
         int maxIndex = 0;
         foreach (NodeId id in _nodes.Keys)
@@ -83,7 +98,7 @@ public sealed partial class GraphBuilder
 
         int length = Math.Max(1, maxIndex + 1);
 
-        LogicNode[] nodes = new LogicNode[length];
+        INode[] nodes = new INode[length];
         Transition[] edges = new Transition[length];
 
         for (int i = 0; i < edges.Length; i++)
@@ -95,7 +110,7 @@ public sealed partial class GraphBuilder
             _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
 
         // Place the rest (null-safe checks)
-        foreach ((NodeId id, ILogic logic) in _nodes)
+        foreach ((NodeId id, IAsyncLogic? logic) in _nodes)
         {
             int idx = id.Index;
 
@@ -109,7 +124,14 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException($"Node slot {idx} already occupied (duplicate NodeId index).");
             }
 
-            nodes[idx] = new LogicNode(id, logic);
+            if (logic != null)
+            {
+                nodes[idx] = new LogicNode(id, logic);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Node {id} has no logic assigned.");
+            }
         }
 
         //transitions > dense array
@@ -130,72 +152,145 @@ public sealed partial class GraphBuilder
 
 
     /// <summary>
-    /// Creates a new state token that starts with the given node.
+    /// Creates a new graph whose first (start) node runs <paramref name="startAsyncLogic"/>.
     /// </summary>
-    /// <param name="startLogic">The node that will be the starting point of the state token.</param>
-    /// <returns>A new StateToken initialized with the specified start node.</returns>
-    public static StateToken StartWith(ILogic startLogic)
+    /// <param name="startAsyncLogic">The logic that will be the starting point of the graph.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(IAsyncLogic startAsyncLogic)
     {
-        return FsmDsl.StartWith(startLogic);
-    }
-
-    public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
-    {
-        ILogic startLogic = new RelayState(run);
-        return FsmDsl.StartWith(startLogic);
+        GraphBuilder builder = new();
+        NodeId id = builder.AddNode(startAsyncLogic, true);
+        return new StateToken(id, builder);
     }
 
     /// <summary>
-    /// Creates a new state token that starts with the default start node.
+    /// Creates a new graph whose first (start) node runs <paramref name="startSyncLogic"/>.
     /// </summary>
-    /// <returns>A new StateToken initialized with the default start node.</returns>
+    /// <param name="startSyncLogic">The synchronous logic that will be the starting point of the graph.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(ILogic startSyncLogic)
+    {
+        GraphBuilder builder = new();
+        NodeId id = builder.AddNode(startSyncLogic, true);
+        return new StateToken(id, builder);
+    }
+
+    /// <summary>
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/>.
+    /// </summary>
+    /// <param name="run">The function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return StartWith(new AsyncRelayState(run));
+    }
+
+    /// <summary>
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/> synchronously.
+    /// </summary>
+    /// <param name="run">The synchronous function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(Func<Result> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return StartWith(new RelayState(run));
+    }
+
+    /// <summary>
+    /// Begins building a new graph without adding a start node yet.
+    /// Chain with <c>.If()</c>, <c>.Switch()</c>, <c>.WaitFor()</c>, or <c>.To()</c> to define the start.
+    /// </summary>
+    /// <returns>A <see cref="StartToken"/> that allows fluent configuration of the first state.</returns>
     public static StartToken Start()
     {
-        return FsmDsl.Start();
+        return new StartToken(new GraphBuilder());
     }
 
     /// <summary>
     /// Sets the name of a node in the graph.
     /// </summary>
-    /// <param name="newId">The new ID of the node, which must already exist in the graph.</param>
-    /// <param name="name">The new name to assign to the node.</param>
-    /// <exception cref="ArgumentException">Thrown if the provided name is null or whitespace.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the node with the specified ID does not exist in the graph.</exception>
-    public void SetName(NodeId newId, string name)
+    public void SetName(NodeId id, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
         }
 
-        if (_startNode != null && _startNode.Id == newId)
+        NodeId oldId = id;
+        NodeId namedId = oldId.WithName(name);
+
+        bool isStart = _startNode is not null && _startNode.Id.Index == oldId.Index;
+        if (isStart)
         {
-            _startNode = new LogicNode(_startNode.Id.WithName(name), _startNode.Logic);
-            return;
+            if (_startNode != null)
+            {
+                _startNode = new LogicNode(namedId, _startNode.AsyncLogic);
+            }
+            else
+            {
+                throw new InvalidOperationException("Start node is not defined.");
+            }
         }
-
-        if (_nodes.Remove(newId, out ILogic? node))
+        else if (_nodes.Remove(oldId, out IAsyncLogic? existingLogic))
         {
-            newId = newId.WithName(name);
-
-            _nodes[newId] = node;
+            // Normal path when callers pass in the exact key we stored
+            _nodes[namedId] = existingLogic;
         }
         else
         {
-            throw new InvalidOperationException($"Node with ID {newId} does not exist in the graph.");
+            // Fallback: look up by index only (in case callers passed an id with the right
+            // index but a different name than what we have as the key).
+            NodeId? keyToRename = null;
+            foreach (NodeId key in _nodes.Keys)
+            {
+                if (key.Index == oldId.Index)
+                {
+                    keyToRename = key;
+                    break;
+                }
+            }
+
+            if (keyToRename is null)
+            {
+                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
+            }
+
+            IAsyncLogic? logic = _nodes[keyToRename.Value];
+            if (logic == null)
+            {
+                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
+            }
+            _nodes.Remove(keyToRename.Value);
+            _nodes[namedId] = logic;
         }
 
-        // Update transitions to reflect the new node ID
-        foreach (KeyValuePair<NodeId, Transition> transition in _transitions.ToList())
+        // Update logic->id map so future AddNode(sameLogic) returns the named id
+        foreach (KeyValuePair<object, NodeId> pair in _byLogic.ToList())
         {
-            if (transition.Key == newId)
+            if (pair.Value.Index == oldId.Index)
             {
-                _transitions.Remove(transition.Key);
-                _transitions.Add(newId, transition.Value);
+                _byLogic[pair.Key] = namedId;
             }
-            else if (transition.Value.Destination == newId)
+        }
+
+        // Update transitions: sources and destinations that reference this index
+        foreach ((NodeId from, Transition t) in _transitions.ToList())
+        {
+            bool fromMatches = from.Index == oldId.Index;
+            bool toMatches = t.Destination.Index == oldId.Index;
+
+            NodeId newFrom = fromMatches ? namedId : from;
+            Transition newTransition = toMatches ? new Transition(namedId) : t;
+
+            if (fromMatches)
             {
-                _transitions[transition.Key] = new Transition(newId);
+                _transitions.Remove(from);
+                _transitions[newFrom] = newTransition;
+            }
+            else if (toMatches)
+            {
+                _transitions[from] = newTransition;
             }
         }
     }
@@ -249,25 +344,48 @@ internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
 public static class GraphBuilderExtensions
 {
     /// <summary>
-    /// Converts a Graph to a StateMachine.
+    /// Converts a Graph to an AsyncStateMachine.
     /// </summary>
     /// <param name="graph">The Graph to be converted.</param>
     /// <param name="observer">Optional observer for state changes.</param>
-    /// <returns>A StateMachine instance.</returns>
-    public static StateMachine ToStateMachine(this Graph graph, IAsyncStateMachineObserver? observer = null)
+    /// <returns>An AsyncStateMachine instance.</returns>
+    public static AsyncStateMachine ToAsyncStateMachine(this Graph graph, IAsyncStateMachineObserver? observer = null)
+    {
+        return new AsyncStateMachine(graph, observer);
+    }
+
+    /// <summary>
+    ///  Converts a Graph to an AsyncStateMachine with a specific agent type.
+    /// </summary>
+    /// <param name="graph">The Graph to be converted.</param>
+    /// <param name="observer">Optional observer for state changes.</param>
+    /// <typeparam name="TAgent">The type of the agent to be used in the state machine.</typeparam>
+    /// <returns>An AsyncStateMachine instance with the specified agent type.</returns>
+    public static AsyncStateMachine<TAgent> ToAsyncStateMachine<TAgent>(this Graph graph,
+        IAsyncStateMachineObserver? observer = null)
+    {
+        return new AsyncStateMachine<TAgent>(graph, observer);
+    }
+
+    public static AsyncStateMachine<TAgent> Add<TAgent>(this AsyncStateMachine<TAgent> sm, TAgent agent)
+    {
+        sm.SetAgent(agent);
+        return sm;
+    }
+
+    /// <summary>
+    /// Converts a Graph to a StateMachine.
+    /// </summary>
+    public static StateMachine ToStateMachine(this Graph graph, IStateMachineObserver? observer = null)
     {
         return new StateMachine(graph, observer);
     }
 
     /// <summary>
-    ///  Converts a Graph to a StateMachine with a specific agent type.
+    /// Converts a Graph to a typed StateMachine.
     /// </summary>
-    /// <param name="graph">The Graph to be converted.</param>
-    /// <param name="observer">Optional observer for state changes.</param>
-    /// <typeparam name="TAgent">The type of the agent to be used in the state machine.</typeparam>
-    /// <returns>A StateMachine instance with the specified agent type.</returns>
     public static StateMachine<TAgent> ToStateMachine<TAgent>(this Graph graph,
-        IAsyncStateMachineObserver? observer = null)
+        IStateMachineObserver? observer = null)
     {
         return new StateMachine<TAgent>(graph, observer);
     }

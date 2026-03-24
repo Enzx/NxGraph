@@ -3,7 +3,6 @@ using NxGraph.Graphs;
 #if NETSTANDARD2_1
 using ArgumentNullException = System.ArgumentNullExceptionShim;
 #endif
-// ReSharper disable UnusedMember.Global
 
 namespace NxGraph.Authoring;
 
@@ -18,8 +17,8 @@ public static partial class Dsl
     public static StateToken To(this StateToken prev, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        ILogic logic = new RelayState(run);
-        return prev.To(logic);
+        IAsyncLogic asyncLogic = new AsyncRelayState(run);
+        return prev.To(asyncLogic);
     }
 
     public static StateToken SetName(this StateToken prev, string name)
@@ -31,7 +30,7 @@ public static partial class Dsl
         }
 
         prev.Builder.SetName(prev.Id, name);
-        return prev;
+        return new StateToken(prev.Id.WithName(name), prev.Builder);
     }
 
     public static Graph SetName(this Graph graph, string name)
@@ -82,22 +81,21 @@ public static partial class Dsl
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return ifBuilder.Then(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return ifBuilder.Then(asyncRelay);
     }
 
     /// <summary>
     /// Creates an "else" branch in the FSM graph that executes the specified logic.
     /// </summary>
-    /// <param name="ifBuilder">The ThenElseBuilder that represents the conditional branch.</param>
+    /// <param name="ifBuilder">The BranchBuilder that represents the conditional branch.</param>
     /// <param name="run">A function that defines the logic to be executed in the "else" branch.</param>
-    /// <returns>A TerminalBuilder that allows chaining further actions.
-    /// (i.e. Building the final state of the FSM graph)</returns>
+    /// <returns>A <see cref="BranchEnd"/> that allows building the graph or continuing to chain states.</returns>
     public static BranchEnd Else(this BranchBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return ifBuilder.Else(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return ifBuilder.Else(asyncRelay);
     }
 
 
@@ -114,8 +112,8 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return switchBuilder.Case(key, relay);
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.Case(key, asyncRelay);
     }
 
     /// <summary>
@@ -130,12 +128,64 @@ public static partial class Dsl
         where TKey : notnull
     {
         ArgumentNullException.ThrowIfNull(run);
-        RelayState relay = new(run);
-        return switchBuilder.Default(relay);
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.Default(asyncRelay);
     }
 
     public static Graph Build(this BranchBuilder branch)
     {
         return branch.Builder.Build();
+    }
+
+    // ── BranchBuilder convenience overloads ─────────────────────────────
+
+    /// <summary>
+    /// Chains a new state onto the "then" branch using a lambda.
+    /// </summary>
+    public static BranchBuilder To(this BranchBuilder branch, Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return branch.To(new AsyncRelayState(run));
+    }
+
+    /// <summary>
+    /// Sets the display name for the current tip node of the "then" branch.
+    /// </summary>
+    public static BranchBuilder SetName(this BranchBuilder branch, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
+        }
+
+        branch.Builder.SetName(branch.Tip, name);
+        return branch;
+    }
+
+    // ── BranchEnd convenience overloads ─────────────────────────────────
+
+    /// <summary>
+    /// Chains a new state after the "else" branch using a lambda.
+    /// </summary>
+    public static StateToken To(this BranchEnd branchEnd, Func<CancellationToken, ValueTask<Result>> run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return branchEnd.To(new AsyncRelayState(run));
+    }
+
+    /// <summary>
+    /// Sets the display name for the current tip node of the "else" branch.
+    /// </summary>
+    public static BranchEnd SetName(this BranchEnd branchEnd, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
+        }
+
+        branchEnd.Builder.SetName(branchEnd.Tip, name);
+        return branchEnd;
     }
 }

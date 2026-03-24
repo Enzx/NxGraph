@@ -3,14 +3,16 @@
 namespace NxGraph.Fsm;
 
 /// <summary>
-/// Branches like a switch/case.  Finish immediately with <see cref="Result.Success"/>; the
+/// Branches like a switch/case.  Finishes immediately with <see cref="Result.Success"/>; the
 /// runtime asks <see cref="SelectNext"/> for the next node.
+/// Purely synchronous — the authoring layer wraps this in a <see cref="SyncLogicAdapter"/>
+/// so that async runtimes can also execute it.
 /// </summary>
 public sealed class SwitchState<TKey>(
     Func<TKey> selector,
     IReadOnlyDictionary<TKey, NodeId> cases,
     NodeId defaultNode = default)
-    : State, IDirector
+    : ILogic, IDirector
     where TKey : notnull
 {
     private readonly Func<TKey> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
@@ -26,10 +28,9 @@ public sealed class SwitchState<TKey>(
         return cases.GetValueOrDefault(key, _defaultNode);
     }
 
-    protected override ValueTask<Result> OnRunAsync(CancellationToken _)
-    {
-        return ResultHelpers.Success;
-    }
+
+    /// <inheritdoc />
+    public Result Execute() => Result.Success;
 
     /// <summary>
     /// Sets the default node to be used when no case matches the selector's key.

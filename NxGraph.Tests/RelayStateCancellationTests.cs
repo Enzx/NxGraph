@@ -11,13 +11,13 @@ public class RelayStateCancellationTests
     public void relay_run_should_observe_cancellation_token_and_throw()
     {
         CancellationTokenSource cts = new(10);
-        StateMachine fsm = GraphBuilder
-            .StartWith(new RelayState(async ct =>
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(1000, ct);
                 return Result.Success;
             }))
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<TaskCanceledException>(async () => await fsm.ExecuteAsync(cts.Token));
     }

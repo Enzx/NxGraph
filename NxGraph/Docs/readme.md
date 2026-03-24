@@ -47,7 +47,7 @@ var graph = GraphBuilder
     .Build();
 
 // 3) Execute
-var sm = graph.ToStateMachine();
+var sm = graph.ToAsyncStateMachine();
 await sm.ExecuteAsync(CancellationToken.None);
 ```
 
@@ -155,7 +155,7 @@ public sealed class WorkState : ILogic, IAgentSettable<AppAgent>
 }
 
 var g = GraphBuilder.StartWith(new WorkState()).Build();
-var sm = g.ToStateMachine<AppAgent>();
+var sm = g.ToAsyncStateMachine<AppAgent>();
 sm.SetAgent(new AppAgent { Log = logger });
 ```
 
@@ -164,7 +164,7 @@ sm.SetAgent(new AppAgent { Log = logger });
 ## Execution
 
 ```csharp
-var sm = graph.ToStateMachine(observer: myObserver);
+var sm = graph.ToAsyncStateMachine(observer: myObserver);
 var status = await sm.ExecuteAsync(ct);
 ```
 
@@ -221,7 +221,7 @@ public sealed class ConsoleObserver : IAsyncStateMachineObserver
     static ValueTask Write(string s) { Console.WriteLine(s); return ValueTask.CompletedTask; }
 }
 
-var sm = graph.ToStateMachine(observer: new ConsoleObserver());
+var sm = graph.ToAsyncStateMachine(observer: new ConsoleObserver());
 await sm.ExecuteAsync(CancellationToken.None);
 ```
 
@@ -233,7 +233,7 @@ A built‑in tracing observer maps machine/node lifecycles to `Activity` spans/e
 
 ```csharp
 using var observer = new TracingObserver(activitySource);
-var sm = graph.ToStateMachine(observer);
+var sm = graph.ToAsyncStateMachine(observer);
 await sm.ExecuteAsync(ct);
 ```
 
@@ -243,7 +243,7 @@ Record execution for offline visualization or debugging and play it back determi
 
 ```csharp
 var recorder = new ReplayRecorder();
-var sm = graph.ToStateMachine(observer: recorder);
+var sm = graph.ToAsyncStateMachine(observer: recorder);
 await sm.ExecuteAsync(ct);
 
 var replay = new StateMachineReplay(recorder.GetEvents().Span);

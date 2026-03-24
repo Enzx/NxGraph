@@ -10,9 +10,9 @@ public class ReentrancyGuardTests
     public void second_execute_while_running_should_throw()
     {
         TaskCompletionSource blockTcs = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
         ValueTask<Result> first = fsm.ExecuteAsync();
 

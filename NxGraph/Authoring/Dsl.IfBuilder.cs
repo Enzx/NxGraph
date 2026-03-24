@@ -17,8 +17,8 @@ public static partial class Dsl
         internal IfBuilder(StateToken prev, Func<bool> predicate)
         {
             _builder = prev.Builder;
-            _truePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-            _falsePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
             NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
@@ -26,15 +26,22 @@ public static partial class Dsl
         internal IfBuilder(StartToken root, Func<bool> predicate)
         {
             _builder = root.Builder;
-            _truePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
-            _falsePad = _builder.AddNode(new RelayState(_ => ResultHelpers.Success));
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
             _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
 
-        public BranchBuilder Then(ILogic logic)
+        public BranchBuilder Then(IAsyncLogic asyncLogic)
         {
-            NodeId firstTrue = _builder.AddNode(logic);
+            NodeId firstTrue = _builder.AddNode(asyncLogic);
+            _builder.AddTransition(_truePad, firstTrue);
+            return new BranchBuilder(_builder, firstTrue, _falsePad);
+        }
+
+        public BranchBuilder Then(ILogic syncLogic)
+        {
+            NodeId firstTrue = _builder.AddNode(syncLogic);
             _builder.AddTransition(_truePad, firstTrue);
             return new BranchBuilder(_builder, firstTrue, _falsePad);
         }
@@ -42,22 +49,33 @@ public static partial class Dsl
 
     public readonly struct BranchBuilder
     {
-        private readonly NodeId _tip;
         private readonly NodeId _falsePad;
 
         internal BranchBuilder(GraphBuilder builder, NodeId tip, NodeId falsePad)
         {
             Builder = builder;
-            _tip = tip;
+            Tip = tip;
             _falsePad = falsePad;
         }
 
         public GraphBuilder Builder { get; }
 
-        public BranchBuilder To(ILogic logic)
+        internal NodeId FalsePad => _falsePad;
+
+        /// <summary>The last node added on the "then" branch.</summary>
+        public NodeId Tip { get; }
+
+        public BranchBuilder To(IAsyncLogic asyncLogic)
         {
-            NodeId next = Builder.AddNode(logic);
-            Builder.AddTransition(_tip, next);
+            NodeId next = Builder.AddNode(asyncLogic);
+            Builder.AddTransition(Tip, next);
+            return new BranchBuilder(Builder, next, _falsePad);
+        }
+
+        public BranchBuilder To(ILogic syncLogic)
+        {
+            NodeId next = Builder.AddNode(syncLogic);
+            Builder.AddTransition(Tip, next);
             return new BranchBuilder(Builder, next, _falsePad);
         }
 
@@ -66,9 +84,16 @@ public static partial class Dsl
             return To(Wait.For(delay));
         }
 
-        public BranchEnd Else(ILogic logic)
+        public BranchEnd Else(IAsyncLogic asyncLogic)
         {
-            NodeId firstElse = Builder.AddNode(logic);
+            NodeId firstElse = Builder.AddNode(asyncLogic);
+            Builder.AddTransition(_falsePad, firstElse);
+            return new BranchEnd(Builder, firstElse);
+        }
+
+        public BranchEnd Else(ILogic syncLogic)
+        {
+            NodeId firstElse = Builder.AddNode(syncLogic);
             Builder.AddTransition(_falsePad, firstElse);
             return new BranchEnd(Builder, firstElse);
         }
@@ -76,42 +101,62 @@ public static partial class Dsl
 
     public readonly struct BranchEnd
     {
-        private readonly GraphBuilder _b;
-        private readonly NodeId _tip;
-
         internal BranchEnd(GraphBuilder b, NodeId tip)
         {
-            _b = b;
-            _tip = tip;
+            Builder = b;
+            Tip = tip;
         }
 
-        // ReSharper disable once MemberCanBePrivate.Global
-        internal StateToken To(ILogic logic)
+        public GraphBuilder Builder { get; }
+
+        /// <summary>The last node added on the "else" branch.</summary>
+        public NodeId Tip { get; }
+
+        /// <summary>Adds a new state and wires a transition from the "else" tip.</summary>
+        public StateToken To(IAsyncLogic asyncLogic)
         {
-            NodeId next = _b.AddNode(logic);
-            _b.AddTransition(_tip, next);
-            return new StateToken(next, _b);
+            NodeId next = Builder.AddNode(asyncLogic);
+            Builder.AddTransition(Tip, next);
+            return new StateToken(next, Builder);
         }
 
-        // ReSharper disable once UnusedMember.Global
+        /// <summary>Adds a new sync state and wires a transition from the "else" tip.</summary>
+        public StateToken To(ILogic syncLogic)
+        {
+            NodeId next = Builder.AddNode(syncLogic);
+            Builder.AddTransition(Tip, next);
+            return new StateToken(next, Builder);
+        }
+
+        /// <summary>Adds a wait state after the "else" branch.</summary>
         public StateToken WaitFor(TimeSpan delay)
         {
             return To(Wait.For(delay));
         }
-        
+
         public Graph Build(bool throwOnError = false)
         {
-            return _b.Build(throwOnError);
+            return Builder.Build(throwOnError);
         }
 
-        public StateMachine ToStateMachine()
+        public AsyncStateMachine ToAsyncStateMachine(IAsyncStateMachineObserver? observer = null)
         {
-            return _b.Build().ToStateMachine();
+            return Builder.Build().ToAsyncStateMachine(observer);
         }
 
-        public StateMachine<T> ToStateMachine<T>()
+        public AsyncStateMachine<T> ToAsyncStateMachine<T>(IAsyncStateMachineObserver? observer = null)
         {
-            return new StateMachine<T>(_b.Build());
+            return new AsyncStateMachine<T>(Builder.Build(), observer);
+        }
+
+        public StateMachine ToStateMachine(IStateMachineObserver? observer = null)
+        {
+            return Builder.Build().ToStateMachine(observer);
+        }
+
+        public StateMachine<T> ToStateMachine<T>(IStateMachineObserver? observer = null)
+        {
+            return Builder.Build().ToStateMachine<T>(observer);
         }
     }
 }

@@ -73,7 +73,7 @@ public class PropertyTests
                        {
                            INode n = graph.GetNodeByIndex(i);
                            LogicNode logicNode = (LogicNode)n;
-                           DummyState state = (DummyState)logicNode.Logic;
+                           DummyState state = (DummyState)logicNode.AsyncLogic;
                            string label = labels[i];
                            return state.Data == label;
                        });
@@ -120,7 +120,7 @@ public class PropertyTests
     }
 }
 
-internal class DummyState(string? data = null) : ILogic
+internal class DummyState(string? data = null) : IAsyncLogic
 {
     public string Data { get; init; } = data ?? string.Empty;
    
@@ -134,10 +134,10 @@ internal class DummyState(string? data = null) : ILogic
 internal class DummyLogicTextCodec : ILogicCodec<string>
 {
 
-    public string Serialize(ILogic logic) =>
-        JsonSerializer.Serialize((DummyState)logic);
+    public string Serialize(IAsyncLogic asyncLogic) =>
+        JsonSerializer.Serialize((DummyState)asyncLogic);
 
-    public ILogic Deserialize(string data) =>
+    public IAsyncLogic Deserialize(string data) =>
         JsonSerializer.Deserialize<DummyState>(data)
         ?? new DummyState();
 }

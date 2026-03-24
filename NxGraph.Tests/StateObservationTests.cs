@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -85,10 +85,10 @@ public class StateObservationTests
     public async Task should_observe_state_execution()
     {
         FsmObserver observer = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(observer);
+            .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
 
@@ -99,10 +99,10 @@ public class StateObservationTests
     public async Task should_observe_cancellation()
     {
         FsmObserver observer = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(observer);
+            .ToAsyncStateMachine(observer);
 
         CancellationTokenSource cts = new();
         await cts.CancelAsync();
@@ -116,10 +116,10 @@ public class StateObservationTests
     public async Task should_observe_reset_on_manual_reset()
     {
         FsmObserver observer = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine(observer);
+            .ToAsyncStateMachine(observer);
         fsm.SetAutoReset(false);
         await fsm.ExecuteAsync();
 

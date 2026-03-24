@@ -28,7 +28,7 @@ namespace NxGraph.Fsm;
 ///    }
 ///  }
 ///  var observer = new MyStateObserver();
-///  var stateMachine = new StateMachine(graph, observer);
+///  var stateMachine = new AsyncStateMachine(graph, observer);
 ///  await stateMachine.ExecuteAsync();
 ///  ```
 /// </example>

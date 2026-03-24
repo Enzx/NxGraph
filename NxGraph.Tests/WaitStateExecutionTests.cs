@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
 
@@ -13,11 +13,11 @@ public class WaitStateExecutionTests
     {
         const int delay = 1;
         const float errorMargin = 0.1f;
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start()
             .WaitFor(delay.Seconds())
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         Result result = await fsm.ExecuteAsync();
@@ -33,11 +33,11 @@ public class WaitStateExecutionTests
     [Test]
     public async Task wait_state_should_handle_zero_delay_immediately()
     {
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start()
             .WaitFor(0.Seconds())
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         Result result = await fsm.ExecuteAsync();
@@ -53,11 +53,11 @@ public class WaitStateExecutionTests
     [Test]
     public async Task wait_state_should_handle_negative_delay_immediately()
     {
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start()
             .WaitFor(-1.Seconds()) // negative delay should be treated as immediate
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         Result result = await fsm.ExecuteAsync();
@@ -74,11 +74,11 @@ public class WaitStateExecutionTests
     public async Task wait_state_should_fail_if_cancelled()
     {
         CancellationTokenSource cts = new();
-        StateMachine fsm = GraphBuilder
+        AsyncStateMachine fsm = GraphBuilder
             .Start()
             .WaitFor(5.Seconds())
             .To(_ => ResultHelpers.Success)
-            .ToStateMachine();
+            .ToAsyncStateMachine();
 
         ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
         await cts.CancelAsync();

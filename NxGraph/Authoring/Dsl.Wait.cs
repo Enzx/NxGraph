@@ -1,10 +1,8 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using NxGraph.Fsm;
+﻿using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
 
-[SuppressMessage("ReSharper", "UnusedMember.Global")]
 public static partial class Dsl
 {
     /// <summary>
@@ -26,7 +24,7 @@ public static partial class Dsl
     /// <returns>A new state token that represents the waiting state.</returns>
     public static StateToken WaitFor(this StartToken token, TimeSpan delay)
     {
-        State node = Wait.For(delay);
+        AsyncState node = Wait.For(delay);
         NodeId id = token.Builder.AddNode(node, true);
         return new StateToken(id, token.Builder);
     }

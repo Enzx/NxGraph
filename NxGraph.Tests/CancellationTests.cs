@@ -12,14 +12,14 @@ public class CancellationTests
     public void should_cancel_execution_when_token_is_cancelled()
     {
         GraphBuilder builder = new();
-        builder.AddNode(new RelayState(async ct =>
+        builder.AddNode(new AsyncRelayState(async ct =>
         {
             await Task.Delay(1000, ct);
             return Result.Success;
         }), true);
         Graph graph = builder.Build();
 
-        StateMachine fsm = new(graph);
+        AsyncStateMachine fsm = new(graph);
 
         using CancellationTokenSource cts = new(50);
 
