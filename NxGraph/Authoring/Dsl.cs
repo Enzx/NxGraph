@@ -30,7 +30,7 @@ public static partial class Dsl
         }
 
         prev.Builder.SetName(prev.Id, name);
-        return prev;
+        return new StateToken(prev.Id.WithName(name), prev.Builder);
     }
 
     public static Graph SetName(this Graph graph, string name)
@@ -154,6 +154,11 @@ public static partial class Dsl
     public static BranchBuilder SetName(this BranchBuilder branch, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
+        }
+
         branch.Builder.SetName(branch.Tip, name);
         return branch;
     }
@@ -175,6 +180,11 @@ public static partial class Dsl
     public static BranchEnd SetName(this BranchEnd branchEnd, string name)
     {
         ArgumentNullException.ThrowIfNull(name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
+        }
+
         branchEnd.Builder.SetName(branchEnd.Tip, name);
         return branchEnd;
     }

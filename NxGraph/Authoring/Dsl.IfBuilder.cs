@@ -17,18 +17,18 @@ public static partial class Dsl
         internal IfBuilder(StateToken prev, Func<bool> predicate)
         {
             _builder = prev.Builder;
-            _truePad = _builder.AddNode((ILogic)new EmptyLogic());
-            _falsePad = _builder.AddNode((ILogic)new EmptyLogic());
-            NodeId choiceId = _builder.AddNode((ILogic)new ChoiceState(predicate, _truePad, _falsePad));
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
 
         internal IfBuilder(StartToken root, Func<bool> predicate)
         {
             _builder = root.Builder;
-            _truePad = _builder.AddNode((ILogic)new EmptyLogic());
-            _falsePad = _builder.AddNode((ILogic)new EmptyLogic());
-            _builder.AddNode((ILogic)new ChoiceState(predicate, _truePad, _falsePad), true);
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
 
@@ -59,6 +59,8 @@ public static partial class Dsl
         }
 
         public GraphBuilder Builder { get; }
+
+        internal NodeId FalsePad => _falsePad;
 
         /// <summary>The last node added on the "then" branch.</summary>
         public NodeId Tip { get; }

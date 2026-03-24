@@ -110,16 +110,10 @@ public sealed class Graph : INode, IGraph
             return false;
         }
 
-        INode candidate = _nodes[id.Index];
-        if (candidate.Id == id)
-        {
-            node = candidate;
-            return true;
-        }
-
-        node = LogicNode.Empty;
-        return false;
+        node = _nodes[id.Index];
+        return true;
     }
+
 
     /// <summary>
     /// Sets the agent for all nodes in the graph that implement <see cref="IAgentSettable{TAgent}"/>.
