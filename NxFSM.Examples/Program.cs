@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using NxFSM.Examples;
+using NxFSM.Examples.DungeonCrawler;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
@@ -41,6 +42,13 @@ await aiEnemy.ExecuteAsync();
 await SerializationExample.Run();
 
 ExportersExample.Run();
+
+Console.WriteLine();
+Console.WriteLine();
+Console.WriteLine("Dungeon Crawler Example (Sync FSM)");
+Console.WriteLine();
+DungeonCrawlerExample.Run();
+
 return 0;
 
 

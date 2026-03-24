@@ -620,6 +620,44 @@ public class StateMachineTests
         Assert.That(counter, Is.EqualTo(100));
     }
 
+    [Test]
+    public void should_preserve_names_when_fluent_set_name_is_used_for_later_wiring()
+    {
+        RecordingObserver observer = new();
+
+        StateToken explore = GraphBuilder
+            .StartWith(() => Result.Success).SetName("Start")
+            .To(() => Result.Success).SetName("Explore");
+
+        GraphBuilder builder = explore.Builder;
+
+        NodeId victoryId = builder.AddNode(new RelayState(() => Result.Success));
+        builder.SetName(victoryId, "Victory");
+        victoryId = victoryId.WithName("Victory");
+
+        ChoiceState chooseVictory = new(() => true, victoryId, explore.Id);
+        NodeId choiceId = builder.AddNode(chooseVictory);
+        builder.SetName(choiceId, "Decision");
+        choiceId = choiceId.WithName("Decision");
+
+        builder.AddTransition(explore.Id, choiceId);
+
+        StateMachine fsm = builder.Build().ToStateMachine(observer);
+
+        Result result = fsm.Execute();
+
+        Assert.That(result, Is.EqualTo(Result.Success));
+        Assert.That(observer.EnteredIds.Select(id => id.Name).ToArray(),
+            Is.EqualTo(new[] { "Start", "Explore", "Decision", "Victory" }));
+        Assert.That(observer.Transitions.Select(t => (t.From.Name, t.To.Name)).ToArray(),
+            Is.EqualTo(new[]
+            {
+                ("Start", "Explore"),
+                ("Explore", "Decision"),
+                ("Decision", "Victory")
+            }));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private sealed class RecordingObserver : IStateMachineObserver

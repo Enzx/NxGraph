@@ -15,7 +15,7 @@ public sealed partial class GraphBuilder
     private NodeId _next = NodeId.Start; // next id to hand out; Start is reserved for the first call with isStart=true
     private LogicNode? _startNode;
 
-    private readonly Dictionary<NodeId, IAsyncLogic> _nodes = new(); // non-start nodes only
+    private readonly Dictionary<NodeId, IAsyncLogic?> _nodes = new(); // non-start nodes only
     private readonly Dictionary<object, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
 
@@ -85,7 +85,7 @@ public sealed partial class GraphBuilder
     /// </summary>
     /// <returns>A <see cref="Graph"/> instance of a graph with the defined nodes and transitions.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no start node has been added or if there are inconsistencies in the graph structure.</exception>
-    public Graph InternalBuild()
+    private Graph InternalBuild()
     {
         int maxIndex = 0;
         foreach (NodeId id in _nodes.Keys)
@@ -98,7 +98,7 @@ public sealed partial class GraphBuilder
 
         int length = Math.Max(1, maxIndex + 1);
 
-        LogicNode[] nodes = new LogicNode[length];
+        INode[] nodes = new INode[length];
         Transition[] edges = new Transition[length];
 
         for (int i = 0; i < edges.Length; i++)
@@ -110,7 +110,7 @@ public sealed partial class GraphBuilder
             _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
 
         // Place the rest (null-safe checks)
-        foreach ((NodeId id, IAsyncLogic logic) in _nodes)
+        foreach ((NodeId id, IAsyncLogic? logic) in _nodes)
         {
             int idx = id.Index;
 
@@ -124,7 +124,14 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException($"Node slot {idx} already occupied (duplicate NodeId index).");
             }
 
-            nodes[idx] = new LogicNode(id, logic);
+            if (logic != null)
+            {
+                nodes[idx] = new LogicNode(id, logic);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Node {id} has no logic assigned.");
+            }
         }
 
         //transitions > dense array
@@ -187,7 +194,7 @@ public sealed partial class GraphBuilder
     public static StateToken StartWith(Func<Result> run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        return StartWith((ILogic)new RelayState(run));
+        return StartWith(new RelayState(run));
     }
 
     /// <summary>
@@ -203,45 +210,87 @@ public sealed partial class GraphBuilder
     /// <summary>
     /// Sets the name of a node in the graph.
     /// </summary>
-    /// <param name="newId">The new ID of the node, which must already exist in the graph.</param>
-    /// <param name="name">The new name to assign to the node.</param>
-    /// <exception cref="ArgumentException">Thrown if the provided name is null or whitespace.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the node with the specified ID does not exist in the graph.</exception>
-    public void SetName(NodeId newId, string name)
+    public void SetName(NodeId id, string name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
         }
 
-        if (_startNode != null && _startNode.Id == newId)
+        NodeId oldId = id;
+        NodeId namedId = oldId.WithName(name);
+
+        bool isStart = _startNode is not null && _startNode.Id.Index == oldId.Index;
+        if (isStart)
         {
-            _startNode = new LogicNode(_startNode.Id.WithName(name), _startNode.AsyncLogic);
-            return;
+            if (_startNode != null)
+            {
+                _startNode = new LogicNode(namedId, _startNode.AsyncLogic);
+            }
+            else
+            {
+                throw new InvalidOperationException("Start node is not defined.");
+            }
         }
-
-        if (_nodes.Remove(newId, out IAsyncLogic? node))
+        else if (_nodes.Remove(oldId, out IAsyncLogic? existingLogic))
         {
-            newId = newId.WithName(name);
-
-            _nodes[newId] = node;
+            // Normal path when callers pass in the exact key we stored
+            _nodes[namedId] = existingLogic;
         }
         else
         {
-            throw new InvalidOperationException($"Node with ID {newId} does not exist in the graph.");
+            // Fallback: look up by index only (in case callers passed an id with the right
+            // index but a different name than what we have as the key).
+            NodeId? keyToRename = null;
+            foreach (NodeId key in _nodes.Keys)
+            {
+                if (key.Index == oldId.Index)
+                {
+                    keyToRename = key;
+                    break;
+                }
+            }
+
+            if (keyToRename is null)
+            {
+                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
+            }
+
+            IAsyncLogic? logic = _nodes[keyToRename.Value];
+            if (logic == null)
+            {
+                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
+            }
+            _nodes.Remove(keyToRename.Value);
+            _nodes[namedId] = logic;
         }
 
-        // Update transitions to reflect the new node ID
-        foreach (KeyValuePair<NodeId, Transition> transition in _transitions.ToList())
+        // Update logic->id map so future AddNode(sameLogic) returns the named id
+        foreach (KeyValuePair<object, NodeId> pair in _byLogic.ToList())
         {
-            if (transition.Key == newId)
+            if (pair.Value.Index == oldId.Index)
             {
-                _transitions.Remove(transition.Key);
-                _transitions.Add(newId, transition.Value);
+                _byLogic[pair.Key] = namedId;
             }
-            else if (transition.Value.Destination == newId)
+        }
+
+        // Update transitions: sources and destinations that reference this index
+        foreach ((NodeId from, Transition t) in _transitions.ToList())
+        {
+            bool fromMatches = from.Index == oldId.Index;
+            bool toMatches = t.Destination.Index == oldId.Index;
+
+            NodeId newFrom = fromMatches ? namedId : from;
+            Transition newTransition = toMatches ? new Transition(namedId) : t;
+
+            if (fromMatches)
             {
-                _transitions[transition.Key] = new Transition(newId);
+                _transitions.Remove(from);
+                _transitions[newFrom] = newTransition;
+            }
+            else if (toMatches)
+            {
+                _transitions[from] = newTransition;
             }
         }
     }
