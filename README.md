@@ -8,36 +8,44 @@
 
 # NxGraph
 
-A lean, high‑performance finite state machine (FSM) / stateflow library for .NET with a clean authoring DSL, strong validation, first‑class observability, and export tools (Mermaid, tracing, replay). Designed for correctness on hot paths (allocation‑free), production diagnostics, and pleasant authoring.
+NxGraph is a lean, high-performance finite state machine / stateflow library for .NET with:
 
-> **Status**: production‑ready core; APIs around serialization/visualization may evolve.
+- a fluent authoring DSL
+- explicit branching through director nodes
+- sync and async runtimes
+- graph validation
+- observers, tracing, replay, and Mermaid export
+- optional graph serialization via a codec-based serializer
+
+The core package targets `net8.0` and `netstandard2.1`.
 
 ---
 
 ## Table of contents
 
 - [Why NxGraph](#why-nxgraph)
-- [Features](#features)
-- [Benchmarks](#benchmarks)
+- [Packages](#packages)
 - [Install](#install)
 - [Quick start](#quick-start)
-- [Core concepts](#core-concepts)
+  - [Async quick start](#async-quick-start)
+  - [Sync quick start](#sync-quick-start)
 - [Authoring DSL](#authoring-dsl)
   - [Linear flows](#linear-flows)
-  - [Branching with directors](#branching-with-directors)
-  - [Delays & timeouts](#delays--timeouts)
-  - [Agents (dependency injection)](#agents-dependency-injection)
+  - [Branching with `If`](#branching-with-if)
+  - [Branching with `Switch`](#branching-with-switch)
+  - [Waits and timeouts](#waits-and-timeouts)
+  - [Naming nodes](#naming-nodes)
+  - [Agents / context injection](#agents--context-injection)
 - [Execution](#execution)
 - [Validation](#validation)
 - [Observability](#observability)
-  - [State machine observers](#state-machine-observers)
-  - [Tracing (OpenTelemetry-friendly)](#tracing-opentelemetryfriendly)
+  - [Observers](#observers)
+  - [Tracing](#tracing)
   - [Replay](#replay)
 - [Visualization](#visualization)
-  - [Mermaid export](#mermaid-export)
-  - [Realtime/offline visualizer (C# only)](#realtimeoffline-visualizer-c-only)
 - [Serialization](#serialization)
-- [Performance notes](#performance-notes)
+- [Examples](#examples)
+- [Benchmarks](#benchmarks)
 - [Testing](#testing)
 - [FAQ](#faq)
 - [Roadmap](#roadmap)
@@ -48,116 +56,99 @@ A lean, high‑performance finite state machine (FSM) / stateflow library for .N
 
 ## Why NxGraph
 
-- **Simple, fast core**: array‑backed `Graph` of `Node[]` and `Transition[]`, single edge per node. Cache‑friendly and easy to reason about.
-- **Explicit branching**: choices/switches are modeled by *director* nodes, keeping the graph sparse and predictable.
-- **Production diagnostics**: validators, Mermaid exporter, tracing observers, and replay tooling.
-- **Authoring ergonomics**: fluent DSL with `StartWith`, `.To(...)`, `.If(...)`, `.Switch(...)`, `.WaitFor(...)`, `.Timeout(...)`.
+- **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one direct outgoing edge.
+- **Predictable branching**: fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`.
+- **Authoring ergonomics**: build flows with `StartWith`, `.To(...)`, `.If(...)`, `.Switch(...)`, `.WaitFor(...)`, and `.ToWithTimeout(...)`.
+- **Diagnostics built in**: validate graphs, inspect Mermaid output, attach observers, capture replay logs, or emit `Activity` traces.
+- **Both async and sync**: use `AsyncStateMachine` for async logic and `StateMachine` for sync-only flows.
 
 ---
 
-## Features
+## Packages
 
-- ✅ Allocation‑aware execution (`ValueTask<Result>` hot paths)
-- ✅ Clear DSL for building graphs
-- ✅ Directors for branching (`If`, `Switch`, choice predicates)
-- ✅ Time primitives: `WaitFor(TimeSpan)`, `Timeout(TimeSpan)` wrappers
-- ✅ Strong validation: broken edges, self‑loops, reachability, terminal paths
-- ✅ Observers: lifecycle + node/transition hooks; exceptions bubble by default
-- ✅ Mermaid exporter for architecture/ops visuals
-- ✅ Replay trace capture and deterministic playback
-- ✅ (Optional) OpenTelemetry‑style tracing via `Activity`
-- ✅ Serialization (JSON/MessagePack) for graphs and replays
+### `NxGraph`
+The core package. Includes:
 
----
+- graph model and FSM runtimes
+- fluent DSL
+- validation
+- Mermaid export
+- replay recording / playback
+- tracing observer
 
-## Benchmarks
+### `NxGraph.Serialization`
+Optional serializer package for persisting graphs to JSON or MessagePack using your own logic codec.
 
-<img width="1234" height="582" alt="image" src="https://github.com/user-attachments/assets/34e90c0c-753e-4cde-91b3-5c36e06282b1" />
-
-### Execution Time (ms)
-
-
-| Scenario           | NxFSM  | Stateless |
-| ------------------ | ------ | --------- |
-| Chain10            | 0.4293 | 47.06     |
-| Chain50            | 1.6384 | 142.75    |
-| DirectorLinear10   | 0.4372 | 42.76     |
-| SingleNode         | 0.1182 | 14.53     |
-| WithObserver       | 0.1206 | 42.96     |
-| WithTimeoutWrapper | 0.2952 | 14.23     |
-
-### Memory Allocation (KB)
-
-| Scenario           | NxFSM | Stateless |
-| ------------------ | ----- | --------- |
-| Chain10            | 0     | 15.07     |
-| Chain50            | 0     | 73.51     |
-| DirectorLinear10   | 0     | 15.07     |
-| SingleNode         | 0     | 1.85      |
-| WithObserver       | 0     | 15.42     |
-| WithTimeoutWrapper | 0     | 1.85      |
+### `NxGraph.Serialization.Abstraction`
+Optional interfaces for consumers who only need serialization contracts.
 
 ---
 
 ## Install
+
+Core package:
+
 ```bash
 dotnet add package NxGraph
 ```
 
->Additionally, you can clone the repository and reference projects directly, or build a local package.
-
+Optional graph serialization:
 
 ```bash
-# build
-dotnet build -c Release
-
-# (optional) create local package
-dotnet pack -c Release
+dotnet add package NxGraph.Serialization
 ```
 
-Add a project reference to `NxGraph` (and `NxGraph.Exporters` / `NxGraph.Serialization` if needed).
+Optional serialization abstractions only:
+
+```bash
+dotnet add package NxGraph.Serialization.Abstraction
+```
+
+Build from source:
+
+```bash
+dotnet build -c Release
+dotnet test -c Release
+```
 
 ---
 
 ## Quick start
 
+### Async quick start
+
 ```csharp
-using System.Threading;
-using System.Threading.Tasks;
 using NxGraph;
 using NxGraph.Authoring;
+using NxGraph.Fsm;
 
-// 1) Define state logic (no allocations on hot path)
-static ValueTask<Result> Acquire(CancellationToken ct) => ResultHelpers.Success;
-static ValueTask<Result> Process(CancellationToken ct) => ResultHelpers.Success;
-static ValueTask<Result> Release(CancellationToken ct) => ResultHelpers.Success;
+static ValueTask<Result> Acquire(CancellationToken _) => ResultHelpers.Success;
+static ValueTask<Result> Process(CancellationToken _) => ResultHelpers.Success;
+static ValueTask<Result> Release(CancellationToken _) => ResultHelpers.Success;
 
-// 2) Build the graph with the DSL
-var graph = GraphBuilder
-    .StartWith(Acquire)
-    .To(Process)
-    .To(Release)
-    .Build();
+AsyncStateMachine fsm = GraphBuilder
+    .StartWith(Acquire).SetName("Acquire")
+    .To(Process).SetName("Process")
+    .To(Release).SetName("Release")
+    .ToAsyncStateMachine();
 
-// 3) Execute
-var sm = graph.ToAsyncStateMachine();
-await sm.ExecuteAsync(CancellationToken.None);
+Result result = await fsm.ExecuteAsync();
 ```
 
-**What you get**
-- Deterministic, single‑edge execution
-- Easy branching via directors (see below)
-- Hooks for tracing/visualization
+### Sync quick start
 
----
+```csharp
+using NxGraph;
+using NxGraph.Authoring;
+using NxGraph.Fsm;
 
-## Core concepts
+StateMachine fsm = GraphBuilder
+    .StartWith(() => Result.Success).SetName("Start")
+    .To(() => Result.Success).SetName("End")
+    .ToStateMachine();
 
-- **Graph**: immutable structure of nodes and single outgoing transitions.
-- **Node**: wraps `ILogic` — work that returns a `Result` (`Success`, `Failure`, etc.).
-- **Director**: a special node that chooses the next node (e.g., `If`, `Switch`).
-- **Transition**: an index from node *i → j*.
-- **State machine**: a runtime over a `Graph` that executes from a start node until terminal.
+Result result = fsm.Execute();
+```
 
 ---
 
@@ -166,302 +157,412 @@ await sm.ExecuteAsync(CancellationToken.None);
 ### Linear flows
 
 ```csharp
-static ValueTask<Result> Start(CancellationToken _) => ResultHelpers.Success;
-static ValueTask<Result> End(CancellationToken _) => ResultHelpers.Success;
-
 var graph = GraphBuilder
-    .StartWith(Start)
-    .To(End)
+    .StartWith(_ => ResultHelpers.Success).SetName("Start")
+    .To(_ => ResultHelpers.Success).SetName("Step1")
+    .To(_ => ResultHelpers.Success).SetName("Step2")
     .Build();
 ```
 
-### Branching with directors
+### Branching with `If`
 
 ```csharp
-static ValueTask<Result> Start(CancellationToken _) => ResultHelpers.Success;
-static bool IsPremium() => true; // your predicate
-static ValueTask<Result> Premium(CancellationToken _) => ResultHelpers.Success;
-static ValueTask<Result> Standard(CancellationToken _) => ResultHelpers.Success;
+bool IsPremium() => true;
 
 var graph = GraphBuilder
-    .StartWith(Start)
+    .StartWith(_ => ResultHelpers.Success).SetName("Entry")
     .If(IsPremium)
-        .Then(Premium)
-        .Else(Standard)
+        .Then(_ => ResultHelpers.Success).SetName("Premium")
+        .Else(_ => ResultHelpers.Success).SetName("Standard")
     .Build();
 ```
 
-`Switch` example:
+### Branching with `Switch`
 
 ```csharp
-static ValueTask<Result> Start(CancellationToken _) => ResultHelpers.Success;
-
-static int RouteKey() => 2;
-static ValueTask<Result> One(CancellationToken _) => ResultHelpers.Success;
-static ValueTask<Result> Two(CancellationToken _) => ResultHelpers.Success;
-static ValueTask<Result> Other(CancellationToken _) => ResultHelpers.Success;
+int RouteKey() => 2;
 
 var graph = GraphBuilder
-    .StartWith(Start)
+    .StartWith(_ => ResultHelpers.Success).SetName("Entry")
     .Switch(RouteKey)
-        .Case(1, One)
-        .Case(2, Two)
-        .Default(Other)
-    .End()
+        .Case(1, _ => ResultHelpers.Success)
+        .Case(2, _ => ResultHelpers.Success)
+        .Default(_ => ResultHelpers.Failure)
+    .End().SetName("Router")
     .Build();
 ```
 
-### Delays & timeouts
+### Waits and timeouts
+
+```csharp
+var delayed = GraphBuilder
+    .StartWith(_ => ResultHelpers.Success).SetName("Start")
+    .WaitFor(250.Milliseconds()).SetName("Cooldown")
+    .To(_ => ResultHelpers.Success).SetName("Finish")
+    .Build();
+
+var timed = GraphBuilder
+    .StartWith(_ => ResultHelpers.Success).SetName("Start")
+    .ToWithTimeout(2.Seconds(), _ => ResultHelpers.Success, TimeoutBehavior.Fail)
+        .SetName("TimedWork")
+    .To(_ => ResultHelpers.Success).SetName("AfterTimeout")
+    .Build();
+```
+
+### Naming nodes
+
+Names are optional but strongly recommended for diagnostics, Mermaid export, replay, and observer output.
 
 ```csharp
 var graph = GraphBuilder
-    .StartWith(Start)
-    .WaitFor(250.Milliseconds())
-    .To(End)
-    .Build();
-
-// Timeout wrapper for a long-running state
-var timeoutGraph = GraphBuilder
-    .StartWith(Start).ToWithTimeout(500.Milliseconds(), _=> ResultHelpers.Failure)
-    .To(Release)
-    .Build();
+    .StartWith(_ => ResultHelpers.Success).SetName("Initial")
+    .To(_ => ResultHelpers.Success).SetName("Second")
+    .Build()
+    .SetName("SampleGraph");
 ```
 
-> `Timeout` cancels the wrapped logic if it exceeds the specified duration and routes to the next node. Prefer passing a linked `CancellationToken` inside your logic for graceful stops.
+### Agents / context injection
 
-### Agents (dependency injection)
-
-Provide an *agent* (context/service) to all nodes that opt‑in via `IAgentSettable<T>`.
+Use typed state machines when your states need shared mutable context or services.
 
 ```csharp
-public sealed class AppAgent { public required ILogger Log { get; init; } }
+using NxGraph;
+using NxGraph.Authoring;
+using NxGraph.Fsm;
 
-public sealed class WorkState : ILogic, IAgentSettable<AppAgent>
+public sealed class AppAgent
 {
-    private AppAgent _agent = default!;
-    public void SetAgent(AppAgent agent) => _agent = agent;
-    public ValueTask<Result> ExecuteAsync(CancellationToken ct)
+    public int Counter { get; set; }
+}
+
+public sealed class WorkState : AsyncState<AppAgent>
+{
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
     {
-        _agent.Log.LogInformation("working");
+        Agent.Counter++;
         return ResultHelpers.Success;
     }
 }
 
-var g = GraphBuilder.StartWith(new WorkState()).Build();
-var sm = g.ToAsyncStateMachine<AppAgent>();
-sm.SetAgent(new AppAgent { Log = logger });
+AsyncStateMachine<AppAgent> fsm = GraphBuilder
+    .StartWith(new WorkState()).SetName("Work")
+    .ToAsyncStateMachine<AppAgent>()
+    .WithAgent(new AppAgent());
+
+await fsm.ExecuteAsync();
 ```
 
 ---
 
 ## Execution
 
+For async flows:
+
 ```csharp
-var sm = graph.ToAsyncStateMachine(observer: myObserver);
-var status = await sm.ExecuteAsync(ct);
+AsyncStateMachine sm = graph.ToAsyncStateMachine(observer: null);
+Result result = await sm.ExecuteAsync();
 ```
 
-- **Threading**: execution is reentrancy‑guarded; call `ExecuteAsync` once per instance.
-- **Cancellation**: all logic receives a `CancellationToken`.
-- **Errors**: exceptions propagate unless you wrap logic/observer.
+For sync flows:
+
+```csharp
+StateMachine sm = graph.ToStateMachine(observer: null);
+Result result = sm.Execute();
+```
+
+Notes:
+
+- execution is reentrancy-guarded per machine instance
+- async execution accepts cancellation tokens
+- observer exceptions bubble by default
+- graphs are immutable after build and can be shared across machine instances
 
 ---
 
 ## Validation
 
-Validate a graph before running it.
+`Build()` already validates the graph. In `DEBUG`, invalid graphs throw immediately.
+
+You can also validate a graph explicitly:
 
 ```csharp
-GraphValidationResult results = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).To(_ => ResultHelpers.Success)
-    .Build().Validate();
-if (results.HasErrors)
+using NxGraph.Diagnostics.Validations;
+
+Graph graph = GraphBuilder
+    .StartWith(_ => ResultHelpers.Success)
+    .To(_ => ResultHelpers.Success)
+    .Build();
+
+GraphValidationResult validation = graph.Validate();
+if (validation.HasErrors)
 {
-    foreach (GraphDiagnostic res in results.Diagnostics)
+    foreach (GraphDiagnostic diagnostic in validation.Diagnostics)
     {
-        Console.WriteLine(res);
+        Console.WriteLine(diagnostic);
     }
 }
 
-//or throw exceptions in case of invalid graphs
-GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).To(_ => ResultHelpers.Success)
-    .Build().ValidateAndThrowIfErrorsDebug();
+graph.ValidateAndThrowIfErrorsDebug();
 ```
 
-Checks include:
-- Broken edges (out of range)
-- Self‑loops (optional severity)
-- Reachability from the start node
-- Terminal path exists (no infinite director cycles)
+Validation checks include:
+
+- broken transitions
+- reachability from the start node
+- self-loops (configurable)
+- terminal path analysis for director-driven graphs
 
 ---
 
 ## Observability
 
-### State machine observers
+### Observers
 
-Subscribe to lifecycle, node, and transition events.
+Async observer example:
 
 ```csharp
+using NxGraph.Fsm;
+using NxGraph.Graphs;
+
 public sealed class ConsoleObserver : IAsyncStateMachineObserver
 {
-    public ValueTask OnStartedAsync(int id, CancellationToken ct) => Write("started");
-    public ValueTask OnNodeEnteredAsync(int id, int idx, CancellationToken ct) => Write($"enter {idx}");
-    public ValueTask OnTransitionAsync(int id, int from, int to, string? label, CancellationToken ct) => Write($"{from}->{to} {label}");
-    public ValueTask OnNodeExitedAsync(int id, int idx, CancellationToken ct) => Write($"exit {idx}");
-    public ValueTask OnStoppedAsync(int id, CancellationToken ct) => Write("stopped");
-    static ValueTask Write(string s) { Console.WriteLine(s); return ValueTask.CompletedTask; }
-}
+    public ValueTask OnStateMachineStarted(NodeId graphId, CancellationToken ct = default)
+    {
+        Console.WriteLine($"FSM started: {graphId}");
+        return ValueTask.CompletedTask;
+    }
 
-var sm = graph.ToAsyncStateMachine(observer: new ConsoleObserver());
-await sm.ExecuteAsync(CancellationToken.None);
+    public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
+    {
+        Console.WriteLine($"Entered: {id.Name}");
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask OnTransition(NodeId from, NodeId to, CancellationToken ct = default)
+    {
+        Console.WriteLine($"Transition: {from.Name} -> {to.Name}");
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask OnStateExited(NodeId id, CancellationToken ct = default)
+    {
+        Console.WriteLine($"Exited: {id.Name}");
+        return ValueTask.CompletedTask;
+    }
+}
 ```
 
-> Observer exceptions bubble by default; wrap if you want best‑effort.
+Synchronous flows use `IStateMachineObserver` with the same event names but `void` return types.
 
-### Tracing (OpenTelemetry‑friendly)
+### Tracing
 
-A built‑in tracing observer maps machine/node lifecycles to `Activity` spans/events so you can export to Jaeger/Tempo/Zipkin.
+On .NET 8+, `TracingObserver` emits `Activity` spans/tags for state machine and node execution.
 
 ```csharp
-using var observer = new TracingObserver(activitySource);
-var sm = graph.ToAsyncStateMachine(observer);
-await sm.ExecuteAsync(ct);
+using NxGraph.Fsm;
+
+IAsyncStateMachineObserver observer = new TracingObserver();
+AsyncStateMachine fsm = graph.ToAsyncStateMachine(observer);
+await fsm.ExecuteAsync();
 ```
+
+This integrates naturally with OpenTelemetry pipelines listening to the `ActivitySource` named `"NxGraph"`.
 
 ### Replay
 
-Record execution for offline visualization or debugging and play it back deterministically.
+Capture a machine run and replay the event stream later:
 
 ```csharp
-var recorder = new ReplayRecorder();
-var sm = graph.ToAsyncStateMachine(observer: recorder);
-await sm.ExecuteAsync(ct);
+using NxGraph.Diagnostics.Replay;
+using NxGraph.Fsm;
 
-var replay = new StateMachineReplay(recorder.GetEvents().Span);
-replay.ReplayAll(
-    evt => Console.WriteLine($"{evt.Timestamp:O} {evt.Type} {evt.Message}")
-);
+ReplayRecorder recorder = new();
+AsyncStateMachine fsm = graph.ToAsyncStateMachine(recorder);
+await fsm.ExecuteAsync();
 
+StateMachineReplay replay = new(recorder.GetEvents().Span);
+replay.ReplayAll(evt =>
+{
+    Console.WriteLine($"{evt.Type}: {evt.SourceId} -> {evt.TargetId} | {evt.Message}");
+});
+
+byte[] bytes = replay.Serialize();
+ReplayEvent[] roundTripped = StateMachineReplay.Deserialize(bytes);
 ```
+
+Replay persistence is its own binary event format; it is separate from graph serialization.
 
 ---
 
 ## Visualization
 
-### Mermaid export
-
-Export a static diagram for docs/PRs.
+Export graphs to Mermaid for docs, PRs, or operations runbooks.
 
 ```csharp
-string mermaid = GraphBuilder.StartWith(_ => ResultHelpers.Success).SetName("Start")
-            .To(_ => ResultHelpers.Success).SetName("Process" )
-            .To(_ => ResultHelpers.Success).SetName("Release")
-            .Build()
-            .ToMermaid();
-Console.WriteLine("Mermaid:");
+using NxGraph.Diagnostics.Export;
+
+string mermaid = GraphBuilder
+    .StartWith(_ => ResultHelpers.Success).SetName("Start")
+    .To(_ => ResultHelpers.Success).SetName("Process")
+    .To(_ => ResultHelpers.Success).SetName("End")
+    .Build()
+    .ToMermaid();
+
 Console.WriteLine(mermaid);
 ```
 
-Example output:
-
-````mermaid
-flowchart LR
-    0([Start]) --> 1([Process])
-    1 --> 2([Release])
-````
-
-### Realtime/offline visualizer (C# only)
-
-Coming Soon!
 ---
 
 ## Serialization
 
-Serialize graphs (and replays) to JSON or MessagePack.
+`NxGraph.Serialization` serializes graphs using an application-provided logic codec.
+
+Text codec example:
 
 ```csharp
+using System.Text.Json;
+using NxGraph;
+using NxGraph.Authoring;
+using NxGraph.Graphs;
+using NxGraph.Serialization;
 
-//Serialize
- GraphSerializer.SetLogicCodec(new ExampleLogicSerializer());
-ExampleState start = new() { Data = "start" };
-ExampleState end = new() { Data = "end" };
-Graph graph = GraphBuilder.StartWith(start).SetName("Start").To(end).SetName("End").Build().SetName("FSM");
-MemoryStream stream = new();
-await GraphSerializer.ToJsonAsync(graph, stream);
+public sealed class ExampleState : IAsyncLogic
+{
+    public string Data { get; set; } = string.Empty;
 
-//Deserialize
-Graph deserializedGraph = await GraphSerializer.FromJsonAsync(stream);
-AsyncStateMachine fsm = deserializedGraph.ToAsyncStateMachine();
-await fsm.ExecuteAsync();
+    public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
+        => ResultHelpers.Success;
+}
+
+public sealed class ExampleLogicCodec : ILogicTextCodec
+{
+    public string Serialize(IAsyncLogic data)
+        => JsonSerializer.Serialize((ExampleState)data);
+
+    public IAsyncLogic Deserialize(string payload)
+        => JsonSerializer.Deserialize<ExampleState>(payload)
+           ?? throw new InvalidOperationException("Failed to deserialize ExampleState.");
+}
+
+Graph graph = GraphBuilder
+    .StartWith(new ExampleState { Data = "start" }).SetName("Start")
+    .To(new ExampleState { Data = "end" }).SetName("End")
+    .Build()
+    .SetName("ExampleGraph");
+
+GraphSerializer serializer = new(new ExampleLogicCodec());
+
+await using MemoryStream stream = new();
+await serializer.ToJsonAsync(graph, stream);
+stream.Position = 0;
+
+Graph roundTripped = await serializer.FromJsonAsync(stream);
 ```
 
-> **Note**: Current serializer uses a configurable logic codec. Future versions may expose an instance‑based `GraphSerializer` to avoid global state and improve concurrency.
+Notes:
+
+- graph serialization is optional and lives in a separate package
+- serializer usage is instance-based
+- JSON and MessagePack are both supported through `GraphSerializer`
+- your codec controls how node logic is persisted and restored
 
 ---
 
-## Performance notes
+## Examples
 
-- Keep logic static (avoid captures) for zero‑alloc authoring:
-  ```csharp
-  static ValueTask<Result> Ok(CancellationToken _) => ResultHelpers.Success;
-  ```
+The solution includes a runnable examples project with:
+
+- a simple async FSM
+- an AI enemy example
+- Mermaid export example
+- a sync Dungeon Crawler example using the DSL, observers, director nodes, loops, and named states
+
+Run it with:
+
+```bash
+dotnet run --project NxFSM.Examples
+```
+
+---
+
+## Benchmarks
+
+Benchmarks live in `NxGraph.Benchmarks` and use BenchmarkDotNet.
+
+Run them with:
+
+```bash
+dotnet run --project NxGraph.Benchmarks -c Release
+```
+
+The repository benchmark suite currently compares scenarios such as:
+
+- single-node execution
+- chains of 10 and 50 nodes
+- timeout wrappers
+- observer overhead
+- director-driven flows
 
 ---
 
 ## Testing
 
-- Unit tests cover reentrancy, cancellation, observers, validation, exporters, replay.
-- Property tests (FsCheck) exercise director branching, exporter escaping, and serialization round-trips.
-
-Run all tests:
+Run the full test suite:
 
 ```bash
 dotnet test -c Release
 ```
 
-Run only property tests:
+The tests cover:
 
-```bash
-dotnet test -c Release --filter Category=property
-```
+- sync and async execution
+- reentrancy and cancellation
+- observers
+- replay
+- validation
+- Mermaid export
+- serialization round-trips
 
 ---
 
-## QA
+## FAQ
 
-**Q: Why a single outgoing edge per node?**  
-A: It makes the graph compact and the runtime simple. Branching happens in directors, not by fanning out edges.
+**Why is there only one direct outgoing transition per node?**  
+Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable.
 
-**Q: Can I run multiple machines on the same graph?**  
-A: Yes. Graphs are immutable and thread-safe for sharing.
+**Can I share a graph across machines?**  
+Yes. `Graph` is immutable after build and can be reused across multiple state machine instances.
 
-**Q: Do observer exceptions crash execution?**  
-A: They bubble by default. Wrap if you need best‑effort telemetry.
+**Do observer exceptions get swallowed?**  
+No. They bubble by default.
 
-**Q: How do I draw my graph in Docs?**  
-A: Use the Mermaid exporter to produce `.mmd` files that GitHub/GitLab render natively.
+**When should I name nodes?**  
+Almost always. Names improve logs, observer output, replay traces, and Mermaid diagrams.
+
+**Does the core package include Mermaid export and replay?**  
+Yes. Those features are part of `NxGraph` itself; graph serialization is the optional extra package.
 
 ---
 
 ## Roadmap
 
-- Instance‑based serializers (no global codec)
-- Additional validators (cycle analysis across directors)
-- Realtime Visualizer
-- NuGet packaging & SourceLink
+- richer package docs and example coverage
+- additional validation/reporting improvements
+- more visualization tooling
+- continued ergonomics improvements around DSL authoring and serialization
 
 ---
 
 ## Contributing
 
-PRs welcome. Please run `dotnet format` and ensure tests pass. For non‑trivial changes, open an issue first.
+PRs are welcome. Please run formatting and tests before submitting:
+
+```bash
+dotnet test
+```
 
 ---
 
 ## License
 
-MIT (see `LICENSE`).
-
-
+MIT. See [LICENSE](LICENSE) for details.
