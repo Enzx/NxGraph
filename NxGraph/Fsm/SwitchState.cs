@@ -16,6 +16,7 @@ public sealed class SwitchState<TKey>(
     where TKey : notnull
 {
     private readonly Func<TKey> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
+    private readonly IReadOnlyDictionary<TKey, NodeId> _cases = cases ?? throw new ArgumentNullException(nameof(cases));
     private NodeId _defaultNode = defaultNode;
 
     /// <summary>
@@ -25,7 +26,7 @@ public sealed class SwitchState<TKey>(
     public NodeId SelectNext()
     {
         TKey key = _selector();
-        return cases.GetValueOrDefault(key, _defaultNode);
+        return _cases.GetValueOrDefault(key, _defaultNode);
     }
 
 

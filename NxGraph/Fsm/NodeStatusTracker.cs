@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using NxGraph.Compatibility;
 using NxGraph.Graphs;
 
 // ReSharper disable ConvertToAutoPropertyWithPrivateSetter
@@ -28,11 +29,7 @@ public sealed class NodeStatusTracker
     /// </summary>
     public void Initialize(Graph graph)
     {
-#if NETSTANDARD2_1
-        ArgumentNullExceptionShim.ThrowIfNull(graph);
-#else
-         ArgumentNullException.ThrowIfNull(graph);
-#endif
+        Guard.NotNull(graph, nameof(graph));
 
         int n = graph.NodeCount;
         if (_statuses.Length != n)
@@ -159,7 +156,7 @@ public sealed class NodeStatusTracker
 /// </summary>
 public sealed class NodeStatusTrackingObserver(NodeStatusTracker tracker) : IAsyncStateMachineObserver
 {
-    private readonly NodeStatusTracker _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
+    private readonly NodeStatusTracker _tracker = Guard.NotNull(tracker, nameof(tracker));
 
     public ValueTask OnStateEntered(NodeId id, CancellationToken ct = default)
     {

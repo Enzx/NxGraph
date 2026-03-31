@@ -1,7 +1,5 @@
-﻿using NxGraph.Graphs;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
+﻿using NxGraph.Compatibility;
+using NxGraph.Graphs;
 namespace NxGraph.Diagnostics.Validations;
 
 public static class GraphValidator
@@ -14,7 +12,7 @@ public static class GraphValidator
     {
         //TODO: add separate validation class for validation rules and allow custom rules to be registered
 
-        ArgumentNullException.ThrowIfNull(graph);
+        Guard.NotNull(graph, nameof(graph));
         options ??= new GraphValidationOptions();
 
         GraphValidationResult result = new();

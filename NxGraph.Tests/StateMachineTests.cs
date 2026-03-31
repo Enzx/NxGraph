@@ -471,7 +471,7 @@ public class StateMachineTests
 
         fsm.Execute();
 
-        Assert.That(log, Is.EqualTo(new[] { "enter", "run", "exit" }));
+        Assert.That(log, Is.EqualTo(["enter", "run", "exit"]));
     }
 
     [Test]
@@ -648,25 +648,24 @@ public class StateMachineTests
 
         Assert.That(result, Is.EqualTo(Result.Success));
         Assert.That(observer.EnteredIds.Select(id => id.Name).ToArray(),
-            Is.EqualTo(new[] { "Start", "Explore", "Decision", "Victory" }));
+            Is.EqualTo(["Start", "Explore", "Decision", "Victory"]));
         Assert.That(observer.Transitions.Select(t => (t.From.Name, t.To.Name)).ToArray(),
-            Is.EqualTo(new[]
-            {
+            Is.EqualTo([
                 ("Start", "Explore"),
                 ("Explore", "Decision"),
                 ("Decision", "Victory")
-            }));
+            ]));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private sealed class RecordingObserver : IStateMachineObserver
     {
-        public readonly List<NodeId> EnteredIds = new();
-        public readonly List<NodeId> ExitedIds = new();
-        public readonly List<(NodeId From, NodeId To)> Transitions = new();
-        public readonly List<(ExecutionStatus Prev, ExecutionStatus Next)> StatusChanges = new();
-        public readonly List<string> LogMessages = new();
+        public readonly List<NodeId> EnteredIds = [];
+        public readonly List<NodeId> ExitedIds = [];
+        public readonly List<(NodeId From, NodeId To)> Transitions = [];
+        public readonly List<(ExecutionStatus Prev, ExecutionStatus Next)> StatusChanges = [];
+        public readonly List<string> LogMessages = [];
         public bool Started;
         public Result? CompletedResult;
 

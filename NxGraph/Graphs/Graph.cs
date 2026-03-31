@@ -1,8 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
+using NxGraph.Compatibility;
 using NxGraph.Fsm;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
 
 namespace NxGraph.Graphs;
 
@@ -55,8 +53,8 @@ public sealed class Graph : INode, IGraph
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
     public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null)
     {
-        ArgumentNullException.ThrowIfNull(nodes);
-        ArgumentNullException.ThrowIfNull(edges);
+        Guard.NotNull(nodes, nameof(nodes));
+        Guard.NotNull(edges, nameof(edges));
 
         if (nodes[0].Id != NodeId.Start)
         {
@@ -123,7 +121,7 @@ public sealed class Graph : INode, IGraph
     /// <exception cref="ArgumentNullException">Thrown when the <paramref name="agent"/> is null.</exception>
     public void SetAgent<TAgent>(TAgent agent)
     {
-        ArgumentNullException.ThrowIfNull(agent);
+        Guard.NotNull(agent, nameof(agent));
 
 
         bool found = false;

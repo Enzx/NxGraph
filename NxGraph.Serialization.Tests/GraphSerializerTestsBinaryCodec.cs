@@ -7,7 +7,7 @@ namespace NxGraph.Serialization.Tests;
 [Category("serialization")]
 public class GraphSerializerTestsBinaryCodec
 {
-    private readonly GraphSerializer _serializer = new GraphSerializer(new DummyLogicBinaryCodec());
+    private readonly GraphSerializer _serializer = new(new DummyLogicBinaryCodec());
 
 
     private static Graph BuildPair(string a, string b)

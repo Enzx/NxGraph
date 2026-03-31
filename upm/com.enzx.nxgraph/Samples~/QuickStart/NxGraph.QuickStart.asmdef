@@ -1,0 +1,17 @@
+﻿{
+  "name": "NxGraph.QuickStart",
+  "rootNamespace": "NxGraph.Samples.QuickStart",
+  "references": [
+    "NxGraph"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
+

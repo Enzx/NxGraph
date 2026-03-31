@@ -7,11 +7,9 @@ namespace NxGraph.Fsm;
 /// <summary>
 /// A synchronous state machine with an agent, mirroring <see cref="AStateMachine{TAgent}"/>.
 /// </summary>
-public class StateMachine<TAgent> : StateMachine, IAgentSettable<TAgent>
+public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer = null)
+    : StateMachine(graph, observer), IAgentSettable<TAgent>
 {
-    public StateMachine(Graph graph, IStateMachineObserver? observer = null)
-        : base(graph, observer) { }
-
     public void SetAgent(TAgent agent) => Graph.SetAgent(agent);
 }
 

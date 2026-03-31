@@ -1,8 +1,6 @@
-﻿using NxGraph.Fsm;
+﻿using NxGraph.Compatibility;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
 
 namespace NxGraph.Authoring;
 
@@ -15,7 +13,7 @@ public static partial class Dsl
     /// </summary>
     public static StateToken To(this StateToken prev, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return prev.To(new RelayState(run));
     }
 
@@ -26,7 +24,7 @@ public static partial class Dsl
     /// </summary>
     public static StateToken To(this StartToken token, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return token.To(new RelayState(run));
     }
 
@@ -37,7 +35,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return ifBuilder.Then(new RelayState(run));
     }
 
@@ -46,7 +44,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchEnd Else(this BranchBuilder branch, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return branch.Else(new RelayState(run));
     }
 
@@ -55,7 +53,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchBuilder To(this BranchBuilder branch, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return branch.To(new RelayState(run));
     }
 
@@ -64,7 +62,7 @@ public static partial class Dsl
     /// </summary>
     public static StateToken To(this BranchEnd branchEnd, Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return branchEnd.To(new RelayState(run));
     }
 
@@ -76,7 +74,7 @@ public static partial class Dsl
     public static SwitchBuilder<TKey> Case<TKey>(this SwitchBuilder<TKey> switchBuilder, TKey key,
         Func<Result> run) where TKey : notnull
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return switchBuilder.Case(key, new RelayState(run));
     }
 
@@ -86,7 +84,7 @@ public static partial class Dsl
     public static SwitchBuilder<TKey> Default<TKey>(this SwitchBuilder<TKey> switchBuilder,
         Func<Result> run) where TKey : notnull
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return switchBuilder.Default(new RelayState(run));
     }
 
@@ -97,7 +95,7 @@ public static partial class Dsl
     /// </summary>
     public static StateToken StartWithSync(Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return GraphBuilder.StartWith(new RelayState(run));
     }
 }

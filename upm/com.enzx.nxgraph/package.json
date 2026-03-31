@@ -1,0 +1,30 @@
+﻿{
+  "name": "com.enzx.nxgraph",
+  "displayName": "NxGraph",
+  "version": "0.1.0",
+  "description": "A lean, high-performance finite state machine / stateflow library for Unity with a fluent authoring DSL, validation, replay, and Mermaid export.",
+  "license": "MIT",
+  "author": {
+    "name": "Mohamad Iraji",
+    "url": "https://github.com/Enzx/NxGraph"
+  },
+  "keywords": [
+    "fsm",
+    "state-machine",
+    "graph",
+    "stateflow",
+    "workflow",
+    "unity"
+  ],
+  "documentationUrl": "https://github.com/Enzx/NxGraph/tree/main/upm/com.enzx.nxgraph/Documentation~",
+  "changelogUrl": "https://github.com/Enzx/NxGraph/blob/main/upm/com.enzx.nxgraph/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Enzx/NxGraph/blob/main/LICENSE",
+  "samples": [
+    {
+      "displayName": "Quick Start",
+      "description": "A minimal Unity MonoBehaviour sample that builds and executes a simple NxGraph state machine.",
+      "path": "Samples~/QuickStart"
+    }
+  ]
+}
+

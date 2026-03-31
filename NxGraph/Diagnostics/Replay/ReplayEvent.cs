@@ -4,14 +4,14 @@ namespace NxGraph.Diagnostics.Replay;
 
 public readonly struct ReplayEvent(
     EventType type,
-    NodeId sourceIdId,
-    NodeId? targetIdId = null,
+    NodeId sourceId,
+    NodeId? targetId = null,
     string? message = null,
     long timestamp = -1)
 {
     public EventType Type { get; } = type;
-    public NodeId SourceId { get; } = sourceIdId;
-    public NodeId? TargetId { get; } = targetIdId;
+    public NodeId SourceId { get; } = sourceId;
+    public NodeId? TargetId { get; } = targetId;
     public string? Message { get; } = message;
     public long Timestamp { get; } = timestamp == -1 ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() : timestamp;
 }

@@ -1,6 +1,6 @@
 ﻿namespace NxGraph.Graphs;
 
-public readonly struct NodeId(int index) : IEquatable<NodeId>
+public struct NodeId(int index) : IEquatable<NodeId>
 {
     public NodeId(int index, string? name)
         : this(index)
@@ -19,9 +19,9 @@ public readonly struct NodeId(int index) : IEquatable<NodeId>
     {
     }
 
-    public readonly int Index = index;
+    public int Index { get; } = index;
 
-    public readonly string Name { get; private init; } = string.Empty;
+    public string Name { get; private set; } = string.Empty;
 
     public override string ToString()
     {

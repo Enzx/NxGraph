@@ -4,10 +4,10 @@
 /// Shared mutable game state injected as the agent into every <c>State&lt;DungeonContext&gt;</c>.
 /// Holds hero stats, inventory, room progress, and encounter results.
 /// </summary>
-public sealed class DungeonContext
+public sealed class DungeonContext(int seed = 42)
 {
     // ── Random ──────────────────────────────────────────────────────────
-    public Random Rng { get; }
+    public Random Rng { get; } = new(seed);
 
     // ── Hero stats ──────────────────────────────────────────────────────
     public string HeroName { get; } = "Aldric";
@@ -37,11 +37,6 @@ public sealed class DungeonContext
 
     // ── Derived ─────────────────────────────────────────────────────────
     public bool HeroAlive => HeroHp > 0;
-
-    public DungeonContext(int seed = 42)
-    {
-        Rng = new Random(seed);
-    }
 
     /// <summary>
     /// Automatically quaffs a potion when health drops below 30 %.
