@@ -1,4 +1,5 @@
 ﻿using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
@@ -81,7 +82,7 @@ public static partial class Dsl
 
         public BranchBuilder WaitFor(TimeSpan delay)
         {
-            return To(Wait.For(delay));
+            return To(AsyncWait.For(delay));
         }
 
         public BranchEnd Else(IAsyncLogic asyncLogic)
@@ -131,7 +132,7 @@ public static partial class Dsl
         /// <summary>Adds a wait state after the "else" branch.</summary>
         public StateToken WaitFor(TimeSpan delay)
         {
-            return To(Wait.For(delay));
+            return To(AsyncWait.For(delay));
         }
 
         public Graph Build(bool throwOnError = false)

@@ -1,4 +1,4 @@
-﻿namespace NxGraph.Fsm;
+﻿namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// AsyncRelayState is a state that can be used to encapsulate a function that returns a Result.

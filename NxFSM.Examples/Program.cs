@@ -5,6 +5,7 @@ using NxFSM.Examples.DungeonCrawler;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
 IAsyncStateMachineObserver observer = new ConsoleStateObserver();

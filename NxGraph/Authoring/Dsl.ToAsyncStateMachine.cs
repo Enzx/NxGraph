@@ -1,5 +1,6 @@
 ﻿using NxGraph.Compatibility;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 
 namespace NxGraph.Authoring;
 

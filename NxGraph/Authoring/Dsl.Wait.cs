@@ -1,4 +1,5 @@
 ﻿using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
@@ -13,7 +14,7 @@ public static partial class Dsl
     /// <returns>A new state token that represents the waiting state.</returns>
     public static StateToken WaitFor(this StateToken token, TimeSpan delay)
     {
-        return token.To(Wait.For(delay));
+        return token.To(AsyncWait.For(delay));
     }
 
     /// <summary>
@@ -24,7 +25,7 @@ public static partial class Dsl
     /// <returns>A new state token that represents the waiting state.</returns>
     public static StateToken WaitFor(this StartToken token, TimeSpan delay)
     {
-        AsyncState node = Wait.For(delay);
+        AsyncState node = AsyncWait.For(delay);
         NodeId id = token.Builder.AddNode(node, true);
         return new StateToken(id, token.Builder);
     }

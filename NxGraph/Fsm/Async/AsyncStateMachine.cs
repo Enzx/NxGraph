@@ -2,7 +2,7 @@
 using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
-namespace NxGraph.Fsm;
+namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// An async state machine that executes a graph of nodes with full lifecycle/observer support.

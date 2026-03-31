@@ -1,6 +1,6 @@
 ﻿using NxGraph.Graphs;
 
-namespace NxGraph.Fsm;
+namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// A composite state that contains a single child node.
