@@ -1,7 +1,5 @@
-﻿using NxGraph.Fsm;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
+﻿using NxGraph.Compatibility;
+using NxGraph.Fsm;
 
 namespace NxGraph.Authoring;
 
@@ -68,7 +66,7 @@ public static partial class Dsl
     public static AsyncStateMachine<TAgent> WithAgent<TAgent>(this AsyncStateMachine<TAgent> fsm,
         TAgent agent)
     {
-        ArgumentNullException.ThrowIfNull(agent);
+        Guard.NotNull(agent, nameof(agent));
         fsm.SetAgent(agent);
         return fsm;
     }

@@ -12,8 +12,7 @@ public sealed class AsyncRelayState(
     Func<CancellationToken, ValueTask>? onExit = null)
     : AsyncState
 {
-    private readonly Func<CancellationToken, ValueTask<Result>> _run =
-        run ?? throw new ArgumentNullException(nameof(run));
+    private readonly Func<CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
 
     protected override ValueTask OnEnterAsync(CancellationToken ct)
     {
@@ -44,8 +43,7 @@ public sealed class AsyncRelayState<TAgent>(
     Func<TAgent, CancellationToken, ValueTask>? onExit = null)
     : AsyncState<TAgent>
 {
-    private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run =
-        run ?? throw new ArgumentNullException(nameof(run));
+    private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
 
     protected override ValueTask OnEnterAsync(CancellationToken ct)
     {

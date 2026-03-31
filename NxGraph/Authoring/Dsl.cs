@@ -1,8 +1,6 @@
-﻿using NxGraph.Fsm;
+﻿using NxGraph.Compatibility;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
 
 namespace NxGraph.Authoring;
 
@@ -16,14 +14,14 @@ public static partial class Dsl
     /// <returns>A new state token that includes the relay state logic.</returns>
     public static StateToken To(this StateToken prev, Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         IAsyncLogic asyncLogic = new AsyncRelayState(run);
         return prev.To(asyncLogic);
     }
 
     public static StateToken SetName(this StateToken prev, string name)
     {
-        ArgumentNullException.ThrowIfNull(name);
+        Guard.NotNull(name, nameof(name));
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
@@ -35,7 +33,7 @@ public static partial class Dsl
 
     public static Graph SetName(this Graph graph, string name)
     {
-        ArgumentNullException.ThrowIfNull(graph);
+        Guard.NotNull(graph, nameof(graph));
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
@@ -80,7 +78,7 @@ public static partial class Dsl
     /// <returns>A ThenElseBuilder that allows chaining further actions.</returns>
     public static BranchBuilder Then(this IfBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         AsyncRelayState asyncRelay = new(run);
         return ifBuilder.Then(asyncRelay);
     }
@@ -93,7 +91,7 @@ public static partial class Dsl
     /// <returns>A <see cref="BranchEnd"/> that allows building the graph or continuing to chain states.</returns>
     public static BranchEnd Else(this BranchBuilder ifBuilder, Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         AsyncRelayState asyncRelay = new(run);
         return ifBuilder.Else(asyncRelay);
     }
@@ -111,7 +109,7 @@ public static partial class Dsl
         Func<CancellationToken, ValueTask<Result>> run)
         where TKey : notnull
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         AsyncRelayState asyncRelay = new(run);
         return switchBuilder.Case(key, asyncRelay);
     }
@@ -127,7 +125,7 @@ public static partial class Dsl
         Func<CancellationToken, ValueTask<Result>> run)
         where TKey : notnull
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         AsyncRelayState asyncRelay = new(run);
         return switchBuilder.Default(asyncRelay);
     }
@@ -144,7 +142,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchBuilder To(this BranchBuilder branch, Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return branch.To(new AsyncRelayState(run));
     }
 
@@ -153,7 +151,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchBuilder SetName(this BranchBuilder branch, string name)
     {
-        ArgumentNullException.ThrowIfNull(name);
+        Guard.NotNull(name, nameof(name));
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));
@@ -170,7 +168,7 @@ public static partial class Dsl
     /// </summary>
     public static StateToken To(this BranchEnd branchEnd, Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return branchEnd.To(new AsyncRelayState(run));
     }
 
@@ -179,7 +177,7 @@ public static partial class Dsl
     /// </summary>
     public static BranchEnd SetName(this BranchEnd branchEnd, string name)
     {
-        ArgumentNullException.ThrowIfNull(name);
+        Guard.NotNull(name, nameof(name));
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("State name cannot be null or whitespace.", nameof(name));

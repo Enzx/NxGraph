@@ -1,9 +1,7 @@
-﻿using NxGraph.Fsm;
+﻿using NxGraph.Compatibility;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 using Timeout = NxGraph.Fsm.Timeout;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
 namespace NxGraph.Authoring;
 
 public static partial class Dsl
@@ -14,7 +12,7 @@ public static partial class Dsl
     public static StateToken StartWithTimeout(Func<CancellationToken, ValueTask<Result>> run, TimeSpan timeout,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return GraphBuilder.StartWith(Timeout.For(timeout, run, behavior));
     }
 
@@ -33,7 +31,7 @@ public static partial class Dsl
         Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         IAsyncLogic wrapped = Timeout.Wrap(new AsyncRelayState(run), timeout, behavior);
         return prev.To(wrapped);
     }
@@ -58,7 +56,7 @@ public static partial class Dsl
     public static StateToken ToWithTimeout(this StartToken prev, IAsyncLogic nextStateAsyncLogic, TimeSpan timeout,
         TimeoutBehavior behavior)
     {
-        ArgumentNullException.ThrowIfNull(nextStateAsyncLogic);
+        Guard.NotNull(nextStateAsyncLogic, nameof(nextStateAsyncLogic));
         IAsyncLogic wrapped = Timeout.Wrap(nextStateAsyncLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);
         return new StateToken(id, prev.Builder);
@@ -77,7 +75,7 @@ public static partial class Dsl
         TimeSpan timeout,
         TimeoutBehavior behavior)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         IAsyncLogic nextStateAsyncLogic = new AsyncRelayState(run);
         IAsyncLogic wrapped = Timeout.Wrap(nextStateAsyncLogic, timeout, behavior);
         NodeId id = prev.Builder.AddNode(wrapped, true);

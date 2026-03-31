@@ -1,9 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
+using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
-#if NETSTANDARD2_1
-using ArgumentNullException = System.ArgumentNullExceptionShim;
-#endif
 
 namespace NxGraph.Authoring;
 
@@ -22,7 +20,7 @@ public sealed partial class GraphBuilder
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
     public NodeId AddNode(IAsyncLogic asyncLogic, bool isStart = false)
     {
-        ArgumentNullException.ThrowIfNull(asyncLogic);
+        Guard.NotNull(asyncLogic, nameof(asyncLogic));
 
         if (isStart)
         {
@@ -67,7 +65,7 @@ public sealed partial class GraphBuilder
     /// <summary>Add a sync-only node. Wraps it in a <see cref="SyncLogicAdapter"/>.</summary>
     public NodeId AddNode(ILogic syncLogic, bool isStart = false)
     {
-        ArgumentNullException.ThrowIfNull(syncLogic);
+        Guard.NotNull(syncLogic, nameof(syncLogic));
 
         // Deduplicate by the original ILogic instance.
         if (_byLogic.TryGetValue(syncLogic, out NodeId existing))
@@ -182,7 +180,7 @@ public sealed partial class GraphBuilder
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
     public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return StartWith(new AsyncRelayState(run));
     }
 
@@ -193,7 +191,7 @@ public sealed partial class GraphBuilder
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
     public static StateToken StartWith(Func<Result> run)
     {
-        ArgumentNullException.ThrowIfNull(run);
+        Guard.NotNull(run, nameof(run));
         return StartWith(new RelayState(run));
     }
 
@@ -297,7 +295,7 @@ public sealed partial class GraphBuilder
 
     public static void SetName(Graph graph, string name)
     {
-        ArgumentNullException.ThrowIfNull(graph);
+        Guard.NotNull(graph, nameof(graph));
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Graph name cannot be null or whitespace.", nameof(name));

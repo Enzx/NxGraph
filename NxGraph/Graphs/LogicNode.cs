@@ -13,16 +13,23 @@ public interface INode
     ILogic? Logic => null;
 }
 
-public class LogicNode(NodeId id, IAsyncLogic asyncLogic) : INode
+public class LogicNode : INode
 {
-    public NodeId Id { get; } = id;
-    public IAsyncLogic AsyncLogic { get; } = asyncLogic;
+    public LogicNode(NodeId id, IAsyncLogic asyncLogic)
+    {
+        Id = id;
+        AsyncLogic = asyncLogic;
+        Logic = asyncLogic is SyncLogicAdapter sla ? sla.Logic : asyncLogic as ILogic;
+    }
+
+    public NodeId Id { get; }
+    public IAsyncLogic AsyncLogic { get; }
 
     /// <summary>
     /// Synchronous logic extracted from the <see cref="AsyncLogic"/>:
     /// unwraps <see cref="SyncLogicAdapter"/>, or detects direct <see cref="ILogic"/> implementations.
     /// </summary>
-    public ILogic? Logic { get; } = asyncLogic is SyncLogicAdapter sla ? sla.Logic : asyncLogic as ILogic;
+    public ILogic? Logic { get; }
 
     public static readonly LogicNode Empty = new(NodeId.Default, new EmptyAsyncLogic());
     public static readonly LogicNode StateMachineMarker = new(NodeId.Default, new EmptyAsyncLogic());
@@ -32,7 +39,7 @@ public class LogicNode(NodeId id, IAsyncLogic asyncLogic) : INode
 /// Async-only empty logic. Used as a sentinel in <see cref="LogicNode.Empty"/>
 /// and <see cref="LogicNode.StateMachineMarker"/>.
 /// </summary>
-public sealed record EmptyAsyncLogic : IAsyncLogic
+public sealed class EmptyAsyncLogic : IAsyncLogic
 {
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
@@ -44,7 +51,7 @@ public sealed record EmptyAsyncLogic : IAsyncLogic
 /// Synchronous empty logic. Returns <see cref="Result.Success"/> immediately.
 /// Used as pad/placeholder nodes that must be executable by both sync and async runtimes.
 /// </summary>
-public sealed record EmptyLogic : ILogic
+public sealed class EmptyLogic : ILogic
 {
     public Result Execute() => Result.Success;
 }

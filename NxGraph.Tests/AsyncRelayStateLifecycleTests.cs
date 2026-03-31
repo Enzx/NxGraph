@@ -55,7 +55,7 @@ public class AsyncRelayStateLifecycleTests
 
         await fsm.ExecuteAsync();
 
-        Assert.That(log, Is.EqualTo(new[] { "enter", "run", "exit" }));
+        Assert.That(log, Is.EqualTo(["enter", "run", "exit"]));
     }
 
     [Test]
