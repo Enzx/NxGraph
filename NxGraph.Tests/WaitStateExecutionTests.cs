@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 
 namespace NxGraph.Tests;
 

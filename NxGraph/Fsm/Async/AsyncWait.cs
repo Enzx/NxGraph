@@ -1,9 +1,9 @@
-﻿namespace NxGraph.Fsm;
+﻿namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// Represents a state that waits for a specified duration before completing.
 /// </summary>
-public static class Wait
+public static class AsyncWait
 {
     /// <summary>
     /// Creates a state that waits for a specified delay before completing.
@@ -12,10 +12,10 @@ public static class Wait
     /// <returns>A new instance of <see cref="AsyncState"/> that represents the delay state.</returns>
     public static AsyncState For(TimeSpan delay)
     {
-        return new DelayState(delay);
+        return new AsyncDelayState(delay);
     }
 
-    private sealed class DelayState(TimeSpan delay) : AsyncState
+    private sealed class AsyncDelayState(TimeSpan delay) : AsyncState
     {
         protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
         {

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using NxGraph.Graphs;
 
-namespace NxGraph.Fsm;
+namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// Wraps any <see cref="IAsyncLogic"/> and enforces a maximum execution time.
@@ -9,14 +9,14 @@ namespace NxGraph.Fsm;
 /// returns <see cref="Result.Failure"/> or throws <see cref="TimeoutException"/>,
 /// depending on <see cref="TimeoutBehavior"/>.
 /// </summary>
-public class TimeoutState : IAsyncLogic
+public class AsyncTimeoutState : IAsyncLogic
 {
     private readonly IAsyncLogic _inner;
     private readonly TimeSpan _timeout;
     private readonly TimeoutBehavior _behavior;
     private readonly Action<object?> _cachedCancelCallback = CancelCallback;
 
-    public TimeoutState(IAsyncLogic inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
+    public AsyncTimeoutState(IAsyncLogic inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         if (timeout <= TimeSpan.Zero)
@@ -133,13 +133,13 @@ public static class Timeout
     /// <summary>Wrap an existing node with a timeout.</summary>
     public static IAsyncLogic Wrap(IAsyncLogic asyncLogic, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutState(asyncLogic, timeout, behavior);
+        return new AsyncTimeoutState(asyncLogic, timeout, behavior);
     }
 
     /// <summary>Wrap a delegate as a node with a timeout (convenience overload).</summary>
     public static IAsyncLogic For(TimeSpan timeout, Func<CancellationToken, ValueTask<Result>> run,
         TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
-        return new TimeoutState(new AsyncRelayState(run), timeout, behavior);
+        return new AsyncTimeoutState(new AsyncRelayState(run), timeout, behavior);
     }
 }

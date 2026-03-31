@@ -1,7 +1,7 @@
 ﻿using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
-namespace NxGraph.Fsm;
+namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// Base class for all async states in a finite state machine.

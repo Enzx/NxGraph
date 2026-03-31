@@ -1,4 +1,5 @@
 using NxGraph.Diagnostics.Replay;
+using NxGraph.Fsm.Async;
 
 namespace NxGraph.Tests;
 

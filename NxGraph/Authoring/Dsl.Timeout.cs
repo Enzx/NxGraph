@@ -1,7 +1,8 @@
 ﻿using NxGraph.Compatibility;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
-using Timeout = NxGraph.Fsm.Timeout;
+using Timeout = NxGraph.Fsm.Async.Timeout;
 namespace NxGraph.Authoring;
 
 public static partial class Dsl

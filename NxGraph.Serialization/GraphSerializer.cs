@@ -4,6 +4,7 @@ using System.Text.Json.Serialization.Metadata;
 using MessagePack;
 using MessagePack.Resolvers;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 using NxGraph.Serialization.Abstraction;
 
