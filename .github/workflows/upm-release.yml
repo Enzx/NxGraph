@@ -1,0 +1,127 @@
+﻿name: UPM Release
+
+on:
+  push:
+    tags:
+      - "upm/v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer version to publish (e.g., 1.2.3). Overrides tag-derived version."
+        required: true
+      mode:
+        description: "Staging mode: source or binary"
+        required: true
+        default: binary
+        type: choice
+        options:
+          - source
+          - binary
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upm-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: 1
+  UPM_PACKAGE_DIR: upm/com.enzx.nxgraph
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve version and mode
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            VER="${GITHUB_REF_NAME#upm/v}"
+            MODE="${{ github.event.inputs.mode || 'binary' }}"
+          else
+            VER="${{ github.event.inputs.version }}"
+            MODE="${{ github.event.inputs.mode }}"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE"   >> "$GITHUB_OUTPUT"
+          echo "Resolved: version=$VER, mode=$MODE"
+
+      - name: Build, test, stage, and package UPM
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          UPM_MODE: ${{ steps.meta.outputs.mode }}
+          UPM_PACKAGE_DIR: upm/com.enzx.nxgraph
+        run: >-
+          dotnet run --project NxGraph.Build --
+          ci
+          stage-${{ steps.meta.outputs.mode }}
+          upm-patch-version
+          upm-tarball
+
+      - name: Push to upm branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create an orphan branch with just the UPM package contents
+          git checkout --orphan upm-staging
+          git rm -rf . > /dev/null 2>&1 || true
+          git clean -fdx -e "${UPM_PACKAGE_DIR}" > /dev/null 2>&1 || true
+
+          # Move UPM package contents to root
+          cp -r ${UPM_PACKAGE_DIR}/* .
+          cp -r ${UPM_PACKAGE_DIR}/.* . 2>/dev/null || true
+
+          git add -A
+          git commit -m "Release UPM v${VER}"
+
+          git push origin upm-staging:upm --force
+
+          echo "Pushed UPM package v${VER} to 'upm' branch."
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "UPM v${{ steps.meta.outputs.version }}"
+          body: |
+            ## Unity Package Manager Release
+
+            **Version:** `${{ steps.meta.outputs.version }}`
+            **Mode:** `${{ steps.meta.outputs.mode }}`
+
+            ### Install via Git URL
+
+            Add to your Unity project's `Packages/manifest.json`:
+            ```json
+            "com.enzx.nxgraph": "https://github.com/${{ github.repository }}.git#upm"
+            ```
+
+            Or pin a specific version:
+            ```json
+            "com.enzx.nxgraph": "https://github.com/${{ github.repository }}.git#upm/v${{ steps.meta.outputs.version }}"
+            ```
+
+            ### Install from tarball
+            Download the `.tgz` file below and install via Unity Package Manager → "Add package from tarball".
+          files: com.enzx.nxgraph-${{ steps.meta.outputs.version }}.tgz
+          draft: false
+          prerelease: ${{ contains(steps.meta.outputs.version, '-') }}

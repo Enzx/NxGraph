@@ -1,0 +1,10 @@
+﻿<!-- Imported before Microsoft.Common.props — safe to set intermediate/output paths here.
+     This isolates build-tool output to .tools/ at the repository root so NxGraph.Build.exe,
+     Bullseye.dll, SimpleExec.dll, etc. never appear alongside the real project artifacts. -->
+<Project>
+    <PropertyGroup>
+        <BaseOutputPath>$(MSBuildThisFileDirectory)..\.tools\bin\</BaseOutputPath>
+        <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\.tools\obj\</BaseIntermediateOutputPath>
+    </PropertyGroup>
+</Project>
+

@@ -20,16 +20,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
+    - name: Build & Test
       env:
         COVERAGE_THRESHOLD: 0
-      run: >-
-        dotnet test --no-build --verbosity normal --collect:"XPlat Code Coverage"
-        /p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold=${{ env.COVERAGE_THRESHOLD }}
+      run: dotnet run --project NxGraph.Build -- ci
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:

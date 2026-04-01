@@ -25,9 +25,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CONFIGURATION: Release
-  NUGET_SOURCE: https://api.nuget.org/v3/index.json
-  ARTIFACTS_DIR: artifacts
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: 1
 
@@ -56,100 +53,26 @@ jobs:
           set -euo pipefail
           if [ -z "${NUGET_API_KEY:-}" ]; then
             echo "::error::NUGET_API_KEY is not set or not visible to this workflow run."
-            echo "Check: repo/organization secrets, environment scope, and that this run is not from a forked PR."
             exit 1
           fi
           echo "::add-mask::$NUGET_API_KEY"
           echo "NuGet API key is present."
 
-      - run: dotnet restore
-
-      - run: dotnet build --no-restore --configuration "$CONFIGURATION"
-
-      - run: dotnet test  --no-build --configuration "$CONFIGURATION" --verbosity normal
-
-      - name: Resolve target and version
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
-            case "${GITHUB_REF_NAME}" in
-              v*) TARGET=all; VER="${GITHUB_REF_NAME#v}" ;;
-              serialization/v*) TARGET=serialization; VER="${GITHUB_REF_NAME#serialization/v}" ;;
-              serialization-abstraction/v*) TARGET=serialization-abstraction; VER="${GITHUB_REF_NAME#serialization-abstraction/v}" ;;
-              nxgraph/v*) TARGET=nxgraph; VER="${GITHUB_REF_NAME#nxgraph/v}" ;;
-              *) echo "::error::Unsupported tag format '${GITHUB_REF_NAME}'."; exit 1 ;;
-            esac
-          else
-            TARGET="${{ github.event.inputs.target }}"
-            VER="${{ github.event.inputs.version }}"
-          fi
-
-          if [[ ! "$VER" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Version '$VER' is not valid SemVer."; exit 1
-          fi
-
-          echo "target=$TARGET"   >> "$GITHUB_OUTPUT"
-          echo "version=$VER"     >> "$GITHUB_OUTPUT"
-          echo "Resolved: target=$TARGET, version=$VER"
-
-      - run: mkdir -p "$ARTIFACTS_DIR"
-
-      # Pack NxGraph (only on 'all' or 'nxgraph')
-      - name: Pack NxGraph
-        if: ${{ steps.ver.outputs.target == 'all' || steps.ver.outputs.target == 'nxgraph' }}
-        run: >
-          dotnet pack NxGraph/NxGraph.csproj
-          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
-          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
-          -p:DebugType=portable
-          -p:PublishRepositoryUrl=true
-          -p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}
-          -p:RepositoryBranch=${{ github.ref_name }}
-          -p:RepositoryCommit=${{ github.sha }}
-          -p:EmbedUntrackedSources=true
-          -p:PackageVersion=${{ steps.ver.outputs.version }}
-
-      # Pack Serialization (on 'all' or 'serialization')
-      - name: Pack NxGraph.Serialization
-        if: ${{ steps.ver.outputs.target == 'all' || steps.ver.outputs.target == 'serialization' }}
-        run: >
-          dotnet pack NxGraph.Serialization/NxGraph.Serialization.csproj
-          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
-          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
-          -p:DebugType=portable
-          -p:PublishRepositoryUrl=true
-          -p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}
-          -p:RepositoryBranch=${{ github.ref_name }}
-          -p:RepositoryCommit=${{ github.sha }}
-          -p:EmbedUntrackedSources=true
-          -p:PackageVersion=${{ steps.ver.outputs.version }}
-
-      # Pack Serialization.Abstraction (on 'all' or 'serialization-abstraction')
-      - name: Pack NxGraph.Serialization.Abstraction
-        if: ${{ steps.ver.outputs.target == 'all' || steps.ver.outputs.target == 'serialization-abstraction' }}
-        run: >
-          dotnet pack NxGraph.Serialization.Abstraction/NxGraph.Serialization.Abstraction.csproj
-          --configuration $CONFIGURATION -o $ARTIFACTS_DIR
-          -p:ContinuousIntegrationBuild=true -p:Deterministic=true
-          -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
-          -p:DebugType=portable
-          -p:PublishRepositoryUrl=true
-          -p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}
-          -p:RepositoryBranch=${{ github.ref_name }}
-          -p:RepositoryCommit=${{ github.sha }}
-          -p:EmbedUntrackedSources=true
-          -p:PackageVersion=${{ steps.ver.outputs.version }}
+      - name: Publish (build, test, pack, push)
+        env:
+          TARGET: ${{ github.event.inputs.target }}
+          VERSION: ${{ github.event.inputs.version }}
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_SOURCE: https://api.nuget.org/v3/index.json
+          ARTIFACTS_DIR: artifacts
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          REPO_BRANCH: ${{ github.ref_name }}
+          REPO_COMMIT: ${{ github.sha }}
+        run: dotnet run --project NxGraph.Build -- publish
 
       - name: List artifacts
         shell: bash
-        run: |
-          set -euo pipefail
-          ls -al "$ARTIFACTS_DIR" || true
+        run: ls -al artifacts/ || true
 
       - name: Validate package and symbol contents
         shell: bash
@@ -157,41 +80,23 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           echo "== Listing assemblies in nupkg =="
-          for f in "$ARTIFACTS_DIR"/*.nupkg; do
+          for f in artifacts/*.nupkg; do
             echo "---- $(basename "$f")"
             unzip -l "$f" | grep -E '(^|/)(lib|ref|runtimes)/' || true
             echo "---- nuspec id/version ----"
             unzip -p "$f" "*.nuspec" | grep -E "<id>|<version>" || true
           done
           echo "== Listing PDBs in snupkg =="
-          for f in "$ARTIFACTS_DIR"/*.snupkg; do
+          for f in artifacts/*.snupkg; do
             echo "---- $(basename "$f")"
             unzip -l "$f" | grep -E '\.pdb$' || true
           done
 
-      - name: Push .nupkg to nuget.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: >
-          dotnet nuget push "$ARTIFACTS_DIR"/*.nupkg
-          --api-key "$NUGET_API_KEY"
-          --source "$NUGET_SOURCE"
-          --skip-duplicate
-
-      - name: Push .snupkg (symbols)
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: >
-          dotnet nuget push "$ARTIFACTS_DIR"/*.snupkg
-          --api-key "$NUGET_API_KEY"
-          --source "$NUGET_SOURCE"
-          --skip-duplicate
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nuget-${{ steps.ver.outputs.target }}-${{ steps.ver.outputs.version }}
+          name: nuget-packages
           path: |
-            ${{ env.ARTIFACTS_DIR }}/*.nupkg
-            ${{ env.ARTIFACTS_DIR }}/*.snupkg
+            artifacts/*.nupkg
+            artifacts/*.snupkg
           if-no-files-found: ignore
