@@ -6,3 +6,5 @@ riderModule.iml
 /_ReSharper.Caches/
 
 *.DotSettings.user
+.tools/
+artifacts/

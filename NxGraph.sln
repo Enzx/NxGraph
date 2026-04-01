@@ -1,5 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph", "NxGraph\NxGraph.csproj", "{842F5875-874D-4A6A-9183-CCE43F0E7F7A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Tests", "NxGraph.Tests\NxGraph.Tests.csproj", "{B669798D-E1B6-44AF-8CE6-934060E859E6}"
@@ -13,6 +14,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Serialization.Abstraction", "NxGraph.Serialization.Abstraction\NxGraph.Serialization.Abstraction.csproj", "{725BB803-FE22-424B-9353-E892AA2FA239}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Serialization.Tests", "NxGraph.Serialization.Tests\NxGraph.Serialization.Tests.csproj", "{CFEB90B3-E1E5-4CBE-AB8B-42529B7E278A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NxGraph.Build", "NxGraph.Build\NxGraph.Build.csproj", "{4FB94ACC-BBD6-4FD4-9E40-C296FD2D74FC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -48,5 +51,8 @@ Global
 		{CFEB90B3-E1E5-4CBE-AB8B-42529B7E278A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CFEB90B3-E1E5-4CBE-AB8B-42529B7E278A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CFEB90B3-E1E5-4CBE-AB8B-42529B7E278A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4FB94ACC-BBD6-4FD4-9E40-C296FD2D74FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4FB94ACC-BBD6-4FD4-9E40-C296FD2D74FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4FB94ACC-BBD6-4FD4-9E40-C296FD2D74FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 EndGlobal

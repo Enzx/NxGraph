@@ -1,0 +1,36 @@
+﻿name: UPM Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  stage-upm:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        mode: [ source, binary ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Stage UPM package (${{ matrix.mode }})
+        run: dotnet run --project NxGraph.Build -- stage-${{ matrix.mode }}
+
+      - name: Upload staged UPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: upm-${{ matrix.mode }}
+          path: upm/com.enzx.nxgraph/
+
