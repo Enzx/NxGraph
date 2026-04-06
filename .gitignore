@@ -8,3 +8,8 @@ riderModule.iml
 *.DotSettings.user
 .tools/
 artifacts/
+NxGraph.Serialization.Tests/TestResults
+NxGraph.Tests/TestResults
+upm/com.enzx.nxgraph/Runtime/**/*.dll
+upm/com.enzx.nxgraph/Runtime/**/*.pdb
+*.log
