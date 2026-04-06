@@ -16,7 +16,7 @@ public class AsyncAutoResetTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(true);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         await fsm.ExecuteAsync();
 
@@ -29,7 +29,7 @@ public class AsyncAutoResetTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWith(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         await fsm.ExecuteAsync();
 
@@ -72,9 +72,9 @@ public class AsyncAutoResetTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWith(new AsyncRelayState(_ => throw new ApplicationException("boom")))
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(true);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
-        Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
+        await Assert.ThatAsync(async () => await fsm.ExecuteAsync(), Throws.InstanceOf<ApplicationException>());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
     }
 
@@ -84,9 +84,9 @@ public class AsyncAutoResetTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWith(new AsyncRelayState(_ => throw new ApplicationException("boom")))
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
-        Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
+        await Assert.ThatAsync(async () => await fsm.ExecuteAsync(), Throws.InstanceOf<ApplicationException>());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
     }
 
@@ -103,7 +103,7 @@ public class AsyncAutoResetTests
                 return Result.Success;
             }))
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(true);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
         await cts.CancelAsync();
@@ -123,13 +123,59 @@ public class AsyncAutoResetTests
                 return Result.Success;
             }))
             .ToAsyncStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
         await cts.CancelAsync();
 
         Assert.That(async () => await task, Throws.InstanceOf<OperationCanceledException>());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Cancelled));
+    }
+
+    [Test]
+    public async Task execute_should_be_silently_ignored_after_completed_when_reset_policy_is_ignore()
+    {
+        int counter = 0;
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(_ =>
+            {
+                counter++;
+                return new ValueTask<Result>(Result.Success);
+            }))
+            .ToAsyncStateMachine();
+        fsm.SetRestartPolicy(RestartPolicy.Ignore);
+
+        Result first = await fsm.ExecuteAsync();
+        Assert.That(first, Is.EqualTo(Result.Success));
+        Assert.That(counter, Is.EqualTo(1));
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+
+        Result second = await fsm.ExecuteAsync();
+        Assert.That(second, Is.EqualTo(Result.Success));
+        Assert.That(counter, Is.EqualTo(1), "Ignore policy must not re-run node logic");
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+    }
+
+    [Test]
+    public async Task execute_should_run_again_after_manual_reset_when_reset_policy_is_ignore()
+    {
+        int counter = 0;
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(_ =>
+            {
+                counter++;
+                return new ValueTask<Result>(Result.Success);
+            }))
+            .ToAsyncStateMachine();
+        fsm.SetRestartPolicy(RestartPolicy.Ignore);
+
+        await fsm.ExecuteAsync();
+        Assert.That(counter, Is.EqualTo(1));
+
+        await fsm.Reset();
+
+        await fsm.ExecuteAsync();
+        Assert.That(counter, Is.EqualTo(2));
     }
 }
 

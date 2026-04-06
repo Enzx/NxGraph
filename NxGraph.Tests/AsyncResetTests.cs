@@ -126,5 +126,55 @@ public class AsyncResetTests
         await fsm.ExecuteAsync();
         Assert.That(counter, Is.EqualTo(2));
     }
+
+    [Test]
+    public async Task execute_without_reset_should_throw_when_completed()
+    {
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(_ => ResultHelpers.Success)
+            .ToAsyncStateMachine();
+        fsm.SetAutoReset(false);
+
+        await fsm.ExecuteAsync();
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+    }
+
+    [Test]
+    public async Task execute_without_reset_should_throw_when_failed()
+    {
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(_ => ResultHelpers.Failure)
+            .ToAsyncStateMachine();
+        fsm.SetAutoReset(false);
+
+        await fsm.ExecuteAsync();
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+    }
+
+    [Test]
+    public async Task execute_without_reset_should_throw_when_cancelled()
+    {
+        using CancellationTokenSource cts = new();
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWith(new AsyncRelayState(async ct =>
+            {
+                await Task.Delay(5000, ct);
+                return Result.Success;
+            }))
+            .ToAsyncStateMachine();
+        fsm.SetAutoReset(false);
+
+        ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);
+        await cts.CancelAsync();
+        try { await task; }
+        catch (OperationCanceledException) { /* expected */ }
+
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Cancelled));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+    }
 }
 

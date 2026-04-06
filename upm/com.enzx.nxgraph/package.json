@@ -1,7 +1,7 @@
-﻿{
+{
   "name": "com.enzx.nxgraph",
   "displayName": "NxGraph",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "A lean, high-performance finite state machine / stateflow library for Unity with a fluent authoring DSL, validation, replay, and Mermaid export.",
   "license": "MIT",
   "author": {
@@ -27,4 +27,3 @@
     }
   ]
 }
-

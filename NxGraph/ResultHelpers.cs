@@ -1,7 +1,7 @@
 ﻿namespace NxGraph;
 
 /// <summary>
-/// Provides helper methods for working with <see cref="Result"/> types.
+/// Provides cached <see cref="ValueTask{Result}"/> singletons for zero-allocation async paths.
 /// </summary>
 public static class ResultHelpers
 {
@@ -14,6 +14,8 @@ public static class ResultHelpers
     /// Represents a failed result.
     /// </summary>
     public static readonly ValueTask<Result> Failure = new(Result.Failure);
-
+    /// <summary>
+    /// Represents a completed operation with no meaningful result (e.g. for lifecycle events).
+    /// </summary>
     public static readonly ValueTask CompletedTask = default;
 }
