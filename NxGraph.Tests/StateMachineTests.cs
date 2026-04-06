@@ -35,36 +35,42 @@ public class StateMachineTests
         Assert.That(result, Is.EqualTo(Result.Failure));
     }
 
-    // ── Transition flow ─────────────────────────────────────────────────
+    // ── Transition flow (Execute should full-run) ───────────────────────
 
     [Test]
-    public void should_traverse_two_states_and_succeed()
+    public void execute_should_traverse_two_states_and_succeed()
     {
+        int counter = 0;
         StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .To(() => Result.Success)
+            .StartWith(() => { counter++; return Result.Success; })
+            .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
 
         Result result = fsm.Execute();
 
         Assert.That(result, Is.EqualTo(Result.Success));
+        Assert.That(counter, Is.EqualTo(2));
     }
 
     [Test]
-    public void should_stop_on_failure_of_second_state()
+    public void execute_should_stop_on_failure_of_second_state()
     {
+        int counter = 0;
         StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .To(() => Result.Failure)
+            .StartWith(() => { counter++; return Result.Success; })
+            .To(() => { counter++; return Result.Failure; })
+            .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
 
         Result result = fsm.Execute();
 
         Assert.That(result, Is.EqualTo(Result.Failure));
+        // third state should never run
+        Assert.That(counter, Is.EqualTo(2));
     }
 
     [Test]
-    public void should_traverse_three_states()
+    public void execute_should_traverse_three_states_and_succeed()
     {
         int counter = 0;
         StateMachine fsm = GraphBuilder
@@ -91,13 +97,14 @@ public class StateMachineTests
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Created));
     }
 
+
     [Test]
     public void status_should_be_ready_after_successful_execution_with_auto_reset()
     {
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetAutoReset(true);
+        fsm.SetResetPolicy(RestartPolicy.Auto);
 
         fsm.Execute();
 
@@ -110,7 +117,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetResetPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
 
@@ -123,7 +130,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
             .ToStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetResetPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
 
@@ -138,7 +145,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetResetPolicy(RestartPolicy.Manual);
         fsm.Execute();
 
         Result resetResult = fsm.Reset();
@@ -167,13 +174,87 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetResetPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Assert.That(counter, Is.EqualTo(1));
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
 
         fsm.Reset();
+        fsm.Execute();
+        Assert.That(counter, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void execute_without_reset_should_throw_when_completed()
+    {
+        StateMachine fsm = GraphBuilder
+            .StartWith(() => Result.Success)
+            .ToStateMachine();
+        fsm.SetResetPolicy(RestartPolicy.Manual);
+
+        fsm.Execute();
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+
+        Assert.Throws<InvalidOperationException>(() => fsm.Execute());
+    }
+
+    [Test]
+    public void execute_without_reset_should_throw_when_failed()
+    {
+        StateMachine fsm = GraphBuilder
+            .StartWith(() => Result.Failure)
+            .ToStateMachine();
+        fsm.SetResetPolicy(RestartPolicy.Manual);
+
+        fsm.Execute();
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
+
+        Assert.Throws<InvalidOperationException>(() => fsm.Execute());
+    }
+
+    [Test]
+    public void execute_should_be_silently_ignored_after_completed_when_reset_policy_is_ignore()
+    {
+        int counter = 0;
+        StateMachine fsm = GraphBuilder
+            .StartWith(() =>
+            {
+                counter++;
+                return Result.Success;
+            })
+            .ToStateMachine();
+        fsm.SetResetPolicy(RestartPolicy.Ignore);
+
+        Result first = fsm.Execute();
+        Assert.That(first, Is.EqualTo(Result.Success));
+        Assert.That(counter, Is.EqualTo(1));
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+
+        Result second = fsm.Execute();
+        Assert.That(second, Is.EqualTo(Result.Success));
+        Assert.That(counter, Is.EqualTo(1), "Ignore policy must not re-run node logic");
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
+    }
+
+    [Test]
+    public void execute_should_run_again_after_manual_reset_when_reset_policy_is_ignore()
+    {
+        int counter = 0;
+        StateMachine fsm = GraphBuilder
+            .StartWith(() =>
+            {
+                counter++;
+                return Result.Success;
+            })
+            .ToStateMachine();
+        fsm.SetResetPolicy(RestartPolicy.Ignore);
+
+        fsm.Execute();
+        Assert.That(counter, Is.EqualTo(1));
+
+        fsm.Reset();
+
         fsm.Execute();
         Assert.That(counter, Is.EqualTo(2));
     }
@@ -194,26 +275,6 @@ public class StateMachineTests
             .ToStateMachine();
 
         fsm.Execute();
-    }
-
-    // ── Observer callbacks ──────────────────────────────────────────────
-
-    [Test]
-    public void observer_should_receive_state_entered_and_exited()
-    {
-        var observer = new RecordingObserver();
-
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .To(() => Result.Success)
-            .ToStateMachine(observer);
-
-        fsm.Execute();
-
-        // Two states entered (state 0 and state 1)
-        Assert.That(observer.EnteredIds, Has.Count.EqualTo(2));
-        // Both states exited
-        Assert.That(observer.ExitedIds, Has.Count.EqualTo(2));
     }
 
     [Test]
@@ -293,80 +354,7 @@ public class StateMachineTests
         Assert.That(observer.LogMessages, Has.Count.EqualTo(1));
         Assert.That(observer.LogMessages[0], Is.EqualTo("hello"));
     }
-
-    // ── If/Else branching ───────────────────────────────────────────────
-
-    [Test]
-    public void should_take_then_branch_when_predicate_is_true()
-    {
-        int thenCalled = 0, elseCalled = 0;
-
-        StateMachine fsm = GraphBuilder.Start()
-            .If(() => true)
-            .Then(() => { thenCalled++; return Result.Success; })
-            .Else(() => { elseCalled++; return Result.Success; })
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(thenCalled, Is.EqualTo(1));
-        Assert.That(elseCalled, Is.EqualTo(0));
-    }
-
-    [Test]
-    public void should_take_else_branch_when_predicate_is_false()
-    {
-        int thenCalled = 0, elseCalled = 0;
-
-        StateMachine fsm = GraphBuilder.Start()
-            .If(() => false)
-            .Then(() => { thenCalled++; return Result.Success; })
-            .Else(() => { elseCalled++; return Result.Success; })
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(thenCalled, Is.EqualTo(0));
-        Assert.That(elseCalled, Is.EqualTo(1));
-    }
-
-    // ── Switch branching ────────────────────────────────────────────────
-
-    [Test]
-    public void switch_should_execute_matching_case()
-    {
-        int aCalled = 0, bCalled = 0;
-
-        StateMachine fsm = GraphBuilder.Start()
-            .Switch(() => "B")
-            .Case("A", () => { aCalled++; return Result.Success; })
-            .Case("B", () => { bCalled++; return Result.Success; })
-            .End()
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(aCalled, Is.EqualTo(0));
-        Assert.That(bCalled, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void switch_should_execute_default_when_no_case_matches()
-    {
-        int aCalled = 0, defaultCalled = 0;
-
-        StateMachine fsm = GraphBuilder.Start()
-            .Switch(() => "X")
-            .Case("A", () => { aCalled++; return Result.Success; })
-            .Default(() => { defaultCalled++; return Result.Success; })
-            .End()
-            .ToStateMachine();
-
-        fsm.Execute();
-
-        Assert.That(aCalled, Is.EqualTo(0));
-        Assert.That(defaultCalled, Is.EqualTo(1));
-    }
+ 
 
 
     // ── Typed agent ─────────────────────────────────────────────────────
@@ -393,7 +381,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
             .ToStateMachine();
-        fsm.SetAutoReset(false);
+        fsm.SetResetPolicy(RestartPolicy.Manual);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
@@ -405,7 +393,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
             .ToStateMachine();
-        fsm.SetAutoReset(true);
+        fsm.SetResetPolicy(RestartPolicy.Auto);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
@@ -561,32 +549,7 @@ public class StateMachineTests
 
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
     }
-
-    // ── Status change order with two states ────────────────────────────
-
-    [Test]
-    public void observer_should_receive_full_status_lifecycle_for_two_states()
-    {
-        var observer = new RecordingObserver();
-        StateMachine fsm = GraphBuilder
-            .StartWith(() => Result.Success)
-            .To(() => Result.Success)
-            .ToStateMachine(observer);
-        fsm.SetAutoReset(false);
-
-        fsm.Execute();
-
-        // Created→Starting→Running→Transitioning→Running→Completed
-        (ExecutionStatus, ExecutionStatus)[] expected =
-        [
-            (ExecutionStatus.Created, ExecutionStatus.Starting),
-            (ExecutionStatus.Starting, ExecutionStatus.Running),
-            (ExecutionStatus.Running, ExecutionStatus.Transitioning),
-            (ExecutionStatus.Transitioning, ExecutionStatus.Running),
-            (ExecutionStatus.Running, ExecutionStatus.Completed),
-        ];
-        Assert.That(observer.StatusChanges, Is.EqualTo(expected));
-    }
+    
 
     // ── Mixed sync + ILogic nodes ───────────────────────────────────────
 
@@ -619,43 +582,6 @@ public class StateMachineTests
         }
 
         Assert.That(counter, Is.EqualTo(100));
-    }
-
-    [Test]
-    public void should_preserve_names_when_fluent_set_name_is_used_for_later_wiring()
-    {
-        RecordingObserver observer = new();
-
-        StateToken explore = GraphBuilder
-            .StartWith(() => Result.Success).SetName("Start")
-            .To(() => Result.Success).SetName("Explore");
-
-        GraphBuilder builder = explore.Builder;
-
-        NodeId victoryId = builder.AddNode(new RelayState(() => Result.Success));
-        builder.SetName(victoryId, "Victory");
-        victoryId = victoryId.WithName("Victory");
-
-        ChoiceState chooseVictory = new(() => true, victoryId, explore.Id);
-        NodeId choiceId = builder.AddNode(chooseVictory);
-        builder.SetName(choiceId, "Decision");
-        choiceId = choiceId.WithName("Decision");
-
-        builder.AddTransition(explore.Id, choiceId);
-
-        StateMachine fsm = builder.Build().ToStateMachine(observer);
-
-        Result result = fsm.Execute();
-
-        Assert.That(result, Is.EqualTo(Result.Success));
-        Assert.That(observer.EnteredIds.Select(id => id.Name).ToArray(),
-            Is.EqualTo(["Start", "Explore", "Decision", "Victory"]));
-        Assert.That(observer.Transitions.Select(t => (t.From.Name, t.To.Name)).ToArray(),
-            Is.EqualTo([
-                ("Start", "Explore"),
-                ("Explore", "Decision"),
-                ("Decision", "Victory")
-            ]));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

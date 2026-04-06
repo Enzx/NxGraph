@@ -26,7 +26,9 @@ public class AsyncStateMachine : AsyncState
     private NodeId _current;
     private readonly NodeId _initial;
 
-    private int _autoReset = 1; // 1 = true, 0 = false (int for lock-free Volatile/Interlocked use)
+    // Reset behaviour after reaching a terminal status.
+    private RestartPolicy _restartPolicy = RestartPolicy.Auto;
+    private Result _terminalResult = Result.Success;
     private int _executeGate;
     private readonly Func<string, CancellationToken, ValueTask> _cachedLogReportCallback;
 
@@ -43,11 +45,21 @@ public class AsyncStateMachine : AsyncState
         // _statusInt already initialized to Created at field declaration; no transition needed.
     }
 
-    /// <summary>Enable/disable auto-reset to Ready after a terminal state.</summary>
-    public void SetAutoReset(bool enabled)
-    {
-        Volatile.Write(ref _autoReset, enabled ? 1 : 0);
-    }
+    /// <summary>
+    /// Controls how the machine behaves after reaching a terminal status.
+    /// <list type="bullet">
+    /// <item><see cref="RestartPolicy.Auto"/>: automatically resets to Ready after completion/failure/cancellation.</item>
+    /// <item><see cref="RestartPolicy.Manual"/>: requires explicit <see cref="Reset"/>; re-execution throws.</item>
+    /// <item><see cref="RestartPolicy.Ignore"/>: ignores further execution attempts and returns the terminal result until <see cref="Reset"/> is called.</item>
+    /// </list>
+    /// </summary>
+    public void SetRestartPolicy(RestartPolicy policy) => _restartPolicy = policy;
+
+    /// <summary>
+    /// Backwards-compatible switch for the legacy auto-reset behaviour.
+    /// <para>Maps to <see cref="RestartPolicy.Auto"/> (true) and <see cref="RestartPolicy.Manual"/> (false).</para>
+    /// </summary>
+    public void SetAutoReset(bool enabled) => _restartPolicy = enabled ? RestartPolicy.Auto : RestartPolicy.Manual;
 
     /// <summary>
     /// Reset to the initial node. Disallowed while Running/Transitioning.
@@ -100,6 +112,29 @@ public class AsyncStateMachine : AsyncState
             throw new InvalidOperationException("AsyncStateMachine is already executing.");
         }
 
+        // If we're terminal, apply reset policy.
+        ExecutionStatus status = Status;
+        if (status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+        {
+            switch (_restartPolicy)
+            {
+                case RestartPolicy.Ignore:
+                    // Ignore further execution attempts until a manual Reset() occurs.
+                    // We must release the gate so the current ExecuteAsync call can run OnRunAsync,
+                    // which will return the cached terminal result.
+                    Volatile.Write(ref _executeGate, 0);
+                    return;
+                case RestartPolicy.Manual:
+                    Volatile.Write(ref _executeGate, 0); // Release the gate before throwing.
+                    throw new InvalidOperationException(
+                        $"AsyncStateMachine is in terminal state '{status}'. Call Reset() before executing again.");
+                default:
+                    // Auto: tolerate unexpected terminal state by resetting on entry.
+                    await Reset(ct).ConfigureAwait(false);
+                    break;
+            }
+        }
+
         // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
         await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
         _current = _initial;
@@ -113,16 +148,25 @@ public class AsyncStateMachine : AsyncState
 
     protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
     {
+        // Ignore policy: once terminal, do not re-run.
+        ExecutionStatus status = Status;
+        if (_restartPolicy == RestartPolicy.Ignore &&
+            status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+        {
+            return _terminalResult;
+        }
+
         try
         {
             Result result = await InternalRunAsync(ct).ConfigureAwait(false);
+            _terminalResult = result;
 
             // If we get here, loop has returned a terminal result already.
             // Machine completion notification + optional auto-reset-to-Ready.
             await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
                 .ConfigureAwait(false);
 
-            if (Volatile.Read(ref _autoReset) != 0)
+            if (_restartPolicy == RestartPolicy.Auto)
             {
                 await Reset(ct).ConfigureAwait(false);
             }
@@ -134,7 +178,9 @@ public class AsyncStateMachine : AsyncState
             // TransitionTo(Cancelled) already fires OnStateMachineCancelled via NotifyMachineStatusChangeAsync.
             await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
 
-            if (Volatile.Read(ref _autoReset) != 0)
+            _terminalResult = Result.Failure;
+
+            if (_restartPolicy == RestartPolicy.Auto)
             {
                 // Use default token — ct is already cancelled at this point.
                 await Reset(default).ConfigureAwait(false);
@@ -151,7 +197,9 @@ public class AsyncStateMachine : AsyncState
             // TransitionTo(Failed) already fires OnStateMachineCompleted(Failure) via NotifyMachineStatusChangeAsync.
             await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
 
-            if (Volatile.Read(ref _autoReset) != 0)
+            _terminalResult = Result.Failure;
+
+            if (_restartPolicy == RestartPolicy.Auto)
             {
                 // Use default token — ct may be cancelled or faulted at this point.
                 await Reset(default).ConfigureAwait(false);
@@ -163,6 +211,9 @@ public class AsyncStateMachine : AsyncState
 
     protected override ValueTask OnExitAsync(CancellationToken ct)
     {
+        // For Ignore policy, OnEnterAsync returns early with the gate held.
+        // We want OnRunAsync to run and return the terminal result, and then
+        // OnExitAsync will release the gate in the normal way.
         Volatile.Write(ref _executeGate, 0);
         return ResultHelpers.CompletedTask;
     }
@@ -188,9 +239,9 @@ public class AsyncStateMachine : AsyncState
 
             LogicNode logicLogicNode = (LogicNode)node;
             Result result = await logicLogicNode.AsyncLogic.ExecuteAsync(ct).ConfigureAwait(false);
-            switch (result)
+            switch (result.Code)
             {
-                case Result.Success:
+                case Result.StatusCode.Success:
                 {
                     if (_observer is not null)
                     {
@@ -250,8 +301,12 @@ public class AsyncStateMachine : AsyncState
 
                     continue;
                 }
-                case Result.Failure:
+                case Result.StatusCode.Failure:
                     return Result.Failure;
+                case Result.StatusCode.Continue:
+                    throw new InvalidOperationException(
+                        $"Node '{_current}' returned Result.Continue, which is reserved for the " +
+                        "stepped-execution runtime. Node logic must return Success or Failure.");
                 default:
                     throw new InvalidOperationException("Unknown node result.");
             }
