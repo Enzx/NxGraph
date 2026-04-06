@@ -33,6 +33,43 @@ public static class Program
     {
         var repoRoot = FindRepoRoot();
 
+        var dotnet = DotNetLocator.Locate(preferMajor: 8);
+
+        // Preflight: print which dotnet is being used and basic SDK info.
+        // This helps diagnose Windows-specific failures where a process fails to start
+        // (e.g. bad PATH, broken .NET install, antivirus interference) and manifests as
+        // a negative exit code inside SimpleExec.
+        Target("info", async () =>
+        {
+            Console.WriteLine($"NxGraph.Build: Working directory: {repoRoot}");
+            try
+            {
+                Console.WriteLine($"NxGraph.Build: Using dotnet: {dotnet.ExecutablePath}");
+                if (!string.IsNullOrWhiteSpace(dotnet.Why))
+                    Console.WriteLine($"NxGraph.Build: dotnet selection: {dotnet.Why}");
+                if (dotnet.Candidates.Count > 0)
+                {
+                    Console.WriteLine("NxGraph.Build: dotnet candidates:");
+                    foreach (var c in dotnet.Candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+                        Console.WriteLine($"  - {c}");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"NxGraph.Build: Failed to resolve dotnet on PATH: {e.Message}");
+            }
+
+            // Don't fail the build if --info fails; it's diagnostic only.
+            try
+            {
+                await RunAsync(dotnet.ExecutablePath, "--info", workingDirectory: repoRoot);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"NxGraph.Build: dotnet --info failed: {e.Message}");
+            }
+        });
+
         // ── Core build targets ──────────────────────────────────────
 
         Target("clean", () =>
@@ -42,24 +79,23 @@ public static class Program
 
         Target("restore", async () =>
         {
-            await RunAsync("dotnet", "restore", workingDirectory: repoRoot);
+            await RunDotNet(repoRoot, "restore");
         });
 
         Target("build", DependsOn("restore"), async () =>
         {
             var config = OptionalEnv("CONFIGURATION") ?? "Release";
-            await RunAsync("dotnet", $"build --no-restore --configuration {config}", workingDirectory: repoRoot);
+            await RunDotNet(repoRoot, $"build --no-restore --configuration {config}");
         });
 
         Target("test", DependsOn("build"), async () =>
         {
             var config = OptionalEnv("CONFIGURATION") ?? "Release";
             var threshold = OptionalEnv("COVERAGE_THRESHOLD") ?? "0";
-            await RunAsync("dotnet",
+            await RunDotNet(repoRoot,
                 $"test --no-build --configuration {config} --verbosity normal " +
                 $"--collect:\"XPlat Code Coverage\" " +
-                $"/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold={threshold}",
-                workingDirectory: repoRoot);
+                $"/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold={threshold}");
         });
 
         // ci = restore → build → test (via dependency chain)
@@ -97,7 +133,7 @@ public static class Program
                 Console.WriteLine($"\n→ Packing {label}...");
                 var packArgs = PackArgs(project, version, artifactsDir,
                     repoUrl: repoUrl, repoBranch: repoBranch, repoCommit: repoCommit);
-                await RunAsync("dotnet", string.Join(" ", packArgs), workingDirectory: repoRoot);
+                await RunDotNet(repoRoot, string.Join(" ", packArgs));
             }
 
             Console.WriteLine($"\nArtifacts in {artifactsDir}:");
@@ -116,19 +152,17 @@ public static class Program
                 throw new InvalidOperationException($"No .nupkg files found in {artifactsDir}");
 
             Console.WriteLine("\n→ Pushing .nupkg...");
-            await RunAsync("dotnet",
+            await RunDotNet(repoRoot,
                 $"nuget push \"{Path.Combine(artifactsDir, "*.nupkg")}\" " +
-                $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate",
-                workingDirectory: repoRoot);
+                $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate");
 
             var snupkgs = Directory.GetFiles(artifactsDir, "*.snupkg");
             if (snupkgs.Length > 0)
             {
                 Console.WriteLine("\n→ Pushing .snupkg...");
-                await RunAsync("dotnet",
+                await RunDotNet(repoRoot,
                     $"nuget push \"{Path.Combine(artifactsDir, "*.snupkg")}\" " +
-                    $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate",
-                    workingDirectory: repoRoot);
+                    $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate");
             }
         });
 
@@ -163,6 +197,156 @@ public static class Program
         });
 
         await RunTargetsAndExitAsync(args);
+    }
+
+    private static async Task RunDotNet(string workingDirectory, string args)
+    {
+        try
+        {
+            var dotnet = DotNetLocator.Locate(preferMajor: 8);
+            await RunAsync(dotnet.ExecutablePath, args, workingDirectory: workingDirectory);
+        }
+        catch (SimpleExec.ExitCodeException e)
+        {
+            // SimpleExec sometimes surfaces Windows process start failures or hard crashes as
+            // unusual negative exit codes. Provide actionable hints.
+            var dotnetPath = SafeResolveExecutablePath("dotnet");
+            throw new InvalidOperationException(
+                $"dotnet {args} failed with exit code {e.ExitCode}. " +
+                $"WorkingDirectory='{workingDirectory}'. dotnet='{dotnetPath ?? "<not found>"}'. " +
+                "Try running the same command manually with higher verbosity: 'dotnet " + args + " -v diag'. " +
+                "On Windows, negative exit codes often indicate the process failed to start (broken install/PATH) or was terminated by policy (AV/AppLocker).",
+                e);
+        }
+    }
+
+    private static class DotNetLocator
+    {
+        internal sealed record Result(string ExecutablePath, string? Why, List<string> Candidates);
+
+        public static Result Locate(int preferMajor)
+        {
+            var candidates = new List<string>();
+
+            void AddCandidate(string? path)
+            {
+                if (string.IsNullOrWhiteSpace(path)) return;
+                candidates.Add(path);
+            }
+
+            // 1) DOTNET_ROOT (and DOTNET_ROOT(x86)) are the most explicit ways to point to an install.
+            var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+            if (!string.IsNullOrWhiteSpace(dotnetRoot))
+                AddCandidate(Path.Combine(dotnetRoot, "dotnet.exe"));
+
+            var dotnetRootX86 = Environment.GetEnvironmentVariable("DOTNET_ROOT(x86)");
+            if (!string.IsNullOrWhiteSpace(dotnetRootX86))
+                AddCandidate(Path.Combine(dotnetRootX86, "dotnet.exe"));
+
+            // 2) PATH resolution.
+            AddCandidate(ResolveExecutablePath("dotnet"));
+
+            // 3) Default install locations on Windows.
+            if (OperatingSystem.IsWindows())
+            {
+                AddCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"));
+                AddCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet", "dotnet.exe"));
+                AddCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "dotnet.exe"));
+
+                // 4) Registry install location (best-effort).
+                try
+                {
+                    using var baseKey = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64);
+                    using var key = baseKey.OpenSubKey(@"SOFTWARE\dotnet\Setup\InstalledVersions\x64");
+                    var installLocation = key?.GetValue("InstallLocation") as string;
+                    if (!string.IsNullOrWhiteSpace(installLocation))
+                        AddCandidate(Path.Combine(installLocation, "dotnet.exe"));
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            // De-dup + keep only existing files.
+            var existing = candidates
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(File.Exists)
+                .ToList();
+
+            // Prefer one that has SDK folder with the requested major version.
+            foreach (var dotnetExe in existing)
+            {
+                var root = Path.GetDirectoryName(dotnetExe);
+                if (string.IsNullOrWhiteSpace(root))
+                    continue;
+
+                var sdkDir = Path.Combine(root, "sdk");
+                if (!Directory.Exists(sdkDir))
+                    continue;
+
+                try
+                {
+                    var hasPreferredMajor = Directory.GetDirectories(sdkDir)
+                        .Select(Path.GetFileName)
+                        .OfType<string>()
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Any(n => n.StartsWith(preferMajor + ".", StringComparison.OrdinalIgnoreCase));
+
+                    if (hasPreferredMajor)
+                        return new Result(dotnetExe, $"Found SDK {preferMajor}.x under '{sdkDir}'", existing);
+                }
+                catch
+                {
+                    Console.WriteLine($"Warning: Failed to inspect SDK directory '{sdkDir}' for dotnet at '{dotnetExe}'. Skipping SDK version check for this candidate.");
+                }
+            }
+
+            // Otherwise just use the first existing candidate.
+            if (existing.Count > 0)
+                return new Result(existing[0], "Fell back to first discovered dotnet.exe", existing);
+
+            // Last resort: let CreateProcess resolve it (will likely fail, but with clearer message from our wrapper).
+            return new Result("dotnet", "No dotnet.exe found in common locations; falling back to PATH resolution", candidates);
+        }
+    }
+
+    private static string? SafeResolveExecutablePath(string name)
+    {
+        try { return ResolveExecutablePath(name); }
+        catch { return null; }
+    }
+
+    private static string? ResolveExecutablePath(string name)
+    {
+        // Cross-platform-ish resolution for the most common case: look on PATH.
+        // We intentionally keep this lightweight and purely diagnostic.
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var paths = pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var candidates = new List<string>();
+        if (OperatingSystem.IsWindows())
+        {
+            candidates.Add(name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe");
+            candidates.Add(name);
+        }
+        else
+        {
+            candidates.Add(name);
+        }
+
+        foreach (var dir in paths)
+        {
+            foreach (var file in candidates)
+            {
+                var full = Path.Combine(dir, file);
+                if (File.Exists(full))
+                    return full;
+            }
+        }
+
+        return null;
     }
 
     // ── UPM staging implementations ────────────────────────────────
@@ -247,9 +431,7 @@ public static class Program
         ClearStagedSource(repoRoot);
         ClearStagedPlugins(repoRoot);
 
-        // Build via SimpleExec
-        await RunAsync("dotnet", $"build \"{projectPath}\" -c Release -f netstandard2.1",
-            workingDirectory: repoRoot);
+        await RunDotNet(repoRoot, $"build \"{projectPath}\" -c Release -f netstandard2.1");
 
         // Copy outputs
         var buildDir = BuildOutput(repoRoot);
