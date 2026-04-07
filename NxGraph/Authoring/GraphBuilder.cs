@@ -151,11 +151,11 @@ public sealed partial class GraphBuilder
 
 
     /// <summary>
-    /// Creates a new graph whose first (start) node runs <paramref name="startAsyncLogic"/>.
+    /// Creates a new graph whose first (start) node runs <paramref name="startAsyncLogic"/> asynchronously.
     /// </summary>
-    /// <param name="startAsyncLogic">The logic that will be the starting point of the graph.</param>
+    /// <param name="startAsyncLogic">The async logic that will be the starting point of the graph.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
-    public static StateToken StartWith(IAsyncLogic startAsyncLogic)
+    public static StateToken StartWithAsync(IAsyncLogic startAsyncLogic)
     {
         GraphBuilder builder = new();
         NodeId id = builder.AddNode(startAsyncLogic, true);
@@ -163,7 +163,7 @@ public sealed partial class GraphBuilder
     }
 
     /// <summary>
-    /// Creates a new graph whose first (start) node runs <paramref name="startSyncLogic"/>.
+    /// Creates a new graph whose first (start) node runs <paramref name="startSyncLogic"/> synchronously.
     /// </summary>
     /// <param name="startSyncLogic">The synchronous logic that will be the starting point of the graph.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
@@ -175,14 +175,14 @@ public sealed partial class GraphBuilder
     }
 
     /// <summary>
-    /// Creates a new graph whose first (start) node executes <paramref name="run"/>.
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/> asynchronously.
     /// </summary>
-    /// <param name="run">The function to execute in the start state.</param>
+    /// <param name="run">The async function to execute in the start state.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
-    public static StateToken StartWith(Func<CancellationToken, ValueTask<Result>> run)
+    public static StateToken StartWithAsync(Func<CancellationToken, ValueTask<Result>> run)
     {
         Guard.NotNull(run, nameof(run));
-        return StartWith(new AsyncRelayState(run));
+        return StartWithAsync(new AsyncRelayState(run));
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ public sealed partial class GraphBuilder
 
     /// <summary>
     /// Begins building a new graph without adding a start node yet.
-    /// Chain with <c>.If()</c>, <c>.Switch()</c>, <c>.WaitFor()</c>, or <c>.To()</c> to define the start.
+    /// Chain with <c>.If()</c>, <c>.Switch()</c>, <c>.WaitForAsync()</c>, or <c>.To()</c> to define the start.
     /// </summary>
     /// <returns>A <see cref="StartToken"/> that allows fluent configuration of the first state.</returns>
     public static StartToken Start()

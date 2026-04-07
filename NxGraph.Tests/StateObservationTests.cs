@@ -87,8 +87,8 @@ public class StateObservationTests
     {
         FsmObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -101,8 +101,8 @@ public class StateObservationTests
     {
         FsmObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         CancellationTokenSource cts = new();
@@ -118,8 +118,8 @@ public class StateObservationTests
     {
         FsmObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
         fsm.SetAutoReset(false);
         await fsm.ExecuteAsync();

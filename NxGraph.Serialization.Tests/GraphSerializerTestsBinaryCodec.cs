@@ -11,7 +11,7 @@ public class GraphSerializerTestsBinaryCodec
 
 
     private static Graph BuildPair(string a, string b)
-        => GraphBuilder.StartWith(new DummyState { Data = a }).To(new DummyState { Data = b }).Build();
+        => GraphBuilder.StartWithAsync(new DummyState { Data = a }).ToAsync(new DummyState { Data = b }).Build();
 
     [Test]
     public async Task Binary_roundtrip_preserves_structure_and_logic()

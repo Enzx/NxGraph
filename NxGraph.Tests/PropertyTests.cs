@@ -26,15 +26,15 @@ public class PropertyTests
     public bool Director_branching_should_not_create_cycles_without_terminal_nodes(NonNegativeInt depth)
     {
         int n = Math.Min(depth.Get, 5);
-        StateToken token = GraphBuilder.StartWith(_ => ResultHelpers.Success);
+        StateToken token = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success);
         GraphBuilder builder = token.Builder;
         for (int i = 0; i < n; i++)
         {
             token = token
                 .If(() => true)
-                .Then(_ => ResultHelpers.Success)
-                .Else(_ => ResultHelpers.Success)
-                .WaitFor(TimeSpan.Zero);
+                .ThenAsync(_ => ResultHelpers.Success)
+                .ElseAsync(_ => ResultHelpers.Success)
+                .WaitForAsync(TimeSpan.Zero);
         }
 
         Graph graph = token.Build();
@@ -55,10 +55,10 @@ public class PropertyTests
         }
 
         GraphSerializer serializer = new(new DummyLogicTextCodec());
-        StateToken token = GraphBuilder.StartWith(new DummyState { Data = labels[0] });
+        StateToken token = GraphBuilder.StartWithAsync(new DummyState { Data = labels[0] });
         for (int i = 1; i < labels.Length; i++)
         {
-            token = token.To(new DummyState { Data = labels[i] });
+            token = token.ToAsync(new DummyState { Data = labels[i] });
         }
 
         Graph graph = token.Build();
@@ -94,8 +94,8 @@ public class PropertyTests
         if (string.IsNullOrWhiteSpace(name))
             return true;
 
-        StateToken start = GraphBuilder.StartWith(_ => ResultHelpers.Success);
-        StateToken node1 = start.To(_ => ResultHelpers.Success).SetName(name);
+        StateToken start = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success);
+        StateToken node1 = start.ToAsync(_ => ResultHelpers.Success).SetName(name);
         Graph graph = node1.Build();
 
         MermaidExportOptions opts = new()

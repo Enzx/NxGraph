@@ -78,7 +78,21 @@ public static class GraphValidator
             result.Add(sev, "No terminal path reachable from Start (all paths have outgoing transitions).", start);
         }
 
-        // 4) If AllNodes are supplied, check for unreachable nodes and duplicate names
+        // 4) Strict sync validation: all nodes must implement ILogic
+        if (options.StrictSyncOnly)
+        {
+            foreach (int index in visited)
+            {
+                if (graph.TryGetNodeByIndex(index, out INode? node) && node!.Logic is null)
+                {
+                    result.Add(Severity.Error,
+                        "Node does not implement ILogic and cannot be executed by sync StateMachine.",
+                        node.Id);
+                }
+            }
+        }
+
+        // 5) If AllNodes are supplied, check for unreachable nodes and duplicate names
         if (options.AllNodes is { Count: > 0 } all)
         {
             // Unreachable detection

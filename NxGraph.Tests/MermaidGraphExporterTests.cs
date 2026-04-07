@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Diagnostics.Export;
 using NxGraph.Graphs;
 
@@ -12,7 +12,7 @@ public class MermaidGraphExporterTests
     public void should_emit_header_and_start_node_for_single_terminal_graph()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -36,8 +36,8 @@ public class MermaidGraphExporterTests
     public void should_link_linear_two_nodes_and_use_capital_End()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -57,8 +57,8 @@ public class MermaidGraphExporterTests
     public void should_support_top_to_bottom_direction()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -76,7 +76,7 @@ public class MermaidGraphExporterTests
     public void should_disable_terminal_node_when_opted_out()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -95,8 +95,8 @@ public class MermaidGraphExporterTests
     public void should_emit_custom_terminal_label_but_keep_symbol_End()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -116,8 +116,8 @@ public class MermaidGraphExporterTests
     public void should_hide_indices_when_option_disabled()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -136,7 +136,7 @@ public class MermaidGraphExporterTests
     public void should_include_title_comment_when_provided()
     {
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();
@@ -155,10 +155,10 @@ public class MermaidGraphExporterTests
     {
         const bool condition = true;
         Graph graph = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success) // n0
+            .StartWithAsync(_ => ResultHelpers.Success) // n0
             .If(() => condition)
-            .Then(_ => ResultHelpers.Success)
-            .Else(_ => ResultHelpers.Success)
+            .ThenAsync(_ => ResultHelpers.Success)
+            .ElseAsync(_ => ResultHelpers.Success)
             .Build();
 
         MermaidGraphExporter exporter = new();

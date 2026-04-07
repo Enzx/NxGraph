@@ -50,42 +50,42 @@ public class NxFsmBenchmarks
     public void Setup()
     {
         _singleSuccess = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
-        StateToken gb10 = GraphBuilder.StartWith(_ => ResultHelpers.Success);
+        StateToken gb10 = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success);
         for (int i = 0; i < 9; i++)
         {
-            gb10 = gb10.To(_ => ResultHelpers.Success);
+            gb10 = gb10.ToAsync(_ => ResultHelpers.Success);
         }
 
         _chain10 = gb10.ToAsyncStateMachine();
 
-        StateToken gb50 = GraphBuilder.StartWith(_ => ResultHelpers.Success);
+        StateToken gb50 = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success);
         for (int i = 0; i < 49; i++)
         {
-            gb50 = gb50.To(_ => ResultHelpers.Success);
+            gb50 = gb50.ToAsync(_ => ResultHelpers.Success);
         }
 
         _chain50 = gb50.ToAsyncStateMachine();
 
         _withObserver = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(new NoopObserver());
 
         _withTimeoutWrapper = GraphBuilder
             .Start()
-            .ToWithTimeout(_ => ValueTask.FromResult(Result.Success), 1.Seconds(), TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(_ => ValueTask.FromResult(Result.Success), 1.Seconds(), TimeoutBehavior.Fail)
             .ToAsyncStateMachine();
 
         // Director that sequences through 10 nodes
-        StateToken builder = GraphBuilder.StartWith(_ => ResultHelpers.Success);
+        StateToken builder = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success);
         for (int i = 0; i < 9; i++)
         {
-            builder = builder.To(_ => ResultHelpers.Success);
+            builder = builder.ToAsync(_ => ResultHelpers.Success);
         }
 
-        _directorLinear10 = builder.To(new LinearDirector(10)).ToAsyncStateMachine();
+        _directorLinear10 = builder.ToAsync(new LinearDirector(10)).ToAsyncStateMachine();
     }
 
     // ---- Benchmarks ----

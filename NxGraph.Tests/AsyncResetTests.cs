@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 
@@ -12,7 +12,7 @@ public class AsyncResetTests
     public async Task reset_from_completed_should_move_to_ready()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -31,7 +31,7 @@ public class AsyncResetTests
     public async Task reset_from_failed_should_move_to_ready()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -51,7 +51,7 @@ public class AsyncResetTests
     {
         using CancellationTokenSource cts = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(async ct =>
+            .StartWithAsync(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(5000, ct);
                 return Result.Success;
@@ -77,7 +77,7 @@ public class AsyncResetTests
     public async Task reset_from_created_should_succeed_immediately()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         Result resetResult = await fsm.Reset();
@@ -93,7 +93,7 @@ public class AsyncResetTests
     public async Task reset_while_running_should_throw()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
+            .Start().WaitForAsync(1.Seconds()).ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -110,7 +110,7 @@ public class AsyncResetTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 counter++;
                 return ResultHelpers.Success;
@@ -131,7 +131,7 @@ public class AsyncResetTests
     public async Task execute_without_reset_should_throw_when_completed()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -145,7 +145,7 @@ public class AsyncResetTests
     public async Task execute_without_reset_should_throw_when_failed()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -160,7 +160,7 @@ public class AsyncResetTests
     {
         using CancellationTokenSource cts = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(async ct =>
+            .StartWithAsync(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(5000, ct);
                 return Result.Success;
@@ -177,4 +177,5 @@ public class AsyncResetTests
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
     }
 }
+
 

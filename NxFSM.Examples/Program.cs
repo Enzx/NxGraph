@@ -1,4 +1,4 @@
-﻿// See https://aka.ms/new-console-template for more information
+// See https://aka.ms/new-console-template for more information
 
 using NxFSM.Examples;
 using NxFSM.Examples.DungeonCrawler;
@@ -12,17 +12,17 @@ IAsyncStateMachineObserver observer = new ConsoleStateObserver();
 Console.WriteLine("Simple FSM Example");
 Console.WriteLine();
 AsyncStateMachine fsm = GraphBuilder
-    .StartWith(_ =>
+    .StartWithAsync(_ =>
     {
         Console.WriteLine("Initializing workflow...");
         return ResultHelpers.Success;
     }).SetName("Initial")
-    .To(_ =>
+    .ToAsync(_ =>
     {
         Console.WriteLine("Running first step...");
         return ResultHelpers.Success;
     }).SetName("Second")
-    .To(_ =>
+    .ToAsync(_ =>
     {
         Console.WriteLine("Running second step...");
         return ResultHelpers.Success;
@@ -107,10 +107,10 @@ namespace NxFSM.Examples
             AttackState attackState = new();
             PatrolState patrolState = new();
             StateMachine = GraphBuilder
-                .StartWith(idleState)
+                .StartWithAsync(idleState)
                 .If(() => Target.IsTargetInRange)
-                .Then(attackState).WaitFor(1.Seconds()).To(idleState)
-                .Else(patrolState)
+                .ThenAsync(attackState).WaitForAsync(1.Seconds()).ToAsync(idleState)
+                .ElseAsync(patrolState)
                 .ToAsyncStateMachine<AiEnemy>()
                 .WithAgent(this);
         }

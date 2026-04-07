@@ -12,8 +12,8 @@ public class TransitionFlowTests
     public async Task should_traverse_two_states_and_succeed()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         Result result = await fsm.ExecuteAsync();
 
@@ -24,8 +24,8 @@ public class TransitionFlowTests
     public async Task should_stop_on_failure_of_second_state()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
         Result result = await fsm.ExecuteAsync();
 

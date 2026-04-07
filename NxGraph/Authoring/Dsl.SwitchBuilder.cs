@@ -34,9 +34,9 @@ public static partial class Dsl
         }
 
         /// <summary>
-        /// Adds a case to the switch statement.
+        /// Adds an async case to the switch statement.
         /// </summary>
-        public SwitchBuilder<TKey> Case(TKey key, IAsyncLogic asyncLogic)
+        public SwitchBuilder<TKey> CaseAsync(TKey key, IAsyncLogic asyncLogic)
         {
             NodeId id = _builder.AddNode(asyncLogic);
             _map[key] = id;
@@ -44,7 +44,7 @@ public static partial class Dsl
         }
 
         /// <summary>
-        /// Adds a case with synchronous logic to the switch statement.
+        /// Adds a sync case to the switch statement.
         /// </summary>
         public SwitchBuilder<TKey> Case(TKey key, ILogic syncLogic)
         {
@@ -54,11 +54,11 @@ public static partial class Dsl
         }
 
         /// <summary>
-        /// Adds a default case to the switch statement.
+        /// Adds an async default case to the switch statement.
         /// </summary>
         /// <param name="asyncLogic">The logic to execute if no case matches.</param>
         /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>
-        public SwitchBuilder<TKey> Default(IAsyncLogic asyncLogic)
+        public SwitchBuilder<TKey> DefaultAsync(IAsyncLogic asyncLogic)
         {
             NodeId defaultNode = _builder.AddNode(asyncLogic);
             _switchNode.SetDefault(defaultNode);
@@ -66,7 +66,7 @@ public static partial class Dsl
         }
 
         /// <summary>
-        /// Adds a default case with synchronous logic to the switch statement.
+        /// Adds a sync default case to the switch statement.
         /// </summary>
         /// <param name="syncLogic">The synchronous logic to execute if no case matches.</param>
         /// <returns>Returns the current instance of <see cref="SwitchBuilder{TKey}"/>.</returns>

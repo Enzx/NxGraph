@@ -23,10 +23,10 @@ public class SwitchStateTests
         AsyncStateMachine fsm = GraphBuilder
             .Start()
             .Switch(() => mode)
-            .Case(Mode.A, new AsyncRelayState(_ => ResultHelpers.Failure))
-            .Case(Mode.B, new AsyncRelayState(_ => ResultHelpers.Success))
-            .Case(Mode.C, new AsyncRelayState(_ => ResultHelpers.Failure))
-            .Default(new AsyncRelayState(_ => ResultHelpers.Failure))
+            .CaseAsync(Mode.A, new AsyncRelayState(_ => ResultHelpers.Failure))
+            .CaseAsync(Mode.B, new AsyncRelayState(_ => ResultHelpers.Success))
+            .CaseAsync(Mode.C, new AsyncRelayState(_ => ResultHelpers.Failure))
+            .DefaultAsync(new AsyncRelayState(_ => ResultHelpers.Failure))
             .End()
             .Build().ToAsyncStateMachine();
 
@@ -41,9 +41,9 @@ public class SwitchStateTests
 
         AsyncStateMachine fsm = GraphBuilder.Start()
             .Switch(() => selector)
-            .Case(0, _ => ResultHelpers.Failure)
-            .Case(1, _ => ResultHelpers.Failure)
-            .Default(_ => ResultHelpers.Success)
+            .CaseAsync(0, _ => ResultHelpers.Failure)
+            .CaseAsync(1, _ => ResultHelpers.Failure)
+            .DefaultAsync(_ => ResultHelpers.Success)
             .End()
             .ToAsyncStateMachine();
 

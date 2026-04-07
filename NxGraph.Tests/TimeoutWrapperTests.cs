@@ -13,7 +13,7 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeout(new AsyncRelayState(
+            .ToWithTimeoutAsync(new AsyncRelayState(
                     async ct =>
                     {
                         await Task.Delay(1000, ct);
@@ -32,7 +32,7 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine throwing = GraphBuilder
             .Start()
-            .ToWithTimeout(new AsyncRelayState(async ct =>
+            .ToWithTimeoutAsync(new AsyncRelayState(async ct =>
                 {
                     await Task.Delay(1000, ct);
                     return Result.Success;
@@ -51,7 +51,7 @@ public class TimeoutWrapperTests
 
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeout(async ct =>
+            .ToWithTimeoutAsync(async ct =>
             {
                 await Task.Delay(1000, ct);
                 return Result.Success;
@@ -72,12 +72,12 @@ public class TimeoutWrapperTests
         // Using StartWithTimeout should throw when timeout <= 0
         Assert.Throws<ArgumentOutOfRangeException>(() =>
         {
-            StateToken _ = Dsl.StartWithTimeout(_ => ResultHelpers.Success, TimeSpan.Zero);
+            StateToken _ = Dsl.StartWithTimeoutAsync(_ => ResultHelpers.Success, TimeSpan.Zero);
         });
         Assert.Throws<ArgumentOutOfRangeException>(() =>
         {
             StateToken _ =
-                Dsl.StartWithTimeout(_ => ResultHelpers.Success, TimeSpan.FromMilliseconds(-1));
+                Dsl.StartWithTimeoutAsync(_ => ResultHelpers.Success, TimeSpan.FromMilliseconds(-1));
         });
     }
 
@@ -87,7 +87,7 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeout(async ct =>
+            .ToWithTimeoutAsync(async ct =>
             {
                 await Task.Delay(50, ct); // finishes well before timeout
                 return Result.Success;

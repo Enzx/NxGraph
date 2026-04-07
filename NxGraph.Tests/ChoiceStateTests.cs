@@ -16,8 +16,8 @@ public class ChoiceStateTests
 
         AsyncStateMachine fsm = GraphBuilder.Start()
             .If(() => flag)
-            .Then(_ => ResultHelpers.Success)
-            .Else(_ => ResultHelpers.Failure)
+            .ThenAsync(_ => ResultHelpers.Success)
+            .ElseAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();
@@ -32,8 +32,8 @@ public class ChoiceStateTests
         AsyncStateMachine fsm = GraphBuilder
             .Start()
             .If(() => flag)
-            .Then(_ => ResultHelpers.Failure)
-            .Else(_ => ResultHelpers.Success)
+            .ThenAsync(_ => ResultHelpers.Failure)
+            .ElseAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();

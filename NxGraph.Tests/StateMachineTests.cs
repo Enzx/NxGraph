@@ -558,7 +558,7 @@ public class StateMachineTests
     {
         // AsyncRelayState (async only) does not implement ILogic.
         StateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => ResultHelpers.Success))
+            .StartWithAsync(new AsyncRelayState(_ => ResultHelpers.Success))
             .ToStateMachine();
 
         Assert.Throws<InvalidOperationException>(() => fsm.Execute());

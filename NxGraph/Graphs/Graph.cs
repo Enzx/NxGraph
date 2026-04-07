@@ -112,6 +112,25 @@ public sealed class Graph : INode, IGraph
         return true;
     }
 
+    /// <summary>
+    /// Attempts to retrieve a node by its index.
+    /// </summary>
+    /// <param name="index">The index of the node to retrieve.</param>
+    /// <param name="node">The node corresponding to the given index, if found; otherwise, <c>null</c>.</param>
+    /// <returns><c>true</c> if the node exists; otherwise, <c>false</c>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetNodeByIndex(int index, out INode? node)
+    {
+        if ((uint)index >= (uint)_nodes.Length)
+        {
+            node = null;
+            return false;
+        }
+
+        node = _nodes[index];
+        return true;
+    }
+
 
     /// <summary>
     /// Sets the agent for all nodes in the graph that implement <see cref="IAgentSettable{TAgent}"/>.
