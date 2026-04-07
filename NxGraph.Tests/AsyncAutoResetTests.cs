@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 
@@ -8,13 +8,13 @@ namespace NxGraph.Tests;
 [Category("async_auto_reset")]
 public class AsyncAutoResetTests
 {
-    // ── Success paths ──────────────────────────────────────────────────
+    // -- Success paths --------------------------------------------------
 
     [Test]
     public async Task status_should_be_ready_after_success_with_auto_reset()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetRestartPolicy(RestartPolicy.Auto);
 
@@ -27,7 +27,7 @@ public class AsyncAutoResetTests
     public async Task status_should_be_completed_after_success_without_auto_reset()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetRestartPolicy(RestartPolicy.Manual);
 
@@ -36,13 +36,13 @@ public class AsyncAutoResetTests
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
     }
 
-    // ── Failure paths ──────────────────────────────────────────────────
+    // -- Failure paths --------------------------------------------------
 
     [Test]
     public async Task status_should_be_failed_after_failure_without_auto_reset()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -55,7 +55,7 @@ public class AsyncAutoResetTests
     public async Task should_auto_reset_to_ready_after_failure()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(true);
 
@@ -64,13 +64,13 @@ public class AsyncAutoResetTests
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
     }
 
-    // ── Exception paths ────────────────────────────────────────────────
+    // -- Exception paths ------------------------------------------------
 
     [Test]
     public async Task should_auto_reset_to_ready_after_exception()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => throw new ApplicationException("boom")))
+            .StartWithAsync(new AsyncRelayState(_ => throw new ApplicationException("boom")))
             .ToAsyncStateMachine();
         fsm.SetRestartPolicy(RestartPolicy.Auto);
 
@@ -82,7 +82,7 @@ public class AsyncAutoResetTests
     public async Task status_should_be_failed_after_exception_without_auto_reset()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => throw new ApplicationException("boom")))
+            .StartWithAsync(new AsyncRelayState(_ => throw new ApplicationException("boom")))
             .ToAsyncStateMachine();
         fsm.SetRestartPolicy(RestartPolicy.Manual);
 
@@ -90,14 +90,14 @@ public class AsyncAutoResetTests
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
     }
 
-    // ── Cancellation paths ─────────────────────────────────────────────
+    // -- Cancellation paths ---------------------------------------------
 
     [Test]
     public async Task should_auto_reset_to_ready_after_cancellation()
     {
         using CancellationTokenSource cts = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(async ct =>
+            .StartWithAsync(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(5000, ct);
                 return Result.Success;
@@ -117,7 +117,7 @@ public class AsyncAutoResetTests
     {
         using CancellationTokenSource cts = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(async ct =>
+            .StartWithAsync(new AsyncRelayState(async ct =>
             {
                 await Task.Delay(5000, ct);
                 return Result.Success;
@@ -137,7 +137,7 @@ public class AsyncAutoResetTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 counter++;
                 return new ValueTask<Result>(Result.Success);
@@ -161,7 +161,7 @@ public class AsyncAutoResetTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 counter++;
                 return new ValueTask<Result>(Result.Success);
@@ -178,4 +178,5 @@ public class AsyncAutoResetTests
         Assert.That(counter, Is.EqualTo(2));
     }
 }
+
 

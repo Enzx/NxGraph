@@ -16,8 +16,8 @@ public class WaitStateExecutionTests
         const float errorMargin = 0.1f;
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .WaitFor(delay.Seconds())
-            .To(_ => ResultHelpers.Success)
+            .WaitForAsync(delay.Seconds())
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -36,8 +36,8 @@ public class WaitStateExecutionTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .WaitFor(0.Seconds())
-            .To(_ => ResultHelpers.Success)
+            .WaitForAsync(0.Seconds())
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -56,8 +56,8 @@ public class WaitStateExecutionTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .WaitFor(-1.Seconds()) // negative delay should be treated as immediate
-            .To(_ => ResultHelpers.Success)
+            .WaitForAsync(-1.Seconds()) // negative delay should be treated as immediate
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -77,8 +77,8 @@ public class WaitStateExecutionTests
         CancellationTokenSource cts = new();
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .WaitFor(5.Seconds())
-            .To(_ => ResultHelpers.Success)
+            .WaitForAsync(5.Seconds())
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
 
         ValueTask<Result> task = fsm.ExecuteAsync(cts.Token);

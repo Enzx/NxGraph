@@ -18,4 +18,10 @@ public sealed class GraphValidationOptions(IReadOnlyList<NodeId>? allNodes = nul
     /// If true, emit an Error when no terminal path exists from Start; otherwise emit a Warning.
     /// </summary>
     public bool StrictNoTerminalPath { get; set; }
+
+    /// <summary>
+    /// If true, emit an Error when any node does not implement <see cref="ILogic"/> (sync-only graphs).
+    /// Use this to validate that a graph can be executed by the synchronous <c>StateMachine</c> runtime.
+    /// </summary>
+    public bool StrictSyncOnly { get; set; }
 }

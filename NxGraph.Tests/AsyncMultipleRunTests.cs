@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 
@@ -13,7 +13,7 @@ public class AsyncMultipleRunTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 counter++;
                 return ResultHelpers.Success;
@@ -35,7 +35,7 @@ public class AsyncMultipleRunTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 counter++;
                 return ResultHelpers.Success;
@@ -58,9 +58,9 @@ public class AsyncMultipleRunTests
     {
         int counter = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
-            .To(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
-            .To(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
+            .StartWithAsync(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
+            .ToAsync(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
+            .ToAsync(new AsyncRelayState(_ => { counter++; return ResultHelpers.Success; }))
             .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();
@@ -77,7 +77,7 @@ public class AsyncMultipleRunTests
     {
         int runCount = 0;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ =>
+            .StartWithAsync(new AsyncRelayState(_ =>
             {
                 runCount++;
                 return runCount % 2 == 0
@@ -100,4 +100,5 @@ public class AsyncMultipleRunTests
         });
     }
 }
+
 

@@ -12,7 +12,7 @@ public class ReentrancyGuardTests
     {
         TaskCompletionSource blockTcs = new();
         AsyncStateMachine fsm = GraphBuilder
-            .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
+            .Start().WaitForAsync(1.Seconds()).ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
         ValueTask<Result> first = fsm.ExecuteAsync();

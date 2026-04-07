@@ -7,23 +7,23 @@ namespace NxGraph.Authoring;
 public static partial class Dsl
 {
     /// <summary>
-    ///  Creates a state that waits for a specified duration before transitioning to the next state.
+    ///  Creates an async state that waits for a specified duration before transitioning to the next state.
     /// </summary>
     /// <param name="token">The previous state token, which is the source of the transition.</param>
     /// <param name="delay">The duration to wait before transitioning to the next state.</param>
     /// <returns>A new state token that represents the waiting state.</returns>
-    public static StateToken WaitFor(this StateToken token, TimeSpan delay)
+    public static StateToken WaitForAsync(this StateToken token, TimeSpan delay)
     {
-        return token.To(AsyncWait.For(delay));
+        return token.ToAsync(AsyncWait.For(delay));
     }
 
     /// <summary>
-    /// Creates a state that waits for a specified duration before transitioning to the next state.
+    /// Creates an async state that waits for a specified duration before transitioning to the next state.
     /// </summary>
     /// <param name="token">The start token, which is the entry point of the FSM graph.</param>
     /// <param name="delay">The duration to wait before transitioning to the next state.</param>
     /// <returns>A new state token that represents the waiting state.</returns>
-    public static StateToken WaitFor(this StartToken token, TimeSpan delay)
+    public static StateToken WaitForAsync(this StartToken token, TimeSpan delay)
     {
         AsyncState node = AsyncWait.For(delay);
         NodeId id = token.Builder.AddNode(node, true);

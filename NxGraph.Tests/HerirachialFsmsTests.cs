@@ -41,13 +41,13 @@ public class HierarchicalFsmTests
     public async Task Executes_HierarchicalFsm_InExpected_Order()
     {
         Graph childGraph = GraphBuilder
-            .StartWith(new HierarchicalDummyState("child start"))
-            .To(new HierarchicalDummyState("child end")).Build();
+            .StartWithAsync(new HierarchicalDummyState("child start"))
+            .ToAsync(new HierarchicalDummyState("child end")).Build();
         AsyncStateMachine childFsm = childGraph.ToAsyncStateMachine();
         Graph parentGraph = GraphBuilder
-            .StartWith(new HierarchicalDummyState("parent start"))
-            .To(childFsm)
-            .To(new HierarchicalDummyState("parent end"))
+            .StartWithAsync(new HierarchicalDummyState("parent start"))
+            .ToAsync(childFsm)
+            .ToAsync(new HierarchicalDummyState("parent end"))
             .Build();
         AsyncStateMachine parentFsm = parentGraph.ToAsyncStateMachine();
         await parentFsm.ExecuteAsync();
@@ -72,13 +72,13 @@ public class HierarchicalFsmTests
     public async Task Serializes_And_Deserializes_HierarchicalFsm_Correctly()
     {
         Graph childGraph = GraphBuilder
-            .StartWith(new HierarchicalDummyState("child start"))
-            .To(new HierarchicalDummyState("child end")).Build();
+            .StartWithAsync(new HierarchicalDummyState("child start"))
+            .ToAsync(new HierarchicalDummyState("child end")).Build();
         AsyncStateMachine childFsm = childGraph.ToAsyncStateMachine();
         Graph parentGraph = GraphBuilder
-            .StartWith(new HierarchicalDummyState("parent start"))
-            .To(childFsm)
-            .To(new HierarchicalDummyState("parent end"))
+            .StartWithAsync(new HierarchicalDummyState("parent start"))
+            .ToAsync(childFsm)
+            .ToAsync(new HierarchicalDummyState("parent end"))
             .Build();
         AsyncStateMachine parentFsm = parentGraph.ToAsyncStateMachine();
         await parentFsm.ExecuteAsync();

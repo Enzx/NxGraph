@@ -1,4 +1,4 @@
-﻿using NxGraph.Authoring;
+using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 
@@ -13,7 +13,7 @@ public class AsyncRelayStateLifecycleTests
     {
         bool entered = false, exited = false;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 run: _ => ResultHelpers.Success,
                 onEnter: _ => { entered = true; return default; },
                 onExit: _ => { exited = true; return default; }))
@@ -33,7 +33,7 @@ public class AsyncRelayStateLifecycleTests
     {
         bool exited = false;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 run: _ => ResultHelpers.Failure,
                 onExit: _ => { exited = true; return default; }))
             .ToAsyncStateMachine();
@@ -48,7 +48,7 @@ public class AsyncRelayStateLifecycleTests
     {
         List<string> log = [];
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 run: _ => { log.Add("run"); return ResultHelpers.Success; },
                 onEnter: _ => { log.Add("enter"); return default; },
                 onExit: _ => { log.Add("exit"); return default; }))
@@ -64,7 +64,7 @@ public class AsyncRelayStateLifecycleTests
     {
         bool exited = false;
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 run: _ => throw new ApplicationException("boom"),
                 onExit: _ => { exited = true; return default; }))
             .ToAsyncStateMachine();
@@ -74,4 +74,5 @@ public class AsyncRelayStateLifecycleTests
         Assert.That(exited, Is.True);
     }
 }
+
 

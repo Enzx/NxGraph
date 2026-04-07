@@ -11,7 +11,7 @@ public class StatusTransitionTests
     public async Task status_flows_created_running_completed_on_success()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
+            .Start().WaitForAsync(1.Seconds()).ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Created));
@@ -30,7 +30,7 @@ public class StatusTransitionTests
     {
         CancellationTokenSource cts = new(10);
         AsyncStateMachine fsm = GraphBuilder
-            .Start().WaitFor(1.Seconds()).To(_ => ResultHelpers.Success)
+            .Start().WaitForAsync(1.Seconds()).ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
@@ -46,7 +46,7 @@ public class StatusTransitionTests
     public void status_sets_failed_on_exception()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(_ => throw new InvalidOperationException("boom")))
+            .StartWithAsync(new AsyncRelayState(_ => throw new InvalidOperationException("boom")))
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());

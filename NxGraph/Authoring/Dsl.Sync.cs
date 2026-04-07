@@ -87,16 +87,5 @@ public static partial class Dsl
         Guard.NotNull(run, nameof(run));
         return switchBuilder.Default(new RelayState(run));
     }
-
-    // ── GraphBuilder.StartWith overload for Func<Result> ────────────────
-
-    /// <summary>
-    /// Creates a new graph whose first (start) node executes <paramref name="run"/> synchronously.
-    /// </summary>
-    public static StateToken StartWithSync(Func<Result> run)
-    {
-        Guard.NotNull(run, nameof(run));
-        return GraphBuilder.StartWith(new RelayState(run));
-    }
 }
 

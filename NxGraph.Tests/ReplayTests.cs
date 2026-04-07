@@ -63,8 +63,8 @@ public class ReplayTests
 
         // Act
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(recorder);
 
         await fsm.ExecuteAsync();
@@ -89,8 +89,8 @@ public class ReplayTests
         // Arrange
         ReplayRecorder recorder = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(recorder);
 
         // Act    
@@ -134,8 +134,8 @@ public class ReplayTests
         // Arrange
         ReplayRecorder recorder = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(recorder);
 
         // Act
@@ -177,8 +177,8 @@ public class ReplayTests
         // Arrange
         ReplayRecorder recorder = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .WaitFor(1.Seconds())
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .WaitForAsync(1.Seconds())
             .ToAsyncStateMachine(recorder);
 
         // Act - Execute with cancellation
@@ -214,10 +214,10 @@ public class ReplayTests
         // Arrange - complex state machine with multiple transitions
         ReplayRecorder recorder = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(recorder);
 
         // Act
@@ -262,7 +262,7 @@ public class ReplayTests
         ReplayRecorder recorder = new();
 
         LoggingTestState loggingState = new("Test log message 1", "Test log message 2");
-        AsyncStateMachine fsm = GraphBuilder.StartWith(loggingState).ToAsyncStateMachine(recorder);
+        AsyncStateMachine fsm = GraphBuilder.StartWithAsync(loggingState).ToAsyncStateMachine(recorder);
 
 
         // Act

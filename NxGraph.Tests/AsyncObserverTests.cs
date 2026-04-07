@@ -16,7 +16,7 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Failure)
+            .StartWithAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -29,7 +29,7 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -46,7 +46,7 @@ public class AsyncObserverTests
         {
             RecordingAsyncObserver observer = new();
             AsyncStateMachine fsm = GraphBuilder
-                .StartWith(new AsyncRelayState(_ => throw new ApplicationException("boom")))
+                .StartWithAsync(new AsyncRelayState(_ => throw new ApplicationException("boom")))
                 .ToAsyncStateMachine(observer);
             fsm.SetAutoReset(false);
 
@@ -72,7 +72,7 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncLoggingState("hello-async"))
+            .StartWithAsync(new AsyncLoggingState("hello-async"))
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -89,8 +89,8 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncLoggingState("msg-1"))
-            .To(new AsyncLoggingState("msg-2"))
+            .StartWithAsync(new AsyncLoggingState("msg-1"))
+            .ToAsync(new AsyncLoggingState("msg-2"))
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -110,9 +110,9 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -130,7 +130,7 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         await fsm.ExecuteAsync();
@@ -149,8 +149,8 @@ public class AsyncObserverTests
     {
         RecordingAsyncObserver observer = new();
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
-            .To(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
         fsm.SetAutoReset(false);
 

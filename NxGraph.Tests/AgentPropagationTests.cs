@@ -24,7 +24,7 @@ public class AgentPropagationTests
 
         DummyAgent agent = new();
         AsyncStateMachine<DummyAgent> fsm = GraphBuilder
-            .StartWith(node)
+            .StartWithAsync(node)
             .ToAsyncStateMachine<DummyAgent>()
             .Add(agent);
         await fsm.ExecuteAsync();
@@ -37,7 +37,7 @@ public class AgentPropagationTests
     {
         DummyAgent agent = new();
         AsyncStateMachine<DummyAgent> fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine<DummyAgent>();
 
         Assert.Throws<InvalidOperationException>(() => fsm.SetAgent(agent));

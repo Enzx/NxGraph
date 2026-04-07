@@ -18,11 +18,11 @@ public readonly struct StartToken
     }
 
     /// <summary>
-    /// Adds the first (start) node with the given logic and returns a <see cref="StateToken"/>.
+    /// Adds the first (start) node with the given async logic and returns a <see cref="StateToken"/>.
     /// </summary>
-    /// <param name="asyncLogic">The logic to run as the start node.</param>
+    /// <param name="asyncLogic">The async logic to run as the start node.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
-    public StateToken To(IAsyncLogic asyncLogic)
+    public StateToken ToAsync(IAsyncLogic asyncLogic)
     {
         NodeId id = Builder.AddNode(asyncLogic, true);
         return new StateToken(id, Builder);
@@ -40,13 +40,23 @@ public readonly struct StartToken
     }
 
     /// <summary>
-    /// Adds the first (start) node that executes <paramref name="run"/> and returns a <see cref="StateToken"/>.
+    /// Adds the first (start) node that executes <paramref name="run"/> asynchronously and returns a <see cref="StateToken"/>.
     /// </summary>
-    /// <param name="run">The function to execute in the start node.</param>
+    /// <param name="run">The async function to execute in the start node.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
-    public StateToken To(Func<CancellationToken, ValueTask<Result>> run)
+    public StateToken ToAsync(Func<CancellationToken, ValueTask<Result>> run)
     {
-        return To(new AsyncRelayState(run));
+        return ToAsync(new AsyncRelayState(run));
+    }
+
+    /// <summary>
+    /// Adds the first (start) node that executes <paramref name="run"/> synchronously and returns a <see cref="StateToken"/>.
+    /// </summary>
+    /// <param name="run">The sync function to execute in the start node.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the newly-created start node.</returns>
+    public StateToken To(Func<Result> run)
+    {
+        return To(new RelayState(run));
     }
 
     /// <summary>
@@ -73,7 +83,7 @@ public readonly struct StartToken
 
     /// <summary>
     /// Builds the graph. Only valid if a start node has already been added
-    /// (e.g. via <see cref="To(IAsyncLogic)"/>, <see cref="Dsl.WaitFor(StartToken, TimeSpan)"/>, etc.).
+    /// (e.g. via <see cref="ToAsync(IAsyncLogic)"/>, <see cref="Dsl.WaitForAsync(StartToken, TimeSpan)"/>, etc.).
     /// </summary>
     public Graph Build()
     {

@@ -12,7 +12,7 @@ public class ExceptionPropagationTests
     public void should_bubble_exception_from_on_enter()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 _ => ResultHelpers.Success,
                 _ => throw new InvalidOperationException("enter boom")))
             .ToAsyncStateMachine();
@@ -24,7 +24,7 @@ public class ExceptionPropagationTests
     public void should_bubble_exception_from_on_run()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 _ => throw new ApplicationException("run boom")))
             .ToAsyncStateMachine();
 
@@ -35,7 +35,7 @@ public class ExceptionPropagationTests
     public void should_bubble_exception_from_on_exit()
     {
         AsyncStateMachine fsm = GraphBuilder
-            .StartWith(new AsyncRelayState(
+            .StartWithAsync(new AsyncRelayState(
                 _ => ResultHelpers.Success,
                 onExit: _ => throw new NotSupportedException("exit boom")))
             .ToAsyncStateMachine();

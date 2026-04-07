@@ -16,9 +16,9 @@ public class SwitchDefaultCaseTests
         AsyncStateMachine? fsm = GraphBuilder
             .Start()
             .Switch(() => key)
-            .Case("a", _ => ResultHelpers.Failure)
-            .Case("b", _ => ResultHelpers.Failure)
-            .Default(_ => ResultHelpers.Success)
+            .CaseAsync("a", _ => ResultHelpers.Failure)
+            .CaseAsync("b", _ => ResultHelpers.Failure)
+            .DefaultAsync(_ => ResultHelpers.Success)
             .End()
             .ToAsyncStateMachine();
 

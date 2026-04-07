@@ -22,7 +22,7 @@ public class ObserverExceptionTests
     {
         ExplosiveObserver? observer = new();
         AsyncStateMachine? fsm = GraphBuilder
-            .StartWith(_ => ResultHelpers.Success)
+            .StartWithAsync(_ => ResultHelpers.Success)
             .ToAsyncStateMachine(observer);
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
