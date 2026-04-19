@@ -87,5 +87,27 @@ public static partial class Dsl
         Guard.NotNull(run, nameof(run));
         return switchBuilder.Default(new RelayState(run));
     }
+
+    // ── AsyncSwitchBuilder overloads accepting Func<Result> ──────────────
+
+    /// <summary>
+    /// Adds a case with a synchronous lambda to the async switch builder.
+    /// </summary>
+    public static AsyncSwitchBuilder<TKey> Case<TKey>(this AsyncSwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Case(key, new RelayState(run));
+    }
+
+    /// <summary>
+    /// Adds a default case with a synchronous lambda to the async switch builder.
+    /// </summary>
+    public static AsyncSwitchBuilder<TKey> Default<TKey>(this AsyncSwitchBuilder<TKey> switchBuilder,
+        Func<Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Default(new RelayState(run));
+    }
 }
 

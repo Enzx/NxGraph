@@ -18,4 +18,6 @@ public static class ResultHelpers
     /// Represents a completed operation with no meaningful result (e.g. for lifecycle events).
     /// </summary>
     public static readonly ValueTask CompletedTask = default;
+
+    public static readonly ValueTask<Result> Continue = new(Result.Continue);
 }

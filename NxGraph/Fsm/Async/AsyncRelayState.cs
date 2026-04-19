@@ -8,15 +8,15 @@
 /// <param name="onExit">Optional function to run when the state is exited. It can be used for cleanup or finalization.</param>
 public sealed class AsyncRelayState(
     Func<CancellationToken, ValueTask<Result>> run,
-    Func<CancellationToken, ValueTask>? onEnter = null,
+    Func<CancellationToken, ValueTask<Result>>? onEnter = null,
     Func<CancellationToken, ValueTask>? onExit = null)
     : AsyncState
 {
     private readonly Func<CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    protected override  ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return onEnter?.Invoke(ct) ?? default;
+        return onEnter?.Invoke(ct) ?? ResultHelpers.Continue;
     }
 
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
@@ -39,15 +39,15 @@ public sealed class AsyncRelayState(
 /// <typeparam name="TAgent">The type of the agent that this state operates on.</typeparam>
 public sealed class AsyncRelayState<TAgent>(
     Func<TAgent, CancellationToken, ValueTask<Result>> run,
-    Func<TAgent, CancellationToken, ValueTask>? onEnter = null,
+    Func<TAgent, CancellationToken, ValueTask<Result>>? onEnter = null,
     Func<TAgent, CancellationToken, ValueTask>? onExit = null)
     : AsyncState<TAgent>
 {
     private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
 
-    protected override ValueTask OnEnterAsync(CancellationToken ct)
+    protected override ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return onEnter?.Invoke(Agent, ct) ?? default;
+        return onEnter?.Invoke(Agent, ct) ?? ResultHelpers.Continue;
     }
 
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)

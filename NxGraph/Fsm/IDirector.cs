@@ -13,3 +13,13 @@ public interface IDirector
     /// <returns></returns>
     NodeId SelectNext();
 }
+
+public interface IAsyncDirector
+{
+    /// <summary>
+    /// Asynchronously selects the next node to run based on some logic.
+    /// </summary>
+    /// <param name="ct">The cancellation token to observe while selecting the next node.</param>
+    /// <returns>A <see cref="ValueTask{NodeId}"/> representing the selected next node.</returns>
+    ValueTask<NodeId> SelectNextAsync(CancellationToken ct = default);
+}

@@ -82,6 +82,18 @@ public readonly struct StartToken
     }
 
     /// <summary>
+    /// Creates an async switch statement that allows branching based on an async key selector.
+    /// </summary>
+    /// <param name="selector">The async function that selects the key for branching.</param>
+    /// <typeparam name="TKey">The type of the key used for branching.</typeparam>
+    /// <returns>An AsyncSwitchBuilder instance for defining branches based on the selected key.</returns>
+    public Dsl.AsyncSwitchBuilder<TKey> SwitchAsync<TKey>(Func<ValueTask<TKey>> selector)
+        where TKey : notnull
+    {
+        return new Dsl.AsyncSwitchBuilder<TKey>(this, selector);
+    }
+
+    /// <summary>
     /// Builds the graph. Only valid if a start node has already been added
     /// (e.g. via <see cref="ToAsync(IAsyncLogic)"/>, <see cref="Dsl.WaitForAsync(StartToken, TimeSpan)"/>, etc.).
     /// </summary>
