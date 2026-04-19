@@ -211,13 +211,13 @@ public class AsyncStateMachine : AsyncState
         }
     }
 
-    protected override ValueTask OnExitAsync(CancellationToken ct)
+    protected override ValueTask<Result> OnExitAsync(CancellationToken ct)
     {
         // For Ignore policy, OnEnterAsync returns early with the gate held.
         // We want OnRunAsync to run and return the terminal result, and then
         // OnExitAsync will release the gate in the normal way.
         Volatile.Write(ref _executeGate, 0);
-        return ResultHelpers.CompletedTask;
+        return ResultHelpers.Success;
     }
 
     private async ValueTask<Result> InternalRunAsync(CancellationToken ct)
@@ -239,8 +239,8 @@ public class AsyncStateMachine : AsyncState
                 }
             }
 
-            LogicNode logicLogicNode = (LogicNode)node;
-            Result result = await logicLogicNode.AsyncLogic.ExecuteAsync(ct).ConfigureAwait(false);
+            LogicNode logic = (LogicNode)node;
+            Result result = await logic.AsyncLogic.ExecuteAsync(ct).ConfigureAwait(false);
             switch (result.Code)
             {
                 case Result.StatusCode.Success:
@@ -252,7 +252,7 @@ public class AsyncStateMachine : AsyncState
 
                     NodeId next;
 
-                    if (logicLogicNode.AsyncLogic is IAsyncDirector director)
+                    if (logic.AsyncLogic is IAsyncDirector director)
                     {
                         next = await director.SelectNextAsync(ct).ConfigureAwait(false);
                         if (next.Equals(NodeId.Default))

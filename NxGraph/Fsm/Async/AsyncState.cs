@@ -48,9 +48,9 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter
         return ResultHelpers.Continue;
     }
 
-    protected virtual ValueTask OnExitAsync(CancellationToken ct)
+    protected virtual ValueTask<Result> OnExitAsync(CancellationToken ct)
     {
-        return default;
+        return ResultHelpers.Success;
     }
 }
 
