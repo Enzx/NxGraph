@@ -15,10 +15,11 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter
     /// <returns>A <see cref="ValueTask{Result}"/> representing the<see cref="Result"/> of the state execution.</returns>
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
-        await OnEnterAsync(ct).ConfigureAwait(false);
+        Result result = await OnEnterAsync(ct).ConfigureAwait(false);
+        if (result.IsCompleted) return result;
         try
         {
-            Result result = await OnRunAsync(ct).ConfigureAwait(false);
+            result = await OnRunAsync(ct).ConfigureAwait(false);
             return result;
         }
         finally
@@ -37,12 +38,15 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter
         }
     }
 
-    protected virtual ValueTask OnEnterAsync(CancellationToken ct)
+    protected virtual ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return default;
+        return ResultHelpers.Continue;
     }
 
-    protected abstract ValueTask<Result> OnRunAsync(CancellationToken ct);
+    protected virtual ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        return ResultHelpers.Continue;
+    }
 
     protected virtual ValueTask OnExitAsync(CancellationToken ct)
     {

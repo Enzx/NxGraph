@@ -105,7 +105,7 @@ public class AsyncStateMachine : AsyncState
         return Result.Success;
     }
 
-    protected override async ValueTask OnEnterAsync(CancellationToken ct)
+    protected override async ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
         if (Interlocked.Exchange(ref _executeGate, 1) == 1) // Prevent re-entrance
         {
@@ -123,7 +123,7 @@ public class AsyncStateMachine : AsyncState
                     // We must release the gate so the current ExecuteAsync call can run OnRunAsync,
                     // which will return the cached terminal result.
                     Volatile.Write(ref _executeGate, 0);
-                    return;
+                    return Result.Continue;
                 case RestartPolicy.Manual:
                     Volatile.Write(ref _executeGate, 0); // Release the gate before throwing.
                     throw new InvalidOperationException(
@@ -144,6 +144,8 @@ public class AsyncStateMachine : AsyncState
         }
 
         await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
+        
+        return Result.Continue;
     }
 
     protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
@@ -183,7 +185,7 @@ public class AsyncStateMachine : AsyncState
             if (_restartPolicy == RestartPolicy.Auto)
             {
                 // Use default token — ct is already cancelled at this point.
-                await Reset(default).ConfigureAwait(false);
+                await Reset(ct).ConfigureAwait(false);
             }
 
             throw;
@@ -202,7 +204,7 @@ public class AsyncStateMachine : AsyncState
             if (_restartPolicy == RestartPolicy.Auto)
             {
                 // Use default token — ct may be cancelled or faulted at this point.
-                await Reset(default).ConfigureAwait(false);
+                await Reset(ct).ConfigureAwait(false);
             }
 
             throw;
@@ -250,10 +252,9 @@ public class AsyncStateMachine : AsyncState
 
                     NodeId next;
 
-                    IDirector? director = logicLogicNode.AsyncLogic as IDirector ?? logicLogicNode.Logic as IDirector;
-                    if (director is not null)
+                    if (logicLogicNode.AsyncLogic is IAsyncDirector director)
                     {
-                        next = director.SelectNext();
+                        next = await director.SelectNextAsync(ct).ConfigureAwait(false);
                         if (next.Equals(NodeId.Default))
                         {
                             return Result.Success;

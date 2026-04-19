@@ -15,17 +15,17 @@ public class AsyncRelayStateLifecycleTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWithAsync(new AsyncRelayState(
                 run: _ => ResultHelpers.Success,
-                onEnter: _ => { entered = true; return default; },
+                onEnter: _ => { entered = true; return ResultHelpers.Continue; },
                 onExit: _ => { exited = true; return default; }))
             .ToAsyncStateMachine();
 
         await fsm.ExecuteAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(entered, Is.True);
             Assert.That(exited, Is.True);
-        });
+        }
     }
 
     [Test]
@@ -50,7 +50,7 @@ public class AsyncRelayStateLifecycleTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWithAsync(new AsyncRelayState(
                 run: _ => { log.Add("run"); return ResultHelpers.Success; },
-                onEnter: _ => { log.Add("enter"); return default; },
+                onEnter: _ => { log.Add("enter"); return ResultHelpers.Continue; },
                 onExit: _ => { log.Add("exit"); return default; }))
             .ToAsyncStateMachine();
 
@@ -60,18 +60,26 @@ public class AsyncRelayStateLifecycleTests
     }
 
     [Test]
-    public async Task relay_state_on_exit_should_run_even_on_exception()
+    public Task relay_state_on_exit_should_run_even_on_exception()
     {
-        bool exited = false;
-        AsyncStateMachine fsm = GraphBuilder
-            .StartWithAsync(new AsyncRelayState(
-                run: _ => throw new ApplicationException("boom"),
-                onExit: _ => { exited = true; return default; }))
-            .ToAsyncStateMachine();
+        try
+        {
+            bool exited = false;
+            AsyncStateMachine fsm = GraphBuilder
+                .StartWithAsync(new AsyncRelayState(
+                    run: _ => throw new ApplicationException("boom"),
+                    onExit: _ => { exited = true; return default; }))
+                .ToAsyncStateMachine();
 
-        Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
+            Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
 
-        Assert.That(exited, Is.True);
+            Assert.That(exited, Is.True);
+            return Task.CompletedTask;
+        }
+        catch (Exception exception)
+        {
+            return Task.FromException(exception);
+        }
     }
 }
 

@@ -29,7 +29,7 @@ public static partial class Dsl
             _builder = root.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
+            _builder.AddNode(new AsyncChoiceState(() => new ValueTask<bool>(predicate()), _truePad, _falsePad), true);
         }
 
         /// <summary>Adds an async "then" branch.</summary>
@@ -61,9 +61,7 @@ public static partial class Dsl
         }
 
         public GraphBuilder Builder { get; }
-
-        internal NodeId FalsePad => _falsePad;
-
+        
         /// <summary>The last node added on the "then" branch.</summary>
         public NodeId Tip { get; }
 
@@ -156,14 +154,6 @@ public static partial class Dsl
             return new AsyncStateMachine<T>(Builder.Build(), observer);
         }
 
-        public StateMachine ToStateMachine(IStateMachineObserver? observer = null)
-        {
-            return Builder.Build().ToStateMachine(observer);
-        }
-
-        public StateMachine<T> ToStateMachine<T>(IStateMachineObserver? observer = null)
-        {
-            return Builder.Build().ToStateMachine<T>(observer);
-        }
+     
     }
 }

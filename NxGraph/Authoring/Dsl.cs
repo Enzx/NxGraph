@@ -70,6 +70,20 @@ public static partial class Dsl
         return new SwitchBuilder<TKey>(prev, selector);
     }
 
+    /// <summary>
+    /// Creates an async switch branch in the FSM graph with an async key selector.
+    /// </summary>
+    /// <param name="prev">The previous state token, which is the source of the transition.</param>
+    /// <param name="selector">An async function that returns the key used to select the branch.</param>
+    /// <typeparam name="TKey">The type of the key used to select the branch.</typeparam>
+    /// <returns>An AsyncSwitchBuilder that allows chaining cases.</returns>
+    public static AsyncSwitchBuilder<TKey> SwitchAsync<TKey>(this StateToken prev,
+        Func<ValueTask<TKey>> selector)
+        where TKey : notnull
+    {
+        return new AsyncSwitchBuilder<TKey>(prev, selector);
+    }
+
 
     /// <summary>
     /// Creates a "then" branch in the FSM graph that executes the specified async logic.
@@ -123,6 +137,32 @@ public static partial class Dsl
     /// <typeparam name="TKey">The type of the key used to identify the case.</typeparam>
     /// <returns>A SwitchBuilder that allows chaining further cases or finalizing the switch statement.</returns>
     public static SwitchBuilder<TKey> DefaultAsync<TKey>(this SwitchBuilder<TKey> switchBuilder,
+        Func<CancellationToken, ValueTask<Result>> run)
+        where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.DefaultAsync(asyncRelay);
+    }
+
+    // ── AsyncSwitchBuilder convenience overloads (lambda → AsyncRelayState) ──
+
+    /// <summary>
+    /// Adds an async case with a lambda to the async switch statement.
+    /// </summary>
+    public static AsyncSwitchBuilder<TKey> CaseAsync<TKey>(this AsyncSwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<CancellationToken, ValueTask<Result>> run)
+        where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.CaseAsync(key, asyncRelay);
+    }
+
+    /// <summary>
+    /// Adds an async default case with a lambda to the async switch statement.
+    /// </summary>
+    public static AsyncSwitchBuilder<TKey> DefaultAsync<TKey>(this AsyncSwitchBuilder<TKey> switchBuilder,
         Func<CancellationToken, ValueTask<Result>> run)
         where TKey : notnull
     {
