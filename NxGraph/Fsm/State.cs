@@ -28,20 +28,36 @@ public abstract class State : ILogic, ILogReporter
     /// </summary>
     Func<string, CancellationToken, ValueTask>? ILogReporter.LogReport { get; set; }
 
+    private bool _hasEntered;
+
     /// <summary>
-    /// Executes the full enter → run → exit lifecycle synchronously.
+    /// Executes the state lifecycle: OnEnter once on first call, OnRun every call,
+    /// OnExit once when a terminal result (non-Continue) is returned or an exception is thrown.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Result Execute()
     {
-        OnEnter();
+        if (!_hasEntered)
+        {
+            _hasEntered = true;
+            try { OnEnter(); }
+            catch { _hasEntered = false; throw; }
+        }
+
         try
         {
-            return OnRun();
+            Result result = OnRun();
+            if (result.IsCompleted)
+            {
+                _hasEntered = false;
+                OnExit();
+            }
+            return result;
         }
-        finally
+        catch
         {
+            _hasEntered = false;
             OnExit();
+            throw;
         }
     }
 

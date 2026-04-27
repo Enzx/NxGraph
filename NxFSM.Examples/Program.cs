@@ -2,6 +2,7 @@
 
 using NxFSM.Examples;
 using NxFSM.Examples.DungeonCrawler;
+using NxFSM.Examples.ReadmeExamples;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
@@ -49,6 +50,20 @@ Console.WriteLine();
 Console.WriteLine("Dungeon Crawler Example (Sync FSM)");
 Console.WriteLine();
 DungeonCrawlerExample.Run();
+
+Console.WriteLine();
+Console.WriteLine();
+Console.WriteLine("=== README Examples ===");
+Console.WriteLine();
+await QuickStartExample.RunAsync();
+Console.WriteLine();
+QuickStartExample.RunSync();
+Console.WriteLine();
+await DslExamples.RunAsync();
+Console.WriteLine();
+await AgentExample.RunAsync();
+Console.WriteLine();
+ObserverExample.Run();
 
 return 0;
 

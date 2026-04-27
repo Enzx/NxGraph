@@ -51,7 +51,10 @@ public sealed class BossFightState : State<DungeonContext>
             .ToStateMachine<DungeonContext>(childObserver)
             .WithAgent(Agent);
 
-        Result result = childFsm.Execute();
+        // Loop to completion — Execute() is stepped; a nested FSM must run to a terminal result.
+        Result result = Result.Continue;
+        while (result == Result.Continue)
+            result = childFsm.Execute();
 
         if (result == Result.Success && Agent.BossHp <= 0)
         {

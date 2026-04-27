@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="490"
+     viewBox="0 0 820 490"
+     font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace">
+
+  <!-- background -->
+  <rect width="820" height="490" fill="#fafafa" rx="4"/>
+
+  <!-- title -->
+  <text x="410" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">
+    NxGraph Benchmark Results — .NET 8 · ShortRun · log₂ scale
+  </text>
+
+  <!--
+    Chart area: x=260..790 (530px), log₂ scale from 4 (16 ns) to 12 (4096 ns)
+    scale = 530 / 8 = 66.25 px per log₂ unit
+    Tick x positions:
+      16 ns=260  32=326  64=393  128=459  256=525  512=591  1024=658  2048=724  4096=790
+    Bar widths  (x = 260 + (log2(ns) - 4) * 66.25):
+      Sync  23.9 ns  w=38   x_end=298
+      Sync  27.4 ns  w=51   x_end=311
+      Sync  194 ns   w=239  x_end=499
+      Sync  979 ns   w=393  x_end=653
+      Async 199 ns   w=241  x_end=501
+      Async 239 ns   w=258  x_end=518
+      Async 330 ns   w=289  x_end=549
+      Async 802 ns   w=374  x_end=634
+      Async 856 ns   w=381  x_end=641
+      Async 3344 ns  w=511  x_end=771
+  -->
+
+  <!-- grid lines (dashed, one per power-of-2) -->
+  <line x1="260" y1="46" x2="260" y2="378" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="326" y1="46" x2="326" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="393" y1="46" x2="393" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="459" y1="46" x2="459" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="525" y1="46" x2="525" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="591" y1="46" x2="591" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="658" y1="46" x2="658" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="724" y1="46" x2="724" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="790" y1="46" x2="790" y2="378" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- ═══ Group 1: Single Node ═══ -->
+  <text x="258" y="46" text-anchor="end" font-size="9" fill="#94a3b8" font-style="italic">single node</text>
+  <rect x="260" y="50" width="38"  height="22" fill="#34d399" rx="2"/>
+  <text x="258" y="65" text-anchor="end" font-size="10" fill="#374151">Sync</text>
+  <text x="302" y="65" font-size="10" fill="#15803d" font-weight="600">24 ns</text>
+  <rect x="260" y="76" width="241" height="22" fill="#60a5fa" rx="2"/>
+  <text x="258" y="91" text-anchor="end" font-size="10" fill="#374151">Async</text>
+  <text x="505" y="91" font-size="10" fill="#1d4ed8" font-weight="600">199 ns</text>
+
+  <!-- ═══ Group 2: Single + Observer ═══ -->
+  <text x="258" y="116" text-anchor="end" font-size="9" fill="#94a3b8" font-style="italic">single + observer</text>
+  <rect x="260" y="120" width="51"  height="22" fill="#34d399" rx="2"/>
+  <text x="258" y="135" text-anchor="end" font-size="10" fill="#374151">Sync</text>
+  <text x="315" y="135" font-size="10" fill="#15803d" font-weight="600">27 ns</text>
+  <rect x="260" y="146" width="258" height="22" fill="#60a5fa" rx="2"/>
+  <text x="258" y="161" text-anchor="end" font-size="10" fill="#374151">Async</text>
+  <text x="522" y="161" font-size="10" fill="#1d4ed8" font-weight="600">239 ns</text>
+
+  <!-- ═══ Group 3: Chain × 10 ═══ -->
+  <text x="258" y="186" text-anchor="end" font-size="9" fill="#94a3b8" font-style="italic">chain × 10</text>
+  <rect x="260" y="190" width="239" height="22" fill="#34d399" rx="2"/>
+  <text x="258" y="205" text-anchor="end" font-size="10" fill="#374151">Sync</text>
+  <text x="503" y="205" font-size="10" fill="#15803d" font-weight="600">194 ns</text>
+  <rect x="260" y="216" width="374" height="22" fill="#60a5fa" rx="2"/>
+  <text x="258" y="231" text-anchor="end" font-size="10" fill="#374151">Async</text>
+  <text x="638" y="231" font-size="10" fill="#1d4ed8" font-weight="600">802 ns</text>
+
+  <!-- ═══ Group 4: Chain × 50 ═══ -->
+  <text x="258" y="256" text-anchor="end" font-size="9" fill="#94a3b8" font-style="italic">chain × 50</text>
+  <rect x="260" y="260" width="393" height="22" fill="#34d399" rx="2"/>
+  <text x="258" y="275" text-anchor="end" font-size="10" fill="#374151">Sync</text>
+  <text x="657" y="275" font-size="10" fill="#15803d" font-weight="600">979 ns</text>
+  <!-- label inside bar: bar spans 260→771, near chart edge -->
+  <rect x="260" y="286" width="511" height="22" fill="#60a5fa" rx="2"/>
+  <text x="258" y="301" text-anchor="end" font-size="10" fill="#374151">Async</text>
+  <text x="767" y="301" text-anchor="end" font-size="10" fill="#ffffff" font-weight="600">3,344 ns</text>
+
+  <!-- ═══ Group 5: Async-only ═══ -->
+  <text x="258" y="326" text-anchor="end" font-size="9" fill="#94a3b8" font-style="italic">async only</text>
+  <rect x="260" y="330" width="289" height="22" fill="#a78bfa" rx="2"/>
+  <text x="258" y="345" text-anchor="end" font-size="10" fill="#374151">Timeout</text>
+  <text x="553" y="345" font-size="10" fill="#6d28d9" font-weight="600">330 ns</text>
+  <rect x="260" y="356" width="381" height="22" fill="#a78bfa" rx="2"/>
+  <text x="258" y="371" text-anchor="end" font-size="10" fill="#374151">Director×10</text>
+  <text x="645" y="371" font-size="10" fill="#6d28d9" font-weight="600">856 ns</text>
+
+  <!-- axis line -->
+  <line x1="260" y1="382" x2="790" y2="382" stroke="#64748b" stroke-width="1.5"/>
+
+  <!-- axis ticks + labels -->
+  <line x1="260" y1="382" x2="260" y2="388" stroke="#64748b" stroke-width="1.5"/>
+  <text x="260" y="400" text-anchor="middle" font-size="10" fill="#64748b">16 ns</text>
+  <line x1="326" y1="382" x2="326" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="326" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">32</text>
+  <line x1="393" y1="382" x2="393" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="393" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">64</text>
+  <line x1="459" y1="382" x2="459" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="459" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">128</text>
+  <line x1="525" y1="382" x2="525" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="525" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">256</text>
+  <line x1="591" y1="382" x2="591" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="591" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">512</text>
+  <line x1="658" y1="382" x2="658" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="658" y="400" text-anchor="middle" font-size="10" fill="#64748b">1 µs</text>
+  <line x1="724" y1="382" x2="724" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="724" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">2 µs</text>
+  <line x1="790" y1="382" x2="790" y2="388" stroke="#94a3b8" stroke-width="1"/>
+  <text x="790" y="400" text-anchor="middle" font-size="10" fill="#94a3b8">4 µs</text>
+
+  <!-- legend -->
+  <rect x="215" y="418" width="13" height="12" fill="#34d399" rx="2"/>
+  <text x="232" y="429" font-size="11" fill="#374151">Sync StateMachine (0 B)</text>
+  <rect x="430" y="418" width="13" height="12" fill="#60a5fa" rx="2"/>
+  <text x="447" y="429" font-size="11" fill="#374151">Async StateMachine (0 B)</text>
+  <rect x="650" y="418" width="13" height="12" fill="#a78bfa" rx="2"/>
+  <text x="667" y="429" font-size="11" fill="#374151">Async extras</text>
+
+  <!-- footer -->
+  <text x="410" y="462" text-anchor="middle" font-size="10" fill="#94a3b8">
+    0 B alloc confirmed after removing async Task&lt;T&gt; benchmark wrapper · Runtime: .NET 8.0.26 · RyuJIT AVX-512 · 2026-04-27
+  </text>
+</svg>
