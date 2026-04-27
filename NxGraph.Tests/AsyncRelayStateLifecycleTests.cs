@@ -60,26 +60,18 @@ public class AsyncRelayStateLifecycleTests
     }
 
     [Test]
-    public Task relay_state_on_exit_should_run_even_on_exception()
+    public void relay_state_on_exit_should_run_even_on_exception()
     {
-        try
-        {
-            bool exited = false;
-            AsyncStateMachine fsm = GraphBuilder
-                .StartWithAsync(new AsyncRelayState(
-                    run: _ => throw new ApplicationException("boom"),
-                    onExit: _ => { exited = true; return default; }))
-                .ToAsyncStateMachine();
+        bool exited = false;
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWithAsync(new AsyncRelayState(
+                run: _ => throw new ApplicationException("boom"),
+                onExit: _ => { exited = true; return default; }))
+            .ToAsyncStateMachine();
 
-            Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
+        Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
 
-            Assert.That(exited, Is.True);
-            return Task.CompletedTask;
-        }
-        catch (Exception exception)
-        {
-            return Task.FromException(exception);
-        }
+        Assert.That(exited, Is.True);
     }
 }
 

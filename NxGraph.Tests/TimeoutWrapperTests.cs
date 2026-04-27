@@ -47,15 +47,15 @@ public class TimeoutWrapperTests
     [Timeout(5000)]
     public void external_cancellation_wins_over_timeout()
     {
-        using CancellationTokenSource cts = new(50); // cancel sooner than timeout
+        using CancellationTokenSource cts = new(200); // cancel sooner than timeout
 
         AsyncStateMachine fsm = GraphBuilder
             .Start()
             .ToWithTimeoutAsync(async ct =>
             {
-                await Task.Delay(1000, ct);
+                await Task.Delay(5000, ct);
                 return Result.Success;
-            }, 500.Milliseconds(), TimeoutBehavior.Fail) // timeout later than external cancel
+            }, 2000.Milliseconds(), TimeoutBehavior.Fail) // timeout later than external cancel
             .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<TaskCanceledException>(async () =>

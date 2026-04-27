@@ -241,9 +241,6 @@ public class ReplayTests
         StateMachineReplay replay = new(events);
         byte[] serialized = replay.Serialize();
 
-        // Save to file for debugging (optional)
-        await File.WriteAllBytesAsync("replay_test.bin", serialized);
-
         // Load and verify
         ReplayEvent[] deserializedEvents = StateMachineReplay.Deserialize(serialized);
         StateMachineReplay newReplay = new(deserializedEvents);

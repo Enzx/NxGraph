@@ -40,29 +40,21 @@ public class AsyncObserverTests
     // ── OnStateFailed ──────────────────────────────────────────────────
 
     [Test]
-    public Task observer_should_receive_on_state_failed_on_exception()
+    public void observer_should_receive_on_state_failed_on_exception()
     {
-        try
-        {
-            RecordingAsyncObserver observer = new();
-            AsyncStateMachine fsm = GraphBuilder
-                .StartWithAsync(new AsyncRelayState(_ => throw new ApplicationException("boom")))
-                .ToAsyncStateMachine(observer);
-            fsm.SetAutoReset(false);
+        RecordingAsyncObserver observer = new();
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWithAsync(new AsyncRelayState(_ => throw new ApplicationException("boom")))
+            .ToAsyncStateMachine(observer);
+        fsm.SetAutoReset(false);
 
-            Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
+        Assert.ThrowsAsync<ApplicationException>(async () => await fsm.ExecuteAsync());
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(observer.FailedExceptions, Has.Count.EqualTo(1));
-                Assert.That(observer.FailedExceptions[0], Is.TypeOf<ApplicationException>());
-            });
-            return Task.CompletedTask;
-        }
-        catch (Exception exception)
+        Assert.Multiple(() =>
         {
-            return Task.FromException(exception);
-        }
+            Assert.That(observer.FailedExceptions, Has.Count.EqualTo(1));
+            Assert.That(observer.FailedExceptions[0], Is.TypeOf<ApplicationException>());
+        });
     }
 
     // ── Log reports ────────────────────────────────────────────────────

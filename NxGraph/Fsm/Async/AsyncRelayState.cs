@@ -9,7 +9,7 @@
 public sealed class AsyncRelayState(
     Func<CancellationToken, ValueTask<Result>> run,
     Func<CancellationToken, ValueTask<Result>>? onEnter = null,
-    Func<CancellationToken, ValueTask>? onExit = null)
+    Func<CancellationToken, ValueTask<Result>>? onExit = null)
     : AsyncState
 {
     private readonly Func<CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
@@ -24,9 +24,9 @@ public sealed class AsyncRelayState(
         return _run(ct);
     }
 
-    protected override ValueTask OnExitAsync(CancellationToken ct)
+    protected override ValueTask<Result> OnExitAsync(CancellationToken ct)
     {
-        return onExit?.Invoke(ct) ?? default;
+        return onExit?.Invoke(ct) ?? ResultHelpers.Success;
     }
 }
 
@@ -40,7 +40,7 @@ public sealed class AsyncRelayState(
 public sealed class AsyncRelayState<TAgent>(
     Func<TAgent, CancellationToken, ValueTask<Result>> run,
     Func<TAgent, CancellationToken, ValueTask<Result>>? onEnter = null,
-    Func<TAgent, CancellationToken, ValueTask>? onExit = null)
+    Func<TAgent, CancellationToken, ValueTask<Result>>? onExit = null)
     : AsyncState<TAgent>
 {
     private readonly Func<TAgent, CancellationToken, ValueTask<Result>> _run = run ?? throw new ArgumentNullException(nameof(run));
@@ -55,8 +55,8 @@ public sealed class AsyncRelayState<TAgent>(
         return _run(Agent, ct);
     }
 
-    protected override ValueTask OnExitAsync(CancellationToken ct)
+    protected override ValueTask<Result> OnExitAsync(CancellationToken ct)
     {
-        return onExit?.Invoke(Agent, ct) ?? default;
+        return onExit?.Invoke(Agent, ct) ?? ResultHelpers.Success;
     }
 }

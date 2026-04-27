@@ -19,6 +19,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
     public GraphSerializer(ILogicCodec codec)
     {
+        ArgumentNullException.ThrowIfNull(codec);
         IFormatterResolver resolver = CompositeResolver.Create(
             formatters: [],
             resolvers:
