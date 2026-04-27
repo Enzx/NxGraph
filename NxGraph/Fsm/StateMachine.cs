@@ -130,10 +130,6 @@ public class StateMachine : State
 
     protected override void OnEnter()
     {
-        // Stepped re-entry: already running, nothing to reinitialise.
-        if (_status == ExecutionStatus.Running)
-            return;
-
         ExecutionStatus status = _status;
 
         // Terminal state: apply restart policy before allowing a new run.

@@ -13,6 +13,7 @@ NxGraph is a lean, high-performance finite state machine / stateflow library for
 - a fluent authoring DSL
 - explicit branching through director nodes
 - sync and async runtimes
+- stepped execution for Unity (`Update()`-loop friendly)
 - graph validation
 - observers, tracing, replay, and Mermaid export
 - optional graph serialization via a codec-based serializer
@@ -37,9 +38,14 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Naming nodes](#naming-nodes)
   - [Agents / context injection](#agents--context-injection)
 - [Execution](#execution)
+  - [Async execution](#async-execution)
+  - [Sync execution, stepped model](#sync-execution--stepped-model)
+  - [Unity integration](#unity-integration)
+  - [Restart policy](#restart-policy)
 - [Validation](#validation)
 - [Observability](#observability)
   - [Observers](#observers)
+  - [State logging](#state-logging)
   - [Tracing](#tracing)
   - [Replay](#replay)
 - [Visualization](#visualization)
@@ -58,7 +64,8 @@ The core package targets `net8.0` and `netstandard2.1`.
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one direct outgoing edge.
 - **Predictable branching**: fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`.
-- **Authoring ergonomics**: build flows with `StartWith`, `.To(...)`, `.If(...)`, `.Switch(...)`, `.WaitFor(...)`, and `.ToWithTimeout(...)`.
+- **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`, and `.ToWithTimeoutAsync(...)`.
+- **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
 - **Diagnostics built in**: validate graphs, inspect Mermaid output, attach observers, capture replay logs, or emit `Activity` traces.
 - **Both async and sync**: use `AsyncStateMachine` for async logic and `StateMachine` for sync-only flows.
 
@@ -127,9 +134,9 @@ static ValueTask<Result> Process(CancellationToken _) => ResultHelpers.Success;
 static ValueTask<Result> Release(CancellationToken _) => ResultHelpers.Success;
 
 AsyncStateMachine fsm = GraphBuilder
-    .StartWith(Acquire).SetName("Acquire")
-    .To(Process).SetName("Process")
-    .To(Release).SetName("Release")
+    .StartWithAsync(Acquire).SetName("Acquire")
+    .ToAsync(Process).SetName("Process")
+    .ToAsync(Release).SetName("Release")
     .ToAsyncStateMachine();
 
 Result result = await fsm.ExecuteAsync();
@@ -147,8 +154,13 @@ StateMachine fsm = GraphBuilder
     .To(() => Result.Success).SetName("End")
     .ToStateMachine();
 
-Result result = fsm.Execute();
+// Execute() advances one node per call; loop to run to completion:
+Result result = Result.Continue;
+while (result == Result.Continue)
+    result = fsm.Execute();
 ```
+
+For a single-node graph `Execute()` returns `Result.Success` (or `Result.Failure`) immediately. For multi-node graphs it returns `Result.Continue` after each intermediate node, signalling that more nodes remain. See [Sync execution, stepped model](#sync-execution--stepped-model) for the Unity pattern.
 
 ---
 
@@ -158,9 +170,9 @@ Result result = fsm.Execute();
 
 ```csharp
 var graph = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Start")
-    .To(_ => ResultHelpers.Success).SetName("Step1")
-    .To(_ => ResultHelpers.Success).SetName("Step2")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Start")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Step1")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Step2")
     .Build();
 ```
 
@@ -170,10 +182,10 @@ var graph = GraphBuilder
 bool IsPremium() => true;
 
 var graph = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Entry")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Entry")
     .If(IsPremium)
-        .Then(_ => ResultHelpers.Success).SetName("Premium")
-        .Else(_ => ResultHelpers.Success).SetName("Standard")
+        .ThenAsync(_ => ResultHelpers.Success).SetName("Premium")
+        .ElseAsync(_ => ResultHelpers.Success).SetName("Standard")
     .Build();
 ```
 
@@ -183,11 +195,11 @@ var graph = GraphBuilder
 int RouteKey() => 2;
 
 var graph = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Entry")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Entry")
     .Switch(RouteKey)
-        .Case(1, _ => ResultHelpers.Success)
-        .Case(2, _ => ResultHelpers.Success)
-        .Default(_ => ResultHelpers.Failure)
+        .CaseAsync(1, _ => ResultHelpers.Success)
+        .CaseAsync(2, _ => ResultHelpers.Success)
+        .DefaultAsync(_ => ResultHelpers.Failure)
     .End().SetName("Router")
     .Build();
 ```
@@ -196,16 +208,16 @@ var graph = GraphBuilder
 
 ```csharp
 var delayed = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Start")
-    .WaitFor(250.Milliseconds()).SetName("Cooldown")
-    .To(_ => ResultHelpers.Success).SetName("Finish")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Start")
+    .WaitForAsync(250.Milliseconds()).SetName("Cooldown")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Finish")
     .Build();
 
 var timed = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Start")
-    .ToWithTimeout(2.Seconds(), _ => ResultHelpers.Success, TimeoutBehavior.Fail)
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Start")
+    .ToWithTimeoutAsync(2.Seconds(), _ => ResultHelpers.Success, TimeoutBehavior.Fail)
         .SetName("TimedWork")
-    .To(_ => ResultHelpers.Success).SetName("AfterTimeout")
+    .ToAsync(_ => ResultHelpers.Success).SetName("AfterTimeout")
     .Build();
 ```
 
@@ -215,8 +227,8 @@ Names are optional but strongly recommended for diagnostics, Mermaid export, rep
 
 ```csharp
 var graph = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Initial")
-    .To(_ => ResultHelpers.Success).SetName("Second")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Initial")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Second")
     .Build()
     .SetName("SampleGraph");
 ```
@@ -245,7 +257,7 @@ public sealed class WorkState : AsyncState<AppAgent>
 }
 
 AsyncStateMachine<AppAgent> fsm = GraphBuilder
-    .StartWith(new WorkState()).SetName("Work")
+    .StartWithAsync(new WorkState()).SetName("Work")
     .ToAsyncStateMachine<AppAgent>()
     .WithAgent(new AppAgent());
 
@@ -256,26 +268,86 @@ await fsm.ExecuteAsync();
 
 ## Execution
 
-For async flows:
+### Async execution
 
 ```csharp
 AsyncStateMachine sm = graph.ToAsyncStateMachine(observer: null);
 Result result = await sm.ExecuteAsync();
 ```
 
-For sync flows:
+### Sync execution, stepped model
+
+`StateMachine.Execute()` is the stepped entry point. Each call advances the machine by **exactly one node** and returns:
+
+| Return value | Meaning |
+|---|---|
+| `Result.Continue` | Node completed; there are more nodes to run. Call `Execute()` again. |
+| `Result.Success` | Machine finished successfully, no more nodes. |
+| `Result.Failure` | A node failed or threw. Machine is now in `Failed` status. |
+
+**Blocking / non-Unity loop:**
 
 ```csharp
-StateMachine sm = graph.ToStateMachine(observer: null);
-Result result = sm.Execute();
+StateMachine sm = graph.ToStateMachine();
+Result result = Result.Continue;
+while (result == Result.Continue)
+    result = sm.Execute();
 ```
 
-Notes:
+**Multi-frame nodes:** A node can return `Result.Continue` from its own `OnRun()` to signal it needs another frame (e.g. a countdown timer or a wait-for-input node). The machine stays on that node and invokes it again on the next `Execute()` call.
 
-- execution is reentrancy-guarded per machine instance
+### Unity integration
+
+Call `Execute()` from `MonoBehaviour.Update()`. The machine advances one node per frame and the main thread is never blocked:
+
+```csharp
+public class FsmRunner : MonoBehaviour
+{
+    private StateMachine _fsm;
+
+    void Start()
+    {
+        _fsm = GraphBuilder
+            .StartWith(new PatrolState()).SetName("Patrol")
+            .To(new AlertState()).SetName("Alert")
+            .To(new AttackState()).SetName("Attack")
+            .ToStateMachine();
+        _fsm.SetResetPolicy(RestartPolicy.Ignore);
+    }
+
+    void Update()
+    {
+        Result r = _fsm.Execute();
+    }
+}
+```
+
+For nested sub-machines used as nodes in a Unity context, wrap them in a custom `State` that calls `inner.Execute()` in its `OnRun()`.
+
+### Restart policy
+
+Control what happens after the machine reaches a terminal status (`Completed`, `Failed`, or `Cancelled`):
+
+| Policy | Behaviour |
+|---|---|
+| `RestartPolicy.Auto` *(default)* | Automatically resets to `Ready`, ideal for Unity `Update()` loops |
+| `RestartPolicy.Manual` | Stays terminal; re-execution throws until `Reset()` is called explicitly |
+| `RestartPolicy.Ignore` | Stays terminal; further `Execute()` calls are no-ops that return the cached result |
+
+```csharp
+fsm.SetResetPolicy(RestartPolicy.Auto);
+
+// Backwards-compatible alias:
+fsm.SetAutoReset(true);  // maps to RestartPolicy.Auto
+fsm.SetAutoReset(false); // maps to RestartPolicy.Manual
+```
+
+Additional notes on execution:
+
+- reentrancy is guarded per machine instance, calling `Execute()` from inside a node throws
 - async execution accepts cancellation tokens
-- observer exceptions bubble by default
-- graphs are immutable after build and can be shared across machine instances
+- observer exceptions bubble to the caller by default
+- graphs are immutable after `Build()` and can be shared across machine instances
 
 ---
 
@@ -289,8 +361,8 @@ You can also validate a graph explicitly:
 using NxGraph.Diagnostics.Validations;
 
 Graph graph = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success)
-    .To(_ => ResultHelpers.Success)
+    .StartWithAsync(_ => ResultHelpers.Success)
+    .ToAsync(_ => ResultHelpers.Success)
     .Build();
 
 GraphValidationResult validation = graph.Validate();
@@ -318,7 +390,7 @@ Validation checks include:
 
 ### Observers
 
-Async observer example:
+**Async observer:**
 
 ```csharp
 using NxGraph.Fsm;
@@ -352,7 +424,58 @@ public sealed class ConsoleObserver : IAsyncStateMachineObserver
 }
 ```
 
-Synchronous flows use `IStateMachineObserver` with the same event names but `void` return types.
+**Sync observer** (`IStateMachineObserver`), all callbacks are `void` with default no-op implementations; override only what you need:
+
+```csharp
+using NxGraph.Fsm;
+using NxGraph.Graphs;
+
+public sealed class DiagnosticObserver : IStateMachineObserver
+{
+    // Node lifecycle
+    public void OnStateEntered(NodeId id) => Console.WriteLine($">> {id.Name}");
+    public void OnStateExited(NodeId id)  => Console.WriteLine($"<< {id.Name}");
+    public void OnTransition(NodeId from, NodeId to) =>
+        Console.WriteLine($"   {from.Name} -> {to.Name}");
+    public void OnStateFailed(NodeId id, Exception ex) =>
+        Console.WriteLine($"FAIL {id.Name}: {ex.Message}");
+
+    // Machine lifecycle
+    public void OnStateMachineStarted(NodeId graphId) =>
+        Console.WriteLine($"FSM started: {graphId.Name}");
+    public void OnStateMachineCompleted(NodeId graphId, Result result) =>
+        Console.WriteLine($"FSM done: {result}");
+    public void OnStateMachineReset(NodeId graphId) { }
+
+    // Status changes (e.g. Created → Starting → Running → Completed)
+    public void StateMachineStatusChanged(NodeId graphId, ExecutionStatus prev, ExecutionStatus next) { }
+
+    // Log messages emitted by State.Log()
+    public void OnLogReport(NodeId nodeId, string message) =>
+        Console.WriteLine($"[{nodeId.Name}] {message}");
+}
+```
+
+### State logging
+
+Custom sync states can emit structured log messages through the observer without taking a direct dependency on a logger:
+
+```csharp
+using NxGraph.Fsm;
+
+public sealed class WorkState : State
+{
+    protected override Result OnRun()
+    {
+        Log("starting heavy computation");
+        // ... do work ...
+        Log("computation complete");
+        return Result.Success;
+    }
+}
+```
+
+`Log(message)` routes to `IStateMachineObserver.OnLogReport` when an observer is attached, and is a no-op otherwise.
 
 ### Tracing
 
@@ -402,9 +525,9 @@ Export graphs to Mermaid for docs, PRs, or operations runbooks.
 using NxGraph.Diagnostics.Export;
 
 string mermaid = GraphBuilder
-    .StartWith(_ => ResultHelpers.Success).SetName("Start")
-    .To(_ => ResultHelpers.Success).SetName("Process")
-    .To(_ => ResultHelpers.Success).SetName("End")
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Start")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Process")
+    .ToAsync(_ => ResultHelpers.Success).SetName("End")
     .Build()
     .ToMermaid();
 
@@ -445,8 +568,8 @@ public sealed class ExampleLogicCodec : ILogicTextCodec
 }
 
 Graph graph = GraphBuilder
-    .StartWith(new ExampleState { Data = "start" }).SetName("Start")
-    .To(new ExampleState { Data = "end" }).SetName("End")
+    .StartWithAsync(new ExampleState { Data = "start" }).SetName("Start")
+    .ToAsync(new ExampleState { Data = "end" }).SetName("End")
     .Build()
     .SetName("ExampleGraph");
 
@@ -487,7 +610,7 @@ dotnet run --project NxFSM.Examples
 
 ## Benchmarks
 
-Benchmarks live in `NxGraph.Benchmarks` and use BenchmarkDotNet.
+Benchmarks live in `NxGraph.Benchmarks` and use BenchmarkDotNet. The suite covers both `AsyncStateMachine` and `StateMachine` (sync), and also measures equivalent Stateless scenarios for comparison.
 
 Run them with:
 
@@ -495,13 +618,42 @@ Run them with:
 dotnet run --project NxGraph.Benchmarks -c Release
 ```
 
-The repository benchmark suite currently compares scenarios such as:
+### Results
 
-- single-node execution
-- chains of 10 and 50 nodes
-- timeout wrappers
-- observer overhead
-- director-driven flows
+> Runtime: .NET 8.0.26 (RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI) · BenchmarkDotNet v0.13.12 · ShortRun job · 2026-04-27
+
+![Benchmark chart](docs/benchmarks.svg)
+
+**Async `AsyncStateMachine`:**
+
+| Scenario | Mean | Alloc |
+|---|---:|---:|
+| Single node (`RelayState.Success`) ★ | 199 ns | 0 B |
+| Single node + `NoopObserver` | 239 ns | 0 B |
+| Timeout wrapper (immediate success) | 330 ns | 0 B |
+| Chain × 10 nodes | 802 ns | 0 B |
+| Director-driven × 10 nodes | 856 ns | 0 B |
+| Chain × 50 nodes | 3,344 ns | 0 B |
+
+**Sync `StateMachine`:**
+
+| Scenario | Mean | Alloc |
+|---|---:|---:|
+| Single node ★ | 24 ns | 0 B |
+| Single node + `SyncNoopObserver` | 27 ns | 0 B |
+| Chain × 10 nodes | 194 ns | 0 B |
+| Chain × 50 nodes | 979 ns | 0 B |
+
+★ baseline
+
+Key observations:
+
+- **Zero allocations**, both runtimes are fully alloc-free after graph construction. The earlier 80 B figure was the `async Task<T>` wrapper on the benchmark method itself; benchmarks now return `ValueTask<Result>` directly.
+- **Sync is ~8× faster on a single node**: 24 ns vs 199 ns, reflecting the absence of async machinery and `Interlocked` operations.
+- **Observer overhead is constant** and runtime-dependent: +3 ns for sync, +40 ns for async, independent of chain length.
+- **Per-node cost falls with chain length**: async 199 ns for 1 node → 80 ns/node for 10 → 67 ns/node for 50.
+- **Sync per-node cost is consistent**: ~19 ns/node for both chain × 10 and chain × 50.
+- **Director nodes** add ~54 ns over a plain 10-node async chain.
 
 ---
 
@@ -516,8 +668,9 @@ dotnet test -c Release
 The tests cover:
 
 - sync and async execution
+- stepped execution (`SteppedExecutionTests`), one-node-per-tick semantics, multi-frame nodes, restart policies
 - reentrancy and cancellation
-- observers
+- observers and log reports
 - replay
 - validation
 - Mermaid export
@@ -541,6 +694,12 @@ Almost always. Names improve logs, observer output, replay traces, and Mermaid d
 
 **Does the core package include Mermaid export and replay?**  
 Yes. Those features are part of `NxGraph` itself; graph serialization is the optional extra package.
+
+**Can I use NxGraph in Unity?**  
+Yes. Use `StateMachine` (the sync runtime) and call `Execute()` from `MonoBehaviour.Update()`. `Execute()` advances exactly one node per call so the main thread is never blocked. Set `RestartPolicy.Auto` for automatic reset between runs, or `RestartPolicy.Ignore` to freeze the machine in its terminal state until you explicitly call `Reset()`. See [Unity integration](#unity-integration) for a full example.
+
+**What does `Result.Continue` mean?**  
+The machine has more nodes to process but is returning control to the caller (e.g. to avoid blocking a frame in Unity). Call `Execute()` again on the next frame. A node can also return `Result.Continue` from its own `OnRun()` to signal it needs multiple frames (e.g. a frame-based timer).
 
 ---
 

@@ -10,6 +10,7 @@ riderModule.iml
 artifacts/
 NxGraph.Serialization.Tests/TestResults
 NxGraph.Tests/TestResults
+/BenchmarkDotNet.Artifacts/
 upm/com.enzx.nxgraph/Runtime/**/*.dll
 upm/com.enzx.nxgraph/Runtime/**/*.pdb
 *.log

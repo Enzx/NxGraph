@@ -260,6 +260,30 @@ public class SteppedExecutionTests
     // ── Multi-frame node (node returns Continue) ─────────────────────────
 
     [Test]
+    public void multi_frame_state_enter_called_once_exit_called_once()
+    {
+        int enterCount = 0, exitCount = 0, runCount = 0;
+        StateMachine fsm = GraphBuilder
+            .StartWith(new RelayState(
+                run: () => { runCount++; return runCount < 3 ? Result.Continue : Result.Success; },
+                onEnter: () => enterCount++,
+                onExit: () => exitCount++))
+            .ToStateMachine();
+        fsm.SetResetPolicy(RestartPolicy.Manual);
+
+        fsm.Execute();
+        fsm.Execute();
+        fsm.Execute();
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(enterCount, Is.EqualTo(1), "OnEnter must fire exactly once");
+            Assert.That(exitCount, Is.EqualTo(1), "OnExit must fire exactly once after terminal result");
+            Assert.That(runCount, Is.EqualTo(3));
+        }
+    }
+
+    [Test]
     public void node_returning_continue_stays_on_same_node()
     {
         int callCount = 0;

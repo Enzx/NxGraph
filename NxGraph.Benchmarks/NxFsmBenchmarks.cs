@@ -92,45 +92,27 @@ public class NxFsmBenchmarks
 
     [BenchmarkCategory("SingleNode")]
     [Benchmark(Baseline = true, Description = "Single node (RelayState.Success)")]
-    public async Task<Result> SingleNode()
-    {
-        return await _singleSuccess.ExecuteAsync();
-    }
+    public ValueTask<Result> SingleNode() => _singleSuccess.ExecuteAsync();
 
     [BenchmarkCategory("Chain10")]
     [Benchmark(Description = "Chain of 10 nodes (RelayState.Success)")]
-    public async Task<Result> Chain10()
-    {
-        return await _chain10.ExecuteAsync();
-    }
+    public ValueTask<Result> Chain10() => _chain10.ExecuteAsync();
 
     [BenchmarkCategory("Chain50")]
     [Benchmark(Description = "Chain of 50 nodes (RelayState.Success)")]
-    public async Task<Result> Chain50()
-    {
-        return await _chain50.ExecuteAsync();
-    }
+    public ValueTask<Result> Chain50() => _chain50.ExecuteAsync();
 
     [BenchmarkCategory("WithObserver")]
     [Benchmark(Description = "Single node + NoopObserver")]
-    public async Task<Result> WithObserver()
-    {
-        return await _withObserver.ExecuteAsync();
-    }
+    public ValueTask<Result> WithObserver() => _withObserver.ExecuteAsync();
 
     [BenchmarkCategory("WithTimeoutWrapper")]
     [Benchmark(Description = "Timeout wrapper around immediate success")]
-    public async Task<Result> WithTimeoutWrapper()
-    {
-        return await _withTimeoutWrapper.ExecuteAsync();
-    }
+    public ValueTask<Result> WithTimeoutWrapper() => _withTimeoutWrapper.ExecuteAsync();
 
     [BenchmarkCategory("DirectorLinear10")]
     [Benchmark(Description = "Director-driven 10-step flow")]
-    public async Task<Result> DirectorLinear10()
-    {
-        return await _directorLinear10.ExecuteAsync();
-    }
+    public ValueTask<Result> DirectorLinear10() => _directorLinear10.ExecuteAsync();
 }
 
 file sealed class LinearDirector(int max) : AsyncState, IDirector
