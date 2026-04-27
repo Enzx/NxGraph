@@ -29,10 +29,12 @@ public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer =
 /// </list>
 /// </para>
 /// <para>
-/// <b>Full-run (blocking)</b> — use the inherited <see cref="State.Execute"/>:
-/// <code>Result r = fsm.Execute();</code>
-/// This is also the entry point used automatically when the machine is nested
-/// as a node in a parent <see cref="StateMachine"/>.
+/// <b>Stepped execution</b> — call the inherited <see cref="State.Execute"/> once per
+/// frame (e.g. from Unity's <c>Update</c> method):
+/// <code>Result r = fsm.Execute(); // Continue while running, Success/Failure when done</code>
+/// Each call advances exactly one node. Nested <see cref="StateMachine"/> instances
+/// used as nodes are also stepped one level at a time.
+/// To run to completion in a non-Unity context, loop until the result is not Continue.
 /// </para>
 /// <para>
 /// Node logic is executed via <see cref="ILogic.Execute"/> — every node in the graph
@@ -120,49 +122,45 @@ public class StateMachine : State
         return Result.Success;
     }
 
-    // ── State overrides (full-run via inherited Execute()) ──────────────
+    // ── State overrides — Execute() is the stepped entry point ────────────
+    // Call Execute() once per frame from Unity's Update().
+    // It initialises on the first call, advances one node, and returns:
+    //   Result.Continue  — more nodes remain; call again next frame.
+    //   Result.Success / Result.Failure — machine has finished.
 
     protected override void OnEnter()
     {
-        if (_executeGate)
-        {
-            throw new InvalidOperationException("StateMachine is already executing.");
-        }
+        // Stepped re-entry: already running, nothing to reinitialise.
+        if (_status == ExecutionStatus.Running)
+            return;
 
-        // If we're terminal, apply reset policy.
         ExecutionStatus status = _status;
+
+        // Terminal state: apply restart policy before allowing a new run.
         if (status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
         {
             if (_restartPolicy == RestartPolicy.Ignore)
-            {
-                // Ignore further execution attempts until a manual Reset() occurs.
-                return;
-            }
-
+                return; // OnRun will return the cached result; no init needed
             if (_restartPolicy == RestartPolicy.Manual)
-            {
                 throw new InvalidOperationException(
                     $"StateMachine is in terminal state '{status}'. Call Reset() before executing again.");
-            }
-
-            // For Auto, we should never normally reach terminal (we reset in Finalise),
-            // but tolerate it by resetting now.
-            Reset();
+            Reset(); // Auto
         }
+
+        if (_executeGate)
+            throw new InvalidOperationException("StateMachine is already executing.");
 
         _executeGate = true;
 
         TransitionTo(ExecutionStatus.Starting);
         _current = _initial;
-
         _observer?.OnStateEntered(_current);
-
         TransitionTo(ExecutionStatus.Running);
     }
 
     protected override Result OnRun()
     {
-        // Ignore policy: once terminal, do not re-run.
+        // Ignore policy: return cached result without advancing.
         ExecutionStatus status = _status;
         if (_restartPolicy == RestartPolicy.Ignore &&
             status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
@@ -170,37 +168,24 @@ public class StateMachine : State
             return _terminalResult;
         }
 
-        // ── Re-entrance guard ───────────────────────────────────────────
         if (_reentranceGuard)
-        {
             throw new InvalidOperationException("StateMachine is already executing.");
-        }
 
         _reentranceGuard = true;
         try
         {
-            // Full-run path (State.Execute): loop until terminal.
-            // OnRun must never return Result.Continue.
-            while (true)
-            {
-                try
-                {
-                    Result result = TickInternal();
-                    if (result == Result.Continue)
-                    {
-                        continue;
-                    }
+            Result result = TickInternal();
+            if (result == Result.Continue)
+                return Result.Continue; // not finished; caller will Execute() again next frame
 
-                    Finalise(result);
-                    return result;
-                }
-                catch (Exception ex)
-                {
-                    _observer?.OnStateFailed(_current, ex);
-                    Finalise(Result.Failure);
-                    throw;
-                }
-            }
+            Finalise(result);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _observer?.OnStateFailed(_current, ex);
+            Finalise(Result.Failure);
+            throw;
         }
         finally
         {
@@ -210,12 +195,10 @@ public class StateMachine : State
 
     protected override void OnExit()
     {
-        // Gate is released in Finalise for the normal path.
-        // For Ignore policy we also don't want OnExit to toggle it erroneously.
-        if (_restartPolicy != RestartPolicy.Ignore)
-        {
-            _executeGate = false;
-        }
+        // Intentionally empty.
+        // Finalise() releases _executeGate on the terminal path.
+        // While Execute() returns Continue the machine stays Running and the gate
+        // must remain held — so OnExit must not touch it.
     }
 
 
@@ -313,9 +296,9 @@ public class StateMachine : State
             case Result.StatusCode.Failure:
                 return Result.Failure;
             case Result.StatusCode.Continue:
-                throw new InvalidOperationException(
-                    $"Node '{_current}' returned Result.Continue, which is reserved for the " +
-                    "stepped-execution runtime. Node logic must return Success or Failure.");
+                // Node is still in progress (e.g. a multi-frame Unity state).
+                // Tick() will call it again next frame; Execute()'s while-loop will spin.
+                return Result.Continue;
             default:
                 throw new InvalidOperationException("Unknown node result.");
         }

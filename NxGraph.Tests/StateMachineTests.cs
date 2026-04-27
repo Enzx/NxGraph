@@ -46,7 +46,7 @@ public class StateMachineTests
             .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
 
-        Result result = fsm.Execute();
+        Result result = RunToCompletion(fsm);
 
         Assert.That(result, Is.EqualTo(Result.Success));
         Assert.That(counter, Is.EqualTo(2));
@@ -62,11 +62,10 @@ public class StateMachineTests
             .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
 
-        Result result = fsm.Execute();
+        Result result = RunToCompletion(fsm);
 
         Assert.That(result, Is.EqualTo(Result.Failure));
-        // third state should never run
-        Assert.That(counter, Is.EqualTo(2));
+        Assert.That(counter, Is.EqualTo(2)); // third state must never run
     }
 
     [Test]
@@ -79,7 +78,7 @@ public class StateMachineTests
             .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
 
-        Result result = fsm.Execute();
+        Result result = RunToCompletion(fsm);
 
         Assert.That(result, Is.EqualTo(Result.Success));
         Assert.That(counter, Is.EqualTo(3));
@@ -585,6 +584,24 @@ public class StateMachineTests
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Steps <paramref name="fsm"/> until it produces a terminal result.
+    /// Fails the test after <paramref name="maxSteps"/> iterations to prevent a runaway loop.
+    /// </summary>
+    private static Result RunToCompletion(StateMachine fsm, int maxSteps = 1000)
+    {
+        Result result = Result.Continue;
+        int steps = 0;
+        while (result == Result.Continue)
+        {
+            Assert.That(steps, Is.LessThan(maxSteps),
+                $"StateMachine did not terminate within {maxSteps} steps.");
+            result = fsm.Execute();
+            steps++;
+        }
+        return result;
+    }
 
     private sealed class RecordingObserver : IStateMachineObserver
     {

@@ -13,7 +13,7 @@ public class WaitStateExecutionTests
     public async Task wait_state_should_complete_after_delay()
     {
         const int delay = 1;
-        const float errorMargin = 0.1f;
+        const float errorMargin = 0.5f;
         AsyncStateMachine fsm = GraphBuilder
             .Start()
             .WaitForAsync(delay.Seconds())

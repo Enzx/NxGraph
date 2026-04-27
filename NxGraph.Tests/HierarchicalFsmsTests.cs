@@ -36,6 +36,9 @@ public class HierarchicalFsmTests
     private static readonly List<string> ExecutionLog = [];
     private static readonly List<string> ExpectedLog = ["parent start", "child start", "child end", "parent end"];
 
+    [SetUp]
+    public void SetUp() => ExecutionLog.Clear();
+
 
     [Test]
     public async Task Executes_HierarchicalFsm_InExpected_Order()

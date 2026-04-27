@@ -29,9 +29,17 @@ public readonly struct Result : IEquatable<Result>
         Failure = 1,
 
         /// <summary>
-        /// The state machine has more nodes to process.
-        /// Returned by <see cref="Fsm.StateMachine.Execute"/> during frame-stepped
-        /// execution. Node logic must <b>never</b> return this value.
+        /// The operation is still in progress.
+        /// <para>
+        /// Returned by <see cref="Fsm.StateMachine.Tick"/> while more nodes remain, and by
+        /// node logic to indicate the current node needs another tick (e.g. a multi-frame
+        /// Unity state such as a timer or animation wait).
+        /// </para>
+        /// <para>
+        /// In the blocking full-run path (<see cref="State.Execute"/>), a node returning
+        /// this value causes the machine to spin on that node until it returns
+        /// <see cref="Success"/> or <see cref="Failure"/>.
+        /// </para>
         /// </summary>
         Continue = 2
     }

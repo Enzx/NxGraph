@@ -21,9 +21,11 @@ public class CancellationTests
         Graph graph = builder.Build();
 
         AsyncStateMachine fsm = new(graph);
+        fsm.SetAutoReset(false);
 
         using CancellationTokenSource cts = new(50);
 
         Assert.ThrowsAsync<TaskCanceledException>(async () => { await fsm.ExecuteAsync(cts.Token); });
+        Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Cancelled));
     }
 }
