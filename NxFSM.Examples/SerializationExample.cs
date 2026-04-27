@@ -1,53 +1,57 @@
-﻿using NxGraph;
+﻿using System.Text.Json;
+using NxGraph;
 using NxGraph.Authoring;
-using NxGraph.Fsm;
 using NxGraph.Graphs;
 using NxGraph.Serialization;
+using NxGraph.Serialization.Abstraction;
 
 namespace NxFSM.Examples;
 
-public class ExampleState : IAsyncLogic
+// ── Logic type that the codec serializes ─────────────────────────────────
+public sealed class ExampleState : IAsyncLogic
 {
     public string Data { get; set; } = string.Empty;
 
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
-    {
-        return ResultHelpers.Success;
-    }
+        => ResultHelpers.Success;
 }
 
-public class ExampleLogicSerializer : ILogicTextCodec
+// ── Text codec: serializes / deserializes ExampleState via System.Text.Json ──
+public sealed class ExampleLogicCodec : ILogicTextCodec
 {
-    public IAsyncLogic Deserialize(string s)
-    {
-        return System.Text.Json.JsonSerializer.Deserialize<ExampleState>(s) ?? throw new InvalidOperationException();
-    }
+    public string Serialize(IAsyncLogic asyncLogic)
+        => JsonSerializer.Serialize((ExampleState)asyncLogic);
 
-    public string Serialize(IAsyncLogic data)
-    {
-        return System.Text.Json.JsonSerializer.Serialize((ExampleState)data);
-    }
+    public IAsyncLogic Deserialize(string payload)
+        => JsonSerializer.Deserialize<ExampleState>(payload)
+           ?? throw new InvalidOperationException("Failed to deserialize ExampleState.");
 }
 
 public static class SerializationExample
 {
     public static async ValueTask Run()
     {
-        // GraphSerializer.SetLogicCodec(new ExampleLogicSerializer());
-        // ExampleState start = new() { Data = "start" };
-        // ExampleState end = new() { Data = "end" };
-        // Graph graph = GraphBuilder.StartWith(start).SetName("Start").To(end).SetName("End").Build().SetName("FSM");
-        // MemoryStream stream = new();
-        // await GraphSerializer.ToJsonAsync(graph, stream);
-        // byte[] bytes = stream.ToArray();
-        // string json = System.Text.Encoding.UTF8.GetString(bytes);
-        // Console.WriteLine(json);
-        // stream.Position = 0;
-        // Graph deserializedGraph = await GraphSerializer.FromJsonAsync(stream);
-        //
-        // AsyncStateMachine fsm = deserializedGraph.ToAsyncStateMachine();
-        // await fsm.ExecuteAsync();
+        Console.WriteLine("=== Serialization Example ===");
 
+        Graph graph = GraphBuilder
+            .StartWithAsync(new ExampleState { Data = "start" }).SetName("Start")
+            .ToAsync(new ExampleState { Data = "end" }).SetName("End")
+            .Build()
+            .SetName("ExampleGraph");
 
+        GraphSerializer serializer = new(new ExampleLogicCodec());
+
+        await using MemoryStream stream = new();
+        await serializer.ToJsonAsync(graph, stream);
+
+        string json = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        Console.WriteLine($"Serialized ({json.Length} bytes):");
+        Console.WriteLine(json);
+
+        stream.Position = 0;
+        Graph roundTripped = await serializer.FromJsonAsync(stream);
+
+        Result result = await roundTripped.ToAsyncStateMachine().ExecuteAsync();
+        Console.WriteLine($"Round-tripped FSM result: {result}");
     }
 }

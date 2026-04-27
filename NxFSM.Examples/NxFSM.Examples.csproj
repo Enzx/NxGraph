@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\NxGraph.Serialization.Tests\NxGraph.Serialization.Tests.csproj" />
+        <ProjectReference Include="..\NxGraph.Serialization\NxGraph.Serialization.csproj" />
         <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>
     </ItemGroup>
 

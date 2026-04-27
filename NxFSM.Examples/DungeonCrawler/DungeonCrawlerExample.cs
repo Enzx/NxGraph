@@ -143,7 +143,10 @@ public static class DungeonCrawlerExample
         Console.ResetColor();
         Console.WriteLine();
 
-        Result result = fsm.Execute();
+        // Execute() advances one node per call; loop until a terminal result.
+        Result result = Result.Continue;
+        while (result == Result.Continue)
+            result = fsm.Execute();
 
         Console.WriteLine();
         ConsoleColor resultColour = result == Result.Success ? ConsoleColor.Green : ConsoleColor.Red;
