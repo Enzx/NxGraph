@@ -41,6 +41,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution--stepped-model)
   - [Unity integration](#unity-integration)
+  - [Nested machines](#nested-machines)
   - [Restart policy](#restart-policy)
 - [Validation](#validation)
 - [Observability](#observability)
@@ -322,7 +323,54 @@ public class FsmRunner : MonoBehaviour
 }
 ```
 
-For nested sub-machines used as nodes in a Unity context, wrap them in a custom `State` that calls `inner.Execute()` in its `OnRun()`.
+### Nested machines
+
+Both `StateMachine` and `AsyncStateMachine` implement the node interface directly, so a machine can be passed as a node inside another machine with no wrapper state required.
+
+**Sync, stepped:**
+
+```csharp
+StateMachine childFsm = GraphBuilder
+    .StartWith(() => Result.Success).SetName("Init")
+    .To(new RelayState(
+            run: () => Result.Success,
+            onExit: () => Console.WriteLine("child done")))
+    .ToStateMachine();
+
+StateMachine parentFsm = GraphBuilder
+    .StartWith(childFsm).SetName("Child")
+    .To(new RelayState(
+            run: () => Result.Success,
+            onExit: () => Console.WriteLine("parent done")))
+    .SetName("Cleanup")
+    .ToStateMachine();
+
+// Each Execute() advances exactly one node — even one inside the child.
+// 3 ticks: child node 1 → child node 2 (child done) → parent Cleanup
+Result r = Result.Continue;
+while (r == Result.Continue)
+    r = parentFsm.Execute();
+```
+
+From Unity's `Update()` each call advances exactly one node across the whole hierarchy — no frame blocking.
+
+**Async:**
+
+```csharp
+AsyncStateMachine childFsm = GraphBuilder
+    .StartWithAsync(_ => ResultHelpers.Success)
+    .ToAsync(_ => ResultHelpers.Success)
+    .ToAsyncStateMachine();
+
+AsyncStateMachine parentFsm = GraphBuilder
+    .StartWithAsync(childFsm)
+    .ToAsync(_ => ResultHelpers.Success)
+    .ToAsyncStateMachine();
+
+Result result = await parentFsm.ExecuteAsync();
+```
+
+Nesting can be arbitrarily deep. Each level is stepped independently; the parent treats a running child as `Result.Continue` and a completed child as `Result.Success`.
 
 ### Restart policy
 
