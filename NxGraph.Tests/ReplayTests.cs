@@ -306,6 +306,49 @@ public class ReplayTests
     }
 
     [Test]
+    public void Sync_state_machine_records_replay_events_via_recorder()
+    {
+        ReplayRecorder recorder = new();
+        StateMachine fsm = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(() => Result.Success)
+            .ToStateMachine(recorder);
+
+        // Run to completion — sync machine ticks via Execute().
+        Result r;
+        do { r = fsm.Execute(); } while (r == Result.Continue);
+
+        ReadOnlyMemory<ReplayEvent> events = recorder.GetEvents();
+        Assert.Multiple(() =>
+        {
+            Assert.That(events.Length, Is.GreaterThan(0));
+            Assert.That(events.ToArray().Any(e => e.Type == EventType.StateMachineStarted), Is.True);
+            Assert.That(events.ToArray().Any(e => e.Type == EventType.StateMachineCompleted), Is.True);
+        });
+    }
+
+    [Test]
+    public void Recorder_DroppedCount_increments_when_ring_overflows()
+    {
+        ReplayRecorder recorder = new(capacity: 4);
+        StateMachine fsm = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(() => Result.Success)
+            .To(() => Result.Success)
+            .To(() => Result.Success)
+            .ToStateMachine(recorder);
+        // Auto-restart is on by default, which would loop forever. Keep deterministic by
+        // disabling auto-reset and only running once.
+        fsm.SetResetPolicy(RestartPolicy.Manual);
+
+        Result r;
+        do { r = fsm.Execute(); } while (r == Result.Continue);
+
+        Assert.That(recorder.DroppedCount, Is.GreaterThan(0),
+            "A four-node sync machine emits more than four events; ring of size 4 must have dropped some.");
+    }
+
+    [Test]
     public void Deserialize_rejects_payload_without_magic_header()
     {
         // Payload starts with the old format (4-byte count = 0, no events). Without the

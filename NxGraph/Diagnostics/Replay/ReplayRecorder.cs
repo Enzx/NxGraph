@@ -4,12 +4,19 @@ using NxGraph.Graphs;
 
 namespace NxGraph.Diagnostics.Replay;
 
-public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObserver
+public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObserver, IStateMachineObserver
 {
     // ReSharper disable UnusedMember.Global
     // ReSharper disable once MemberCanBePrivate.Global
     public int Count { get; private set; }
     public int Capacity => _events.Length;
+
+    /// <summary>
+    /// Number of events the ring buffer has dropped due to capacity overflow. Increments
+    /// every time Record overwrites an existing slot. Useful for callers that need to
+    /// distinguish "complete capture" from "lossy capture" without scanning the buffer.
+    /// </summary>
+    public long DroppedCount { get; private set; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Clear()
@@ -17,6 +24,7 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
         Count = 0;
         _head = 0;
         _tail = 0;
+        DroppedCount = 0;
     }
 
 
@@ -74,6 +82,7 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
         if (Count == _events.Length)
         {
             _head = (_head + 1) % _events.Length;
+            DroppedCount++;
         }
         else
         {
@@ -145,4 +154,35 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
         Record(new ReplayEvent(EventType.Log, nodeId, null, message, CurrentTimestamp));
         return ResultHelpers.CompletedTask;
     }
+
+    // ── Synchronous observer parity ─────────────────────────────────────
+    // Mirrors the async callbacks above. Sync StateMachine instances previously emitted no
+    // replay events because ReplayRecorder only implemented the async observer interface.
+
+    void IStateMachineObserver.OnStateEntered(NodeId id)
+        => Record(new ReplayEvent(EventType.StateEntered, id, timestamp: CurrentTimestamp));
+
+    void IStateMachineObserver.OnStateExited(NodeId id)
+        => Record(new ReplayEvent(EventType.StateExited, id, timestamp: CurrentTimestamp));
+
+    void IStateMachineObserver.OnTransition(NodeId from, NodeId to)
+        => Record(new ReplayEvent(EventType.Transition, from, to, timestamp: CurrentTimestamp));
+
+    void IStateMachineObserver.OnStateFailed(NodeId id, Exception ex)
+        => Record(new ReplayEvent(EventType.StateFailed, id, null, ex.ToString(), CurrentTimestamp));
+
+    void IStateMachineObserver.OnStateMachineReset(NodeId graphId)
+        => Record(new ReplayEvent(EventType.StateMachineReset, graphId, timestamp: CurrentTimestamp));
+
+    void IStateMachineObserver.OnStateMachineStarted(NodeId graphId)
+        => Record(new ReplayEvent(EventType.StateMachineStarted, graphId, timestamp: CurrentTimestamp));
+
+    void IStateMachineObserver.OnStateMachineCompleted(NodeId graphId, Result result)
+        => Record(new ReplayEvent(EventType.StateMachineCompleted, graphId, null, result.ToString(), CurrentTimestamp));
+
+    void IStateMachineObserver.StateMachineStatusChanged(NodeId graphId, ExecutionStatus prev, ExecutionStatus next)
+        => Record(new ReplayEvent(EventType.StatusChanged, graphId, null, $"{prev}->{next}", CurrentTimestamp));
+
+    void IStateMachineObserver.OnLogReport(NodeId nodeId, string message)
+        => Record(new ReplayEvent(EventType.Log, nodeId, null, message, CurrentTimestamp));
 }
