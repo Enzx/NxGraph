@@ -54,6 +54,11 @@ public class StateMachine : State
     private RestartPolicy _restartPolicy = RestartPolicy.Auto;
     private Result _terminalResult = Result.Success;
     private bool _executeGate;
+    // Guards OnRun against reentrance from inside node logic that calls Execute() on the
+    // owning machine. _executeGate alone is not sufficient: State.Execute() only invokes
+    // OnEnter once per lifecycle (via its own _hasEntered flag), so a re-entrant Execute()
+    // skips OnEnter entirely and never observes _executeGate.
+    private bool _reentranceGuard;
     private readonly Action<string> _cachedLogReportCallback;
 
     /// <summary>Public execution status.</summary>
@@ -163,6 +168,10 @@ public class StateMachine : State
             return _terminalResult;
         }
 
+        if (_reentranceGuard)
+            throw new InvalidOperationException("StateMachine is already executing.");
+
+        _reentranceGuard = true;
         try
         {
             Result result = TickInternal();
@@ -177,6 +186,10 @@ public class StateMachine : State
             _observer?.OnStateFailed(_current, ex);
             Finalise(Result.Failure);
             throw;
+        }
+        finally
+        {
+            _reentranceGuard = false;
         }
     }
 
