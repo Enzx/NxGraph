@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using NxGraph.Compatibility;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 
 namespace NxGraph.Graphs;
 
@@ -142,7 +143,14 @@ public sealed class Graph : INode, IGraph
     {
         Guard.NotNull(agent, nameof(agent));
 
+        if (!SetAgentRecursive(agent))
+        {
+            throw new InvalidOperationException($"No nodes in the graph implement {nameof(IAgentSettable<TAgent>)}.");
+        }
+    }
 
+    private bool SetAgentRecursive<TAgent>(TAgent agent)
+    {
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
         {
@@ -153,19 +161,30 @@ public sealed class Graph : INode, IGraph
                 logicNode.AsyncLogic as IAgentSettable<TAgent>
                 ?? logicNode.Logic as IAgentSettable<TAgent>;
 
-            if (settable is null)
+            if (settable is not null)
             {
+                settable.SetAgent(agent);
+                found = true;
+                // Generic StateMachine<TAgent>/AsyncStateMachine<TAgent> already re-walk
+                // their inner graph via SetAgent — no additional recursion needed.
                 continue;
             }
 
-            found = true;
-            settable.SetAgent(agent);
+            // Non-generic nested state machines do not implement IAgentSettable<TAgent>, so
+            // the direct match misses them. Walk their inner graph explicitly so
+            // IAgentSettable<TAgent> nodes deeper in the tree still receive the agent.
+            Graph? nested = (logicNode.AsyncLogic as AsyncStateMachine)?.Graph
+                         ?? (logicNode.Logic as StateMachine)?.Graph;
+            if (nested is not null && !ReferenceEquals(nested, this))
+            {
+                if (nested.SetAgentRecursive(agent))
+                {
+                    found = true;
+                }
+            }
         }
 
-        if (!found)
-        {
-            throw new InvalidOperationException($"No nodes in the graph implement {nameof(IAgentSettable<TAgent>)}.");
-        }
+        return found;
     }
 
     public INode GetNodeByIndex(int index)
