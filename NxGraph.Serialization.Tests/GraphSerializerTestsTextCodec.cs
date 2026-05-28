@@ -1,3 +1,4 @@
+using System.Text;
 using NxGraph.Authoring;
 using NxGraph.Graphs;
 
@@ -79,6 +80,37 @@ public class GraphSerializerTestsTextCodec
         Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await _serializer.FromBinaryAsync(source: null!));
         // ReSharper restore NullableWarningSuppressionIsUsed
+    }
+
+    [Test]
+    public async Task Json_payload_includes_serialization_version()
+    {
+        Graph graph = BuildChain("only");
+
+        await using MemoryStream stream = new();
+        await _serializer.ToJsonAsync(graph, stream);
+        string json = Encoding.UTF8.GetString(stream.ToArray());
+
+        Assert.That(json, Does.Contain($"\"version\": {SerializationVersion.Version}"));
+    }
+
+    [Test]
+    public void FromJsonAsync_rejects_payload_with_newer_version()
+    {
+        // Hand-rolled JSON with a version one ahead of what the serializer supports.
+        string json = $$"""
+            {
+              "version": {{SerializationVersion.Version + 1}},
+              "nodes": [],
+              "transitions": [],
+              "subGraphs": [],
+              "name": null,
+              "index": -1
+            }
+            """;
+
+        using MemoryStream source = new(Encoding.UTF8.GetBytes(json));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _serializer.FromJsonAsync(source));
     }
 
     [Test]

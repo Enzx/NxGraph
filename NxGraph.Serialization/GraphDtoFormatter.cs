@@ -13,7 +13,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
     {
         // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[]]
         writer.WriteArrayHeader(VersionOneHeaderCount);
-        writer.Write(GraphDto.Version);
+        writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
         options.Resolver.GetFormatterWithVerify<INodeDto[]>().Serialize(ref writer, value.Nodes, options);
@@ -44,6 +44,6 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             options.Resolver.GetFormatterWithVerify<SubGraphDto[]>().Deserialize(ref reader, options);
 
 
-        return new GraphDto(nodes, transitions, subGraphs, index, name);
+        return new GraphDto(nodes, transitions, subGraphs, index, name) { Version = version };
     }
 }

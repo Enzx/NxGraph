@@ -21,7 +21,13 @@ internal sealed class GraphDto
         Index = index;
     }
 
-    public static int Version => SerializationVersion.Version;
+    /// <summary>
+    /// Serialized payload version. Defaults to <see cref="SerializationVersion.Version"/> for
+    /// freshly-constructed DTOs so the JSON/MessagePack writers emit a version on the wire,
+    /// and is overwritten by the deserializer when reading an existing payload so callers can
+    /// detect version mismatches.
+    /// </summary>
+    public int Version { get; set; } = SerializationVersion.Version;
 
     public INodeDto[] Nodes { get; set; }
     public TransitionDto[] Transitions { get; set; }

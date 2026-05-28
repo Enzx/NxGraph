@@ -88,6 +88,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         GraphDto dto = JsonSerializer.Deserialize<GraphDto>(json, _jsonOptions) ??
                        throw new InvalidOperationException("Failed to parse Graph JSON.");
 
+        // Match the version-check behaviour of GraphDtoFormatter (MessagePack path). Future
+        // versions are rejected; matching versions pass through. Lower versions are accepted
+        // for forward compatibility (older payloads remain readable when the format adds
+        // optional fields), so only the strict-greater check fires here.
+        if (dto.Version > SerializationVersion.Version)
+        {
+            throw new InvalidOperationException(
+                $"GraphDto: JSON payload version {dto.Version} is newer than serializer version {SerializationVersion.Version}.");
+        }
+
         return FromDto(dto);
     }
 
