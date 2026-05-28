@@ -17,7 +17,10 @@ public sealed class SwitchState<TKey>(
 {
     private readonly Func<TKey> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
     private readonly IReadOnlyDictionary<TKey, NodeId> _cases = cases ?? throw new ArgumentNullException(nameof(cases));
-    private NodeId _defaultNode = defaultNode;
+    // When no explicit default is supplied, fall back to NodeId.Default — both the sync and
+    // the async runtimes treat that as a terminal-success exit from the director. Defaulting
+    // to default(NodeId) would silently route to Start (index 0) instead.
+    private NodeId _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
 
     /// <summary>
     /// Selects the next node based on the selector function.
@@ -27,6 +30,14 @@ public sealed class SwitchState<TKey>(
     {
         TKey key = _selector();
         return _cases.GetValueOrDefault(key, _defaultNode);
+    }
+
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        foreach (NodeId target in _cases.Values)
+            yield return target;
+        yield return _defaultNode;
     }
 
 

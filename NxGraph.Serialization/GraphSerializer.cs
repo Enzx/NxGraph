@@ -12,6 +12,11 @@ namespace NxGraph.Serialization;
 
 public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializer
 {
+    // Limits subgraph recursion in ToDto/FromDto. A deeper nesting in a payload almost
+    // certainly indicates a malicious or corrupt input rather than a real graph; without
+    // the cap an attacker can stack-overflow the deserializer with a deeply nested payload.
+    internal const int MaxSubGraphDepth = 64;
+
     private readonly ILogicCodec _codec;
     private readonly MessagePackSerializerOptions _options;
 
@@ -28,7 +33,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             ]
         );
         _codec = codec;
-        _options = MessagePackSerializerOptions.Standard.WithResolver(resolver);
+        // UntrustedData enables MessagePack-CSharp's hardening against pathological inputs
+        // (collection size caps, hash-collision DoS guards, etc.). Required because graph
+        // payloads can come from disk or the network — both are untrusted boundaries.
+        _options = MessagePackSerializerOptions.Standard
+            .WithSecurity(MessagePackSecurity.UntrustedData)
+            .WithResolver(resolver);
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -88,6 +98,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         GraphDto dto = JsonSerializer.Deserialize<GraphDto>(json, _jsonOptions) ??
                        throw new InvalidOperationException("Failed to parse Graph JSON.");
 
+        // Match the version-check behaviour of GraphDtoFormatter (MessagePack path). Future
+        // versions are rejected; matching versions pass through. Lower versions are accepted
+        // for forward compatibility (older payloads remain readable when the format adds
+        // optional fields), so only the strict-greater check fires here.
+        if (dto.Version > SerializationVersion.Version)
+        {
+            throw new InvalidOperationException(
+                $"GraphDto: JSON payload version {dto.Version} is newer than serializer version {SerializationVersion.Version}.");
+        }
+
         return FromDto(dto);
     }
 
@@ -110,9 +130,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         return FromDto(dto);
     }
 
-    private GraphDto ToDto(Graph graph)
+    private GraphDto ToDto(Graph graph) => ToDto(graph, depth: 0);
+
+    private GraphDto ToDto(Graph graph, int depth)
     {
         ArgumentNullException.ThrowIfNull(graph);
+        if (depth > MaxSubGraphDepth)
+        {
+            throw new InvalidOperationException(
+                $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while serializing.");
+        }
         if (_codec is NullLogicCodec)
         {
             throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.");
@@ -139,7 +166,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
                         // Serialize state machine as sub-graph
-                        GraphDto childDto = ToDto(stateMachine.Graph);
+                        GraphDto childDto = ToDto(stateMachine.Graph, depth + 1);
                         subGraphs.Add(new SubGraphDto(index, childDto));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.StateMachineMarker.Id.Name);
                         break;
@@ -163,7 +190,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     break;
                 case Graph childGraph:
                 {
-                    GraphDto childDto = ToDto(childGraph);
+                    GraphDto childDto = ToDto(childGraph, depth + 1);
                     subGraphs.Add(new SubGraphDto(index, childDto));
                     break;
                 }
@@ -173,9 +200,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name);
     }
 
-    private Graph FromDto(GraphDto dto)
+    private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
+
+    private Graph FromDto(GraphDto dto, int depth)
     {
         ArgumentNullException.ThrowIfNull(dto);
+        if (depth > MaxSubGraphDepth)
+        {
+            throw new InvalidOperationException(
+                $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while deserializing.");
+        }
 
         int nodesLength = dto.Nodes.Length;
         if (nodesLength == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
@@ -184,12 +218,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         var textCodec = _codec as ILogicCodec<string>;
 
         INode[] nodes = new INode[nodesLength];
+        bool[] slotFilled = new bool[nodesLength];
         for (int index = 0; index < nodesLength; index++)
         {
             INodeDto nodeDto = dto.Nodes[index];
             if (nodeDto.Index < 0 || nodeDto.Index >= nodesLength)
                 throw new InvalidOperationException(
                     $"Node DTO index {nodeDto.Index} is out of range (0..{nodesLength - 1}).");
+            if (slotFilled[nodeDto.Index])
+                throw new InvalidOperationException(
+                    $"Node DTO index {nodeDto.Index} is duplicated in the payload.");
 
             switch (nodeDto)
             {
@@ -207,7 +245,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
                 {
                     IAsyncLogic asyncLogic = textCodec.Deserialize(textDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, textDto.Name), asyncLogic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(nodeDto.Index, textDto.Name), asyncLogic);
                 }
                     break;
 
@@ -217,13 +255,24 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                             "GraphSerializer has no ILogicCodec<ReadOnlyMemory<byte>> configured, cannot decode binary nodes.");
                 {
                     IAsyncLogic binAsyncLogic = binaryCodec.Deserialize(binaryDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, binaryDto.Name), binAsyncLogic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(nodeDto.Index, binaryDto.Name), binAsyncLogic);
                 }
                     break;
 
                 default:
                     throw new InvalidOperationException($"Unknown node DTO type: {nodeDto.GetType().FullName}");
             }
+
+            slotFilled[nodeDto.Index] = true;
+        }
+
+        // Reject payloads with gaps. With nodesLength items and no duplicates already
+        // enforced above, a single unfilled slot means the payload skipped an index
+        // — corrupt routing if we proceeded.
+        for (int i = 0; i < nodesLength; i++)
+        {
+            if (!slotFilled[i])
+                throw new InvalidOperationException($"Node DTO payload is missing entry for index {i}.");
         }
 
         Dictionary<int, Graph> ownerToSubGraph = new();
@@ -236,7 +285,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
 
-            Graph childGraph = FromDto(subDto.Graph);
+            Graph childGraph = FromDto(subDto.Graph, depth + 1);
             if (nodes[subDto.OwnerIndex] == LogicNode.StateMachineMarker)
             {
                 ownerToSubGraph[subDto.OwnerIndex] = childGraph;

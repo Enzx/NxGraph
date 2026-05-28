@@ -38,7 +38,11 @@ public class AsyncTimeoutState : IAsyncLogic
 #if NET6_0_OR_GREATER
             reg = ct.UnsafeRegister(_cachedCancelCallback, cts);
 #else
-            reg = ct.Register(static s => ((Action)s!).Invoke(), _cachedCancelCallback);
+            // netstandard2.1 has no UnsafeRegister; the Register(Action<object?>, object?) overload
+            // takes the callback and the state directly. The previous version cast the state to
+            // Action and invoked it, which threw InvalidCastException because the cached callback
+            // is Action<object?>, not Action — and would also have lost the CTS state.
+            reg = ct.Register(_cachedCancelCallback, cts);
 #endif
         }
 
@@ -95,10 +99,12 @@ public class AsyncTimeoutState : IAsyncLogic
                 return cts;
             }
 #else
-            // No TryReset in .NET Standard 2.1, so just dispose and create new.
+            // No TryReset in .NET Standard 2.1: reuse the rented CTS when it has not been
+            // cancelled (CancelAfter will reset its timer on next use). Previously this
+            // branch allocated a *new* CTS when the rented one was not cancelled, leaking
+            // the rented one and doubling allocations on every rent.
             if (!cts.IsCancellationRequested)
             {
-                cts = new CancellationTokenSource(); 
                 return cts;
             }
 #endif

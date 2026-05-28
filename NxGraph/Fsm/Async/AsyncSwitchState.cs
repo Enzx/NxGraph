@@ -11,14 +11,25 @@ public sealed class AsyncSwitchState<TKey>(
 {
     private readonly Func<ValueTask<TKey>> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
     private readonly IReadOnlyDictionary<TKey, NodeId> _cases = cases ?? throw new ArgumentNullException(nameof(cases));
-    private NodeId _defaultNode = defaultNode;
+    // When no explicit default is supplied, fall back to NodeId.Default — the async runtime
+    // (AsyncStateMachine.InternalRunAsync) treats that as a terminal-success exit from the
+    // director. Defaulting to default(NodeId) would silently route to Start (index 0).
+    private NodeId _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
 
 
     public async ValueTask<NodeId> SelectNextAsync(CancellationToken ct = default)
     {
         TKey key = await _selector();
         return _cases.GetValueOrDefault(key, _defaultNode);
-        
+
+    }
+
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        foreach (NodeId target in _cases.Values)
+            yield return target;
+        yield return _defaultNode;
     }
 
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)

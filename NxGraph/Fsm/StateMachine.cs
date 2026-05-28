@@ -54,6 +54,10 @@ public class StateMachine : State
     private RestartPolicy _restartPolicy = RestartPolicy.Auto;
     private Result _terminalResult = Result.Success;
     private bool _executeGate;
+    // Guards OnRun against reentrance from inside node logic that calls Execute() on the
+    // owning machine. _executeGate alone is not sufficient: State.Execute() only invokes
+    // OnEnter once per lifecycle (via its own _hasEntered flag), so a re-entrant Execute()
+    // skips OnEnter entirely and never observes _executeGate.
     private bool _reentranceGuard;
     private readonly Action<string> _cachedLogReportCallback;
 
@@ -202,15 +206,32 @@ public class StateMachine : State
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Finalise(Result result)
     {
-        _terminalResult = result;
-        TransitionTo(result.IsSuccess ? ExecutionStatus.Completed : ExecutionStatus.Failed);
-
-        if (_restartPolicy == RestartPolicy.Auto)
+        try
         {
-            Reset();
-        }
+            // Idempotent: if the first Finalise call partially completed (e.g. an observer
+            // threw inside TransitionTo) the OnRun catch will call Finalise(Failure) again.
+            // Skip the notification cascade in that case so OnStateMachineCompleted is not
+            // fired twice for the same run.
+            ExecutionStatus current = _status;
+            if (current is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+            {
+                return;
+            }
 
-        _executeGate = false;
+            _terminalResult = result;
+            TransitionTo(result.IsSuccess ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+
+            if (_restartPolicy == RestartPolicy.Auto)
+            {
+                Reset();
+            }
+        }
+        finally
+        {
+            // Always release the gate, even if an observer or Reset threw. Without this the
+            // gate stays held and every subsequent Execute() throws "already executing".
+            _executeGate = false;
+        }
     }
 
     /// <summary>
