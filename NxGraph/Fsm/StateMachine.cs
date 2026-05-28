@@ -54,7 +54,6 @@ public class StateMachine : State
     private RestartPolicy _restartPolicy = RestartPolicy.Auto;
     private Result _terminalResult = Result.Success;
     private bool _executeGate;
-    private bool _reentranceGuard;
     private readonly Action<string> _cachedLogReportCallback;
 
     /// <summary>Public execution status.</summary>
@@ -164,10 +163,6 @@ public class StateMachine : State
             return _terminalResult;
         }
 
-        if (_reentranceGuard)
-            throw new InvalidOperationException("StateMachine is already executing.");
-
-        _reentranceGuard = true;
         try
         {
             Result result = TickInternal();
@@ -182,10 +177,6 @@ public class StateMachine : State
             _observer?.OnStateFailed(_current, ex);
             Finalise(Result.Failure);
             throw;
-        }
-        finally
-        {
-            _reentranceGuard = false;
         }
     }
 
@@ -202,15 +193,32 @@ public class StateMachine : State
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Finalise(Result result)
     {
-        _terminalResult = result;
-        TransitionTo(result.IsSuccess ? ExecutionStatus.Completed : ExecutionStatus.Failed);
-
-        if (_restartPolicy == RestartPolicy.Auto)
+        try
         {
-            Reset();
-        }
+            // Idempotent: if the first Finalise call partially completed (e.g. an observer
+            // threw inside TransitionTo) the OnRun catch will call Finalise(Failure) again.
+            // Skip the notification cascade in that case so OnStateMachineCompleted is not
+            // fired twice for the same run.
+            ExecutionStatus current = _status;
+            if (current is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+            {
+                return;
+            }
 
-        _executeGate = false;
+            _terminalResult = result;
+            TransitionTo(result.IsSuccess ? ExecutionStatus.Completed : ExecutionStatus.Failed);
+
+            if (_restartPolicy == RestartPolicy.Auto)
+            {
+                Reset();
+            }
+        }
+        finally
+        {
+            // Always release the gate, even if an observer or Reset threw. Without this the
+            // gate stays held and every subsequent Execute() throws "already executing".
+            _executeGate = false;
+        }
     }
 
     /// <summary>
