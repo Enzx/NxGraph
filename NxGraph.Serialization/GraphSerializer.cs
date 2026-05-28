@@ -12,6 +12,11 @@ namespace NxGraph.Serialization;
 
 public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializer
 {
+    // Limits subgraph recursion in ToDto/FromDto. A deeper nesting in a payload almost
+    // certainly indicates a malicious or corrupt input rather than a real graph; without
+    // the cap an attacker can stack-overflow the deserializer with a deeply nested payload.
+    internal const int MaxSubGraphDepth = 64;
+
     private readonly ILogicCodec _codec;
     private readonly MessagePackSerializerOptions _options;
 
@@ -28,7 +33,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             ]
         );
         _codec = codec;
-        _options = MessagePackSerializerOptions.Standard.WithResolver(resolver);
+        // UntrustedData enables MessagePack-CSharp's hardening against pathological inputs
+        // (collection size caps, hash-collision DoS guards, etc.). Required because graph
+        // payloads can come from disk or the network — both are untrusted boundaries.
+        _options = MessagePackSerializerOptions.Standard
+            .WithSecurity(MessagePackSecurity.UntrustedData)
+            .WithResolver(resolver);
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -120,9 +130,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         return FromDto(dto);
     }
 
-    private GraphDto ToDto(Graph graph)
+    private GraphDto ToDto(Graph graph) => ToDto(graph, depth: 0);
+
+    private GraphDto ToDto(Graph graph, int depth)
     {
         ArgumentNullException.ThrowIfNull(graph);
+        if (depth > MaxSubGraphDepth)
+        {
+            throw new InvalidOperationException(
+                $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while serializing.");
+        }
         if (_codec is NullLogicCodec)
         {
             throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.");
@@ -149,7 +166,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
                         // Serialize state machine as sub-graph
-                        GraphDto childDto = ToDto(stateMachine.Graph);
+                        GraphDto childDto = ToDto(stateMachine.Graph, depth + 1);
                         subGraphs.Add(new SubGraphDto(index, childDto));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.StateMachineMarker.Id.Name);
                         break;
@@ -173,7 +190,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     break;
                 case Graph childGraph:
                 {
-                    GraphDto childDto = ToDto(childGraph);
+                    GraphDto childDto = ToDto(childGraph, depth + 1);
                     subGraphs.Add(new SubGraphDto(index, childDto));
                     break;
                 }
@@ -183,9 +200,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name);
     }
 
-    private Graph FromDto(GraphDto dto)
+    private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
+
+    private Graph FromDto(GraphDto dto, int depth)
     {
         ArgumentNullException.ThrowIfNull(dto);
+        if (depth > MaxSubGraphDepth)
+        {
+            throw new InvalidOperationException(
+                $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while deserializing.");
+        }
 
         int nodesLength = dto.Nodes.Length;
         if (nodesLength == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
@@ -261,7 +285,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
 
-            Graph childGraph = FromDto(subDto.Graph);
+            Graph childGraph = FromDto(subDto.Graph, depth + 1);
             if (nodes[subDto.OwnerIndex] == LogicNode.StateMachineMarker)
             {
                 ownerToSubGraph[subDto.OwnerIndex] = childGraph;

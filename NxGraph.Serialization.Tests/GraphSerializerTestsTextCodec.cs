@@ -1,5 +1,6 @@
 using System.Text;
 using NxGraph.Authoring;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
 namespace NxGraph.Serialization.Tests;
@@ -160,6 +161,26 @@ public class GraphSerializerTestsTextCodec
 
         using MemoryStream source = new(Encoding.UTF8.GetBytes(json));
         Assert.ThrowsAsync<InvalidOperationException>(async () => await _serializer.FromJsonAsync(source));
+    }
+
+    [Test]
+    public void Serializer_rejects_payloads_exceeding_subgraph_depth_cap()
+    {
+        // Build a chain of nested AsyncStateMachines deeper than MaxSubGraphDepth (64).
+        // The cap exists to prevent stack-overflow on untrusted/deeply nested input.
+        AsyncStateMachine current = GraphBuilder
+            .StartWithAsync(new DummyState { Data = "leaf" })
+            .ToAsyncStateMachine();
+        for (int i = 0; i < 100; i++)
+        {
+            current = GraphBuilder
+                .StartWithAsync(current)
+                .ToAsyncStateMachine();
+        }
+
+        using MemoryStream stream = new();
+        Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _serializer.ToBinaryAsync(current.Graph, stream));
     }
 
     [Test]
