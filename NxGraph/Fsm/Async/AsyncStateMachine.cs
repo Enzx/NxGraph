@@ -65,7 +65,31 @@ public class AsyncStateMachine : AsyncState
     /// Reset to the initial node. Disallowed while Running/Transitioning.
     /// Status moves: (any non-running) -> Resetting -> Ready.
     /// </summary>
+    /// <remarks>
+    /// Public entry point acquires <see cref="_executeGate"/> so an external caller
+    /// cannot race a running machine. Internal auto-restart paths must call
+    /// <see cref="ResetCore"/> directly because the gate is already held by the
+    /// surrounding <see cref="OnEnterAsync"/>/<see cref="OnRunAsync"/>/<see cref="OnExitAsync"/> frame.
+    /// </remarks>
     public async ValueTask<Result> Reset(CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _executeGate, 1) == 1)
+        {
+            throw new InvalidOperationException(
+                "Cannot reset while the machine is executing. Await completion before calling Reset.");
+        }
+
+        try
+        {
+            return await ResetCore(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Volatile.Write(ref _executeGate, 0);
+        }
+    }
+
+    private async ValueTask<Result> ResetCore(CancellationToken ct)
     {
         while (true)
         {
@@ -79,10 +103,12 @@ public class AsyncStateMachine : AsyncState
                 case ExecutionStatus.Created:
                 case ExecutionStatus.Ready:
                     return Result.Success;
+                case ExecutionStatus.Resetting:
+                    // Another caller is already resetting — be idempotent rather than firing duplicate notifications.
+                    return Result.Success;
                 case ExecutionStatus.Completed:
                 case ExecutionStatus.Failed:
                 case ExecutionStatus.Cancelled:
-                case ExecutionStatus.Resetting:
                     break;
                 default:
                     throw new IndexOutOfRangeException(nameof(status));
@@ -120,9 +146,9 @@ public class AsyncStateMachine : AsyncState
             {
                 case RestartPolicy.Ignore:
                     // Ignore further execution attempts until a manual Reset() occurs.
-                    // We must release the gate so the current ExecuteAsync call can run OnRunAsync,
-                    // which will return the cached terminal result.
-                    Volatile.Write(ref _executeGate, 0);
+                    // Keep the gate held so a concurrent caller cannot enter while this
+                    // ExecuteAsync is still on its way to OnRunAsync (which returns the
+                    // cached terminal result) and OnExitAsync (which releases the gate).
                     return Result.Continue;
                 case RestartPolicy.Manual:
                     Volatile.Write(ref _executeGate, 0); // Release the gate before throwing.
@@ -130,7 +156,8 @@ public class AsyncStateMachine : AsyncState
                         $"AsyncStateMachine is in terminal state '{status}'. Call Reset() before executing again.");
                 default:
                     // Auto: tolerate unexpected terminal state by resetting on entry.
-                    await Reset(ct).ConfigureAwait(false);
+                    // ResetCore (not Reset) because OnEnterAsync already holds the gate.
+                    await ResetCore(ct).ConfigureAwait(false);
                     break;
             }
         }
@@ -170,7 +197,8 @@ public class AsyncStateMachine : AsyncState
 
             if (_restartPolicy == RestartPolicy.Auto)
             {
-                await Reset(ct).ConfigureAwait(false);
+                // ResetCore (not Reset) because the gate is held by the surrounding ExecuteAsync.
+                await ResetCore(ct).ConfigureAwait(false);
             }
 
             return result;
@@ -184,8 +212,9 @@ public class AsyncStateMachine : AsyncState
 
             if (_restartPolicy == RestartPolicy.Auto)
             {
-                // Use default token — ct is already cancelled at this point.
-                await Reset(ct).ConfigureAwait(false);
+                // CancellationToken.None: ct is already cancelled; passing it would make
+                // any cancellable await inside the reset throw, stranding status at Resetting.
+                await ResetCore(CancellationToken.None).ConfigureAwait(false);
             }
 
             throw;
@@ -203,8 +232,8 @@ public class AsyncStateMachine : AsyncState
 
             if (_restartPolicy == RestartPolicy.Auto)
             {
-                // Use default token — ct may be cancelled or faulted at this point.
-                await Reset(ct).ConfigureAwait(false);
+                // CancellationToken.None: ct may already be cancelled/faulted; reset must complete cleanly.
+                await ResetCore(CancellationToken.None).ConfigureAwait(false);
             }
 
             throw;
