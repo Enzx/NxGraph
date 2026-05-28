@@ -32,6 +32,14 @@ public sealed class SwitchState<TKey>(
         return _cases.GetValueOrDefault(key, _defaultNode);
     }
 
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        foreach (NodeId target in _cases.Values)
+            yield return target;
+        yield return _defaultNode;
+    }
+
 
     /// <inheritdoc />
     public Result Execute() => Result.Success;

@@ -16,4 +16,11 @@ public sealed class AsyncChoiceState(Func<ValueTask<bool>> predicate, NodeId tru
     {
         return ResultHelpers.Success;
     }
+
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        yield return trueNode;
+        yield return falseNode;
+    }
 }

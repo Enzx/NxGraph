@@ -140,4 +140,37 @@ public class GraphValidatorTests
             Assert.That(res.HasErrors, Is.False, "Lack of AllNodes should not produce validation errors.");
         });
     }
+
+    [Test]
+    public void Validator_follows_choice_director_branches_for_reachability()
+    {
+        // Regression: the validator previously stopped at director nodes (TryGetTransition
+        // returns Empty), so nodes only reachable via a director branch were flagged
+        // unreachable. EnumerateStaticTargets exposes those branches to the BFS.
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId trueBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId falseBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId choice = builder.AddNode(new ChoiceState(() => true, trueBranch, falseBranch));
+
+        builder.AddTransition(start, choice);
+
+        Graph graph = builder.Build(throwOnError: false);
+
+        GraphValidationResult res = graph.Validate(new GraphValidationOptions
+            { AllNodes = builder.GetAllNodeIds() });
+
+        bool trueBranchFlagged = res.Diagnostics.Any(d =>
+            d.Node.Index == trueBranch.Index &&
+            d.Message.Contains("unreachable", StringComparison.OrdinalIgnoreCase));
+        bool falseBranchFlagged = res.Diagnostics.Any(d =>
+            d.Node.Index == falseBranch.Index &&
+            d.Message.Contains("unreachable", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(trueBranchFlagged, Is.False, "True branch is reachable via director — should not be flagged.");
+            Assert.That(falseBranchFlagged, Is.False, "False branch is reachable via director — should not be flagged.");
+        });
+    }
 }

@@ -24,4 +24,11 @@ public sealed class ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId fa
     {
         return _predicate() ? trueNode : falseNode;
     }
+
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        yield return trueNode;
+        yield return falseNode;
+    }
 }

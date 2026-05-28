@@ -21,7 +21,15 @@ public sealed class AsyncSwitchState<TKey>(
     {
         TKey key = await _selector();
         return _cases.GetValueOrDefault(key, _defaultNode);
-        
+
+    }
+
+    /// <inheritdoc />
+    public IEnumerable<NodeId> EnumerateStaticTargets()
+    {
+        foreach (NodeId target in _cases.Values)
+            yield return target;
+        yield return _defaultNode;
     }
 
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)

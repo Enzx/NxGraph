@@ -1,4 +1,6 @@
 ﻿using NxGraph.Compatibility;
+using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 namespace NxGraph.Diagnostics.Validations;
 
@@ -37,9 +39,61 @@ public static class GraphValidator
             if (!visited.Add(current.Index))
                 continue;
 
-            if (!graph.TryGetNode(current, out _))
+            if (!graph.TryGetNode(current, out INode? currentNode))
             {
                 result.Add(Severity.Error, "Node referenced during traversal does not exist.", current);
+                continue;
+            }
+
+            // Director nodes route at runtime; their statically-known targets must be walked
+            // explicitly because TryGetTransition returns Empty for them. EnumerateStaticTargets
+            // returns the empty sequence for opaque custom directors — those remain invisible
+            // to reachability but the built-in Choice/Switch states now participate.
+            IEnumerable<NodeId>? directorTargets = null;
+            if (currentNode is LogicNode logicNode)
+            {
+                directorTargets =
+                    (logicNode.AsyncLogic as IDirector)?.EnumerateStaticTargets()
+                    ?? (logicNode.Logic as IDirector)?.EnumerateStaticTargets()
+                    ?? (logicNode.AsyncLogic as IAsyncDirector)?.EnumerateStaticTargets()
+                    ?? (logicNode.Logic as IAsyncDirector)?.EnumerateStaticTargets();
+            }
+
+            if (directorTargets is not null)
+            {
+                bool sawTerminalBranch = false;
+                foreach (NodeId branchDest in directorTargets)
+                {
+                    if (branchDest.Equals(NodeId.Default))
+                    {
+                        // NodeId.Default is the runtime sentinel for "exit successfully" from
+                        // a director — counts as a terminal path, not an error.
+                        sawTerminalBranch = true;
+                        continue;
+                    }
+
+                    if (!graph.TryGetNode(branchDest, out _))
+                    {
+                        result.Add(Severity.Error,
+                            $"Director branch points to non-existent node #{branchDest.Index}.", current);
+                        continue;
+                    }
+
+                    if (options.WarnOnSelfLoop && branchDest.Index == current.Index)
+                    {
+                        result.Add(Severity.Warning, "Self-loop transition detected.", current);
+                    }
+
+                    queue.Enqueue(branchDest);
+                }
+
+                if (sawTerminalBranch)
+                {
+                    sawTerminal = true;
+                }
+
+                // Director nodes do not have a static fall-through transition; skip the
+                // edge check below.
                 continue;
             }
 

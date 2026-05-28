@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
 namespace NxGraph.Diagnostics.Export;
@@ -41,8 +42,12 @@ public sealed class MermaidGraphExporter : IGraphExporter
             string nodeId = NodeVar(i);
             string label = BuildNodeLabel(node.Id, i, opts);
 
-            // Shape: Start node gets a "stadium" shape, if IDirector rhombus {}, others are rectangles
-            if (node is LogicNode ln && (ln.AsyncLogic is IDirector || ln.Logic is IDirector))
+            // Shape: Start node gets a "stadium" shape, director nodes — sync IDirector or
+            // async IAsyncDirector — get a rhombus, others are rectangles. Previously only
+            // the sync IDirector path was checked, so async If/Switch nodes silently
+            // rendered as plain rectangles.
+            if (node is LogicNode ln && (ln.AsyncLogic is IDirector || ln.Logic is IDirector
+                                         || ln.AsyncLogic is IAsyncDirector || ln.Logic is IAsyncDirector))
             {
                 label = $"{{\"{EscapeLabel( label)}\"}}";
                 sb.Append("  ").Append(nodeId).Append(label).AppendLine();
@@ -104,6 +109,33 @@ public sealed class MermaidGraphExporter : IGraphExporter
                 {
                     sb.Append("  ").Append(from).Append(" -. invalid → .- ").Append(TerminalVar).AppendLine();
                 }
+            }
+        }
+
+        // Director edges: directors don't carry a static transition (the runtime calls
+        // SelectNext at execution time), so they're missed by the static-edge loop above.
+        // Emit dashed edges to every statically-known target so the rendered diagram
+        // reflects the actual reachability.
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (graph.GetNodeByIndex(i) is not LogicNode dn) continue;
+
+            IEnumerable<NodeId>? targets =
+                (dn.AsyncLogic as IDirector)?.EnumerateStaticTargets()
+                ?? (dn.Logic as IDirector)?.EnumerateStaticTargets()
+                ?? (dn.AsyncLogic as IAsyncDirector)?.EnumerateStaticTargets()
+                ?? (dn.Logic as IAsyncDirector)?.EnumerateStaticTargets();
+            if (targets is null) continue;
+
+            string from = NodeVar(i);
+            foreach (NodeId target in targets)
+            {
+                int dstIdx = target.Index;
+                // Skip the NodeId.Default sentinel (terminal exit from a director) — emitting
+                // an edge to a non-existent index would just look like a broken link.
+                if (target.Equals(NodeId.Default)) continue;
+                if ((uint)dstIdx >= (uint)graph.NodeCount) continue;
+                sb.Append("  ").Append(from).Append(" -.-> ").Append(NodeVar(dstIdx)).AppendLine();
             }
         }
 
