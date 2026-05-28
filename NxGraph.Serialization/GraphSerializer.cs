@@ -194,12 +194,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         var textCodec = _codec as ILogicCodec<string>;
 
         INode[] nodes = new INode[nodesLength];
+        bool[] slotFilled = new bool[nodesLength];
         for (int index = 0; index < nodesLength; index++)
         {
             INodeDto nodeDto = dto.Nodes[index];
             if (nodeDto.Index < 0 || nodeDto.Index >= nodesLength)
                 throw new InvalidOperationException(
                     $"Node DTO index {nodeDto.Index} is out of range (0..{nodesLength - 1}).");
+            if (slotFilled[nodeDto.Index])
+                throw new InvalidOperationException(
+                    $"Node DTO index {nodeDto.Index} is duplicated in the payload.");
 
             switch (nodeDto)
             {
@@ -217,7 +221,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
                 {
                     IAsyncLogic asyncLogic = textCodec.Deserialize(textDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, textDto.Name), asyncLogic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(nodeDto.Index, textDto.Name), asyncLogic);
                 }
                     break;
 
@@ -227,13 +231,24 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                             "GraphSerializer has no ILogicCodec<ReadOnlyMemory<byte>> configured, cannot decode binary nodes.");
                 {
                     IAsyncLogic binAsyncLogic = binaryCodec.Deserialize(binaryDto.Logic);
-                    nodes[nodeDto.Index] = new LogicNode(new NodeId(index, binaryDto.Name), binAsyncLogic);
+                    nodes[nodeDto.Index] = new LogicNode(new NodeId(nodeDto.Index, binaryDto.Name), binAsyncLogic);
                 }
                     break;
 
                 default:
                     throw new InvalidOperationException($"Unknown node DTO type: {nodeDto.GetType().FullName}");
             }
+
+            slotFilled[nodeDto.Index] = true;
+        }
+
+        // Reject payloads with gaps. With nodesLength items and no duplicates already
+        // enforced above, a single unfilled slot means the payload skipped an index
+        // — corrupt routing if we proceeded.
+        for (int i = 0; i < nodesLength; i++)
+        {
+            if (!slotFilled[i])
+                throw new InvalidOperationException($"Node DTO payload is missing entry for index {i}.");
         }
 
         Dictionary<int, Graph> ownerToSubGraph = new();

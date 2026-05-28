@@ -114,6 +114,55 @@ public class GraphSerializerTestsTextCodec
     }
 
     [Test]
+    public void FromJsonAsync_rejects_payload_with_duplicate_node_indices()
+    {
+        // Two nodes both claiming index 0 — would otherwise overwrite a slot and lose routing.
+        // The logic field carries a JSON-encoded DummyState so the codec doesn't throw before
+        // the duplicate-index check fires on the second iteration.
+        const string logic = "\"{\\\"Data\\\":\\\"x\\\"}\"";
+        string json = $$"""
+            {
+              "version": {{SerializationVersion.Version}},
+              "nodes": [
+                { "$type": "txt", "index": 0, "name": "a", "logic": {{logic}} },
+                { "$type": "txt", "index": 0, "name": "b", "logic": {{logic}} }
+              ],
+              "transitions": [ { "destination": -1 }, { "destination": -1 } ],
+              "subGraphs": [],
+              "name": null,
+              "index": -1
+            }
+            """;
+
+        using MemoryStream source = new(Encoding.UTF8.GetBytes(json));
+        InvalidOperationException? ex = Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _serializer.FromJsonAsync(source));
+        Assert.That(ex!.Message, Does.Contain("duplicated"));
+    }
+
+    [Test]
+    public void FromJsonAsync_rejects_payload_with_out_of_range_node_index()
+    {
+        // Index 5 in a 1-node payload — would have corrupted routing under the old code.
+        const string logic = "\"{\\\"Data\\\":\\\"x\\\"}\"";
+        string json = $$"""
+            {
+              "version": {{SerializationVersion.Version}},
+              "nodes": [
+                { "$type": "txt", "index": 5, "name": "a", "logic": {{logic}} }
+              ],
+              "transitions": [ { "destination": -1 } ],
+              "subGraphs": [],
+              "name": null,
+              "index": -1
+            }
+            """;
+
+        using MemoryStream source = new(Encoding.UTF8.GetBytes(json));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _serializer.FromJsonAsync(source));
+    }
+
+    [Test]
     public async Task Streams_are_left_open_after_json_helpers()
     {
         Graph graph = BuildChain("a", "b");
