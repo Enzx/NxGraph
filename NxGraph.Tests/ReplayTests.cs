@@ -304,4 +304,58 @@ public class ReplayTests
             return Result.Success;
         }
     }
+
+    [Test]
+    public void Deserialize_rejects_payload_without_magic_header()
+    {
+        // Payload starts with the old format (4-byte count = 0, no events). Without the
+        // magic header it must be rejected — silently accepting it would lock in the
+        // unsafe pre-magic format.
+        using MemoryStream ms = new();
+        using BinaryWriter writer = new(ms);
+        writer.Write(0);
+        Assert.Throws<InvalidDataException>(() => StateMachineReplay.Deserialize(ms.ToArray()));
+    }
+
+    [Test]
+    public void Deserialize_rejects_payload_with_unknown_version()
+    {
+        using MemoryStream ms = new();
+        using BinaryWriter writer = new(ms);
+        writer.Write("NXRP"u8.ToArray());
+        writer.Write((byte)99); // version
+        writer.Write(0); // count
+        Assert.Throws<InvalidDataException>(() => StateMachineReplay.Deserialize(ms.ToArray()));
+    }
+
+    [Test]
+    public void Deserialize_rejects_payload_with_implausibly_large_count()
+    {
+        // count = int.MaxValue would cause `new ReplayEvent[count]` to OOM. The bound on
+        // count vs remaining bytes catches this immediately.
+        using MemoryStream ms = new();
+        using BinaryWriter writer = new(ms);
+        writer.Write("NXRP"u8.ToArray());
+        writer.Write((byte)1); // version
+        writer.Write(int.MaxValue); // count
+        // No events follow.
+        Assert.Throws<InvalidDataException>(() => StateMachineReplay.Deserialize(ms.ToArray()));
+    }
+
+    [Test]
+    public void Deserialize_rejects_payload_with_unknown_event_type_byte()
+    {
+        using MemoryStream ms = new();
+        using BinaryWriter writer = new(ms);
+        writer.Write("NXRP"u8.ToArray());
+        writer.Write((byte)1); // version
+        writer.Write(1); // count
+        writer.Write((byte)200); // bogus EventType
+        // Pad to satisfy the min-size bound check (count=1 needs >=15 bytes remaining).
+        writer.Write(0); // source idx
+        writer.Write(false); // has-target
+        writer.Write(0L); // timestamp
+        writer.Write(string.Empty); // message
+        Assert.Throws<InvalidDataException>(() => StateMachineReplay.Deserialize(ms.ToArray()));
+    }
 }
