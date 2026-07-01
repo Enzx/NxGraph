@@ -100,8 +100,8 @@ public class HierarchicalFsmTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(r1, Is.EqualTo(Result.Continue));
-            Assert.That(r2, Is.EqualTo(Result.Continue));
+            Assert.That(r1, Is.EqualTo(Result.InProgress));
+            Assert.That(r2, Is.EqualTo(Result.InProgress));
             Assert.That(r3, Is.EqualTo(Result.Success));
             Assert.That(log, Is.EqualTo(["child-1", "child-2", "child-exit", "parent-end", "parent-exit"]));
         }
@@ -129,8 +129,8 @@ public class HierarchicalFsmTests
         // Tick 1: grandchild's only node
         // Tick 2: child's second node  (grandchild finished → child transitions)
         // Tick 3: parent's second node (child finished → parent transitions)
-        Assert.That(parentFsm.Execute(), Is.EqualTo(Result.Continue));
-        Assert.That(parentFsm.Execute(), Is.EqualTo(Result.Continue));
+        Assert.That(parentFsm.Execute(), Is.EqualTo(Result.InProgress));
+        Assert.That(parentFsm.Execute(), Is.EqualTo(Result.InProgress));
         Assert.That(parentFsm.Execute(), Is.EqualTo(Result.Success));
     }
 

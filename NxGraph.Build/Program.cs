@@ -91,11 +91,15 @@ public static class Program
         Target("test", DependsOn("build"), async () =>
         {
             var config = OptionalEnv("CONFIGURATION") ?? "Release";
-            var threshold = OptionalEnv("COVERAGE_THRESHOLD") ?? "0";
+            // Line-coverage floor per instrumented module (each test project scopes its own
+            // Include filter in its csproj). Raise this as new features land with tests;
+            // never lower it without a recorded decision.
+            var threshold = OptionalEnv("COVERAGE_THRESHOLD") ?? "70";
             await RunDotNet(repoRoot,
                 $"test --no-build --configuration {config} --verbosity normal " +
                 $"--collect:\"XPlat Code Coverage\" " +
-                $"/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold={threshold}");
+                $"/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold={threshold} " +
+                $"/p:ThresholdType=line /p:ThresholdStat=minimum");
         });
 
         // ci = restore → build → test (via dependency chain)

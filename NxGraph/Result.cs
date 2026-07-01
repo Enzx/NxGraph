@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 namespace NxGraph;
 
@@ -6,7 +6,7 @@ namespace NxGraph;
 /// Represents the outcome of a state-machine operation.
 /// <para>
 /// Use the static fields <see cref="Success"/>, <see cref="Failure"/>, and
-/// <see cref="Continue"/> for standard results, or the factory methods
+/// <see cref="InProgress"/> for standard results, or the factory methods
 /// <see cref="Ok"/> / <see cref="Fail"/> to attach a diagnostic message.
 /// </para>
 /// <para>
@@ -29,19 +29,19 @@ public readonly struct Result : IEquatable<Result>
         Failure = 1,
 
         /// <summary>
-        /// The operation is still in progress.
+        /// The operation has not finished yet — it is a status report, not a command.
         /// <para>
-        /// Returned by <see cref="Fsm.StateMachine.Tick"/> while more nodes remain, and by
-        /// node logic to indicate the current node needs another tick (e.g. a multi-frame
+        /// Returned by the stepped runtimes (<see cref="Fsm.StateMachine.Execute"/>,
+        /// <c>AsyncStateMachine.StepAsync</c>) while more nodes remain, and by sync node
+        /// logic to indicate the current node needs another tick (e.g. a multi-frame
         /// Unity state such as a timer or animation wait).
         /// </para>
-        /// <para>
-        /// In the blocking full-run path (<see cref="State.Execute"/>), a node returning
-        /// this value causes the machine to spin on that node until it returns
-        /// <see cref="Success"/> or <see cref="Failure"/>.
-        /// </para>
         /// </summary>
-        Continue = 2
+        InProgress = 2,
+
+        /// <inheritdoc cref="InProgress"/>
+        [Obsolete("Renamed to StatusCode.InProgress — 'Continue' read like a command rather than a status.")]
+        Continue = 2,
     }
 
     // ── Static singletons ───────────────────────────────────────────────
@@ -54,10 +54,14 @@ public readonly struct Result : IEquatable<Result>
 
     /// <summary>
     /// Indicates the state machine has more work to do.
-    /// Returned by <see cref="Fsm.StateMachine.Execute"/> during frame-stepped execution;
-    /// node logic must <b>never</b> return this value.
+    /// Returned by the stepped runtimes during frame-stepped execution; async node logic
+    /// must <b>never</b> return this value (sync multi-frame states may).
     /// </summary>
-    public static readonly Result Continue = new(StatusCode.Continue);
+    public static readonly Result InProgress = new(StatusCode.InProgress);
+
+    /// <inheritdoc cref="InProgress"/>
+    [Obsolete("Renamed to Result.InProgress — 'Continue' read like a command rather than a status.")]
+    public static readonly Result Continue = new(StatusCode.InProgress);
 
     // ── Factory methods ─────────────────────────────────────────────────
 
@@ -93,15 +97,22 @@ public readonly struct Result : IEquatable<Result>
         get => Code == StatusCode.Failure;
     }
 
+    /// <summary><see langword="true"/> when <see cref="Code"/> is <see cref="StatusCode.InProgress"/>.</summary>
+    public bool IsInProgress
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => Code == StatusCode.InProgress;
+    }
+
     /// <summary>
     /// <see langword="true"/> when the state machine has finished
     /// (<see cref="StatusCode.Success"/> or <see cref="StatusCode.Failure"/>).
-    /// Equivalent to <c>Code != StatusCode.Continue</c>.
+    /// Equivalent to <c>Code != StatusCode.InProgress</c>.
     /// </summary>
     public bool IsCompleted
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => Code != StatusCode.Continue;
+        get => Code != StatusCode.InProgress;
     }
 
     // ── Constructor ─────────────────────────────────────────────────────

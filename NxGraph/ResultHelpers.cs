@@ -19,5 +19,12 @@ public static class ResultHelpers
     /// </summary>
     public static readonly ValueTask CompletedTask = default;
 
-    public static readonly ValueTask<Result> Continue = new(Result.Continue);
+    /// <summary>
+    /// Represents an in-progress (not yet finished) result.
+    /// </summary>
+    public static readonly ValueTask<Result> InProgress = new(Result.InProgress);
+
+    /// <inheritdoc cref="InProgress"/>
+    [Obsolete("Renamed to ResultHelpers.InProgress — 'Continue' read like a command rather than a status.")]
+    public static readonly ValueTask<Result> Continue = new(Result.InProgress);
 }

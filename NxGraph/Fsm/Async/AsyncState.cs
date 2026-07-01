@@ -1,4 +1,4 @@
-﻿using NxGraph.Diagnostics.Replay;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm.Async;
@@ -40,12 +40,12 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter
 
     protected virtual ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return ResultHelpers.Continue;
+        return ResultHelpers.InProgress;
     }
 
     protected virtual ValueTask<Result> OnRunAsync(CancellationToken ct)
     {
-        return ResultHelpers.Continue;
+        return ResultHelpers.InProgress;
     }
 
     protected virtual ValueTask<Result> OnExitAsync(CancellationToken ct)

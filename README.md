@@ -156,12 +156,12 @@ StateMachine fsm = GraphBuilder
     .ToStateMachine();
 
 // Execute() advances one node per call; loop to run to completion:
-Result result = Result.Continue;
-while (result == Result.Continue)
+Result result = Result.InProgress;
+while (result == Result.InProgress)
     result = fsm.Execute();
 ```
 
-For a single-node graph `Execute()` returns `Result.Success` (or `Result.Failure`) immediately. For multi-node graphs it returns `Result.Continue` after each intermediate node, signalling that more nodes remain. See [Sync execution, stepped model](#sync-execution--stepped-model) for the Unity pattern.
+For a single-node graph `Execute()` returns `Result.Success` (or `Result.Failure`) immediately. For multi-node graphs it returns `Result.InProgress` after each intermediate node, signalling that more nodes remain. See [Sync execution, stepped model](#sync-execution--stepped-model) for the Unity pattern.
 
 ---
 
@@ -282,7 +282,7 @@ Result result = await sm.ExecuteAsync();
 
 | Return value | Meaning |
 |---|---|
-| `Result.Continue` | Node completed; there are more nodes to run. Call `Execute()` again. |
+| `Result.InProgress` | Node completed; there are more nodes to run. Call `Execute()` again. |
 | `Result.Success` | Machine finished successfully, no more nodes. |
 | `Result.Failure` | A node failed or threw. Machine is now in `Failed` status. |
 
@@ -290,12 +290,12 @@ Result result = await sm.ExecuteAsync();
 
 ```csharp
 StateMachine sm = graph.ToStateMachine();
-Result result = Result.Continue;
-while (result == Result.Continue)
+Result result = Result.InProgress;
+while (result == Result.InProgress)
     result = sm.Execute();
 ```
 
-**Multi-frame nodes:** A node can return `Result.Continue` from its own `OnRun()` to signal it needs another frame (e.g. a countdown timer or a wait-for-input node). The machine stays on that node and invokes it again on the next `Execute()` call.
+**Multi-frame nodes:** A node can return `Result.InProgress` from its own `OnRun()` to signal it needs another frame (e.g. a countdown timer or a wait-for-input node). The machine stays on that node and invokes it again on the next `Execute()` call.
 
 ### Unity integration
 
@@ -347,8 +347,8 @@ StateMachine parentFsm = GraphBuilder
 
 // Each Execute() advances exactly one node — even one inside the child.
 // 3 ticks: child node 1 → child node 2 (child done) → parent Cleanup
-Result r = Result.Continue;
-while (r == Result.Continue)
+Result r = Result.InProgress;
+while (r == Result.InProgress)
     r = parentFsm.Execute();
 ```
 
@@ -370,7 +370,7 @@ AsyncStateMachine parentFsm = GraphBuilder
 Result result = await parentFsm.ExecuteAsync();
 ```
 
-Nesting can be arbitrarily deep. Each level is stepped independently; the parent treats a running child as `Result.Continue` and a completed child as `Result.Success`.
+Nesting can be arbitrarily deep. Each level is stepped independently; the parent treats a running child as `Result.InProgress` and a completed child as `Result.Success`.
 
 ### Restart policy
 
@@ -746,8 +746,8 @@ Yes. Those features are part of `NxGraph` itself; graph serialization is the opt
 **Can I use NxGraph in Unity?**  
 Yes. Use `StateMachine` (the sync runtime) and call `Execute()` from `MonoBehaviour.Update()`. `Execute()` advances exactly one node per call so the main thread is never blocked. Set `RestartPolicy.Auto` for automatic reset between runs, or `RestartPolicy.Ignore` to freeze the machine in its terminal state until you explicitly call `Reset()`. See [Unity integration](#unity-integration) for a full example.
 
-**What does `Result.Continue` mean?**  
-The machine has more nodes to process but is returning control to the caller (e.g. to avoid blocking a frame in Unity). Call `Execute()` again on the next frame. A node can also return `Result.Continue` from its own `OnRun()` to signal it needs multiple frames (e.g. a frame-based timer).
+**What does `Result.InProgress` mean?**  
+The machine has more nodes to process but is returning control to the caller (e.g. to avoid blocking a frame in Unity). Call `Execute()` again on the next frame. A node can also return `Result.InProgress` from its own `OnRun()` to signal it needs multiple frames (e.g. a frame-based timer).
 
 ---
 

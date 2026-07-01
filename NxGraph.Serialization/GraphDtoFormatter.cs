@@ -8,17 +8,25 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
     internal static readonly GraphDtoFormatter Instance = new();
 
     private const int VersionOneHeaderCount = 6;
+    private const int VersionTwoHeaderCount = 9;
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {
-        // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[]]
-        writer.WriteArrayHeader(VersionOneHeaderCount);
+        // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[],
+        //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[]]
+        writer.WriteArrayHeader(VersionTwoHeaderCount);
         writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
         options.Resolver.GetFormatterWithVerify<INodeDto[]>().Serialize(ref writer, value.Nodes, options);
         options.Resolver.GetFormatterWithVerify<TransitionDto[]>().Serialize(ref writer, value.Transitions, options);
         options.Resolver.GetFormatterWithVerify<SubGraphDto[]>().Serialize(ref writer, value.SubGraphs, options);
+        options.Resolver.GetFormatterWithVerify<RetryPolicyDto[]>()
+            .Serialize(ref writer, value.RetryPolicies, options);
+        options.Resolver.GetFormatterWithVerify<OutcomeCodeDto[]>()
+            .Serialize(ref writer, value.OutcomeCodes, options);
+        options.Resolver.GetFormatterWithVerify<OutcomeNameDto[]>()
+            .Serialize(ref writer, value.OutcomeNames, options);
     }
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -33,6 +41,9 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 1 when count < VersionOneHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionOneHeaderCount} elements, got {count}");
+            case 2 when count < VersionTwoHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionTwoHeaderCount} elements, got {count}");
         }
 
         int index = reader.ReadInt32();
@@ -43,7 +54,21 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         SubGraphDto[] subGraphs =
             options.Resolver.GetFormatterWithVerify<SubGraphDto[]>().Deserialize(ref reader, options);
 
+        // Version-1 payloads end after SubGraphs; retry policies and outcomes arrived with version 2.
+        RetryPolicyDto[] retryPolicies = [];
+        OutcomeCodeDto[] outcomeCodes = [];
+        OutcomeNameDto[] outcomeNames = [];
+        if (count >= VersionTwoHeaderCount)
+        {
+            retryPolicies = options.Resolver.GetFormatterWithVerify<RetryPolicyDto[]>()
+                .Deserialize(ref reader, options);
+            outcomeCodes = options.Resolver.GetFormatterWithVerify<OutcomeCodeDto[]>()
+                .Deserialize(ref reader, options);
+            outcomeNames = options.Resolver.GetFormatterWithVerify<OutcomeNameDto[]>()
+                .Deserialize(ref reader, options);
+        }
 
-        return new GraphDto(nodes, transitions, subGraphs, index, name) { Version = version };
+        return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames)
+            { Version = version };
     }
 }

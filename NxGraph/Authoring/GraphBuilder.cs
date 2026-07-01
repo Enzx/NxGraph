@@ -17,6 +17,13 @@ public sealed partial class GraphBuilder
     private readonly Dictionary<NodeId, IAsyncLogic?> _nodes = new(); // non-start nodes only
     private readonly Dictionary<object, NodeId> _byLogic = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<NodeId, Transition> _transitions = new();
+    private readonly Dictionary<int, string> _names = new(); // display names, applied at Build()
+    private readonly List<KeyValuePair<NodeId, string>> _pendingGotos = new(); // back-edges resolved by name at Build()
+    private readonly Dictionary<int, RetryPolicy> _retryPolicies = new(); // sparse; materialized at Build()
+    private readonly Dictionary<int, Action> _enterActions = new(); // sparse; attached to LogicNodes at Build()
+    private readonly Dictionary<int, Action> _exitActions = new(); // sparse; attached to LogicNodes at Build()
+    private readonly Dictionary<int, int> _outcomeCodes = new(); // sparse; materialized at Build()
+    private readonly Dictionary<int, string> _outcomeNames = new(); // code -> display name
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
     public NodeId AddNode(IAsyncLogic asyncLogic, bool isStart = false)
@@ -52,15 +59,130 @@ public sealed partial class GraphBuilder
         return _next;
     }
 
-    /// <summary>Add a single outgoing transition from <paramref name="from"/> to <paramref name="to"/>.</summary>
+    /// <summary>Add the single outgoing success transition from <paramref name="from"/> to <paramref name="to"/>.</summary>
     public GraphBuilder AddTransition(NodeId from, NodeId to)
     {
-        if (!_transitions.TryAdd(from, new Transition(to)))
+        if (HasPendingGoto(from))
         {
             throw new InvalidOperationException($"A transition from {from} is already defined.");
         }
 
+        AddSuccessEdge(from, to);
         return this;
+    }
+
+    /// <summary>
+    /// Add the failure transition from <paramref name="from"/> to <paramref name="to"/>:
+    /// when the node returns <c>Failure</c>, the machine routes there instead of terminating.
+    /// </summary>
+    public GraphBuilder AddFailureTransition(NodeId from, NodeId to)
+    {
+        if (to == NodeId.Default)
+        {
+            throw new ArgumentException("Failure transition target cannot be NodeId.Default.", nameof(to));
+        }
+
+        if (_transitions.TryGetValue(from, out Transition existing))
+        {
+            if (existing.HasFailureDestination)
+            {
+                throw new InvalidOperationException($"A failure transition from {from} is already defined.");
+            }
+
+            _transitions[from] = new Transition(existing.Destination, to);
+        }
+        else
+        {
+            _transitions.Add(from, new Transition(NodeId.Default, to));
+        }
+
+        return this;
+    }
+
+    private void AddSuccessEdge(NodeId from, NodeId to)
+    {
+        if (_transitions.TryGetValue(from, out Transition existing))
+        {
+            if (!existing.IsEmpty)
+            {
+                throw new InvalidOperationException($"A transition from {from} is already defined.");
+            }
+
+            _transitions[from] = new Transition(to, existing.FailureDestination);
+        }
+        else
+        {
+            _transitions.Add(from, new Transition(to));
+        }
+    }
+
+    /// <summary>
+    /// Adds a transition from <paramref name="from"/> to the node whose display name is
+    /// <paramref name="targetName"/>. The name is resolved at <c>Build()</c>, so it may be
+    /// assigned later in the chain. Unknown or ambiguous names fail the build.
+    /// </summary>
+    public GraphBuilder AddGoto(NodeId from, string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName))
+        {
+            throw new ArgumentException("Goto target name cannot be null or whitespace.", nameof(targetName));
+        }
+
+        if (HasPendingGoto(from) ||
+            (_transitions.TryGetValue(from, out Transition existing) && !existing.IsEmpty))
+        {
+            throw new InvalidOperationException($"A transition from {from} is already defined.");
+        }
+
+        _pendingGotos.Add(new KeyValuePair<NodeId, string>(from, targetName));
+        return this;
+    }
+
+    private bool HasPendingGoto(NodeId from)
+    {
+        foreach (KeyValuePair<NodeId, string> pending in _pendingGotos)
+        {
+            if (pending.Key.Index == from.Index)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ResolvePendingGotos()
+    {
+        foreach ((NodeId from, string targetName) in _pendingGotos)
+        {
+            int targetIndex = -1;
+            foreach ((int index, string name) in _names)
+            {
+                if (!string.Equals(name, targetName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (targetIndex >= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Goto target name '{targetName}' is ambiguous: nodes #{targetIndex} and #{index} both use it.");
+                }
+
+                targetIndex = index;
+            }
+
+            if (targetIndex < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Goto target '{targetName}' does not match any named node. " +
+                    "Name the target with SetName(...) before Build().");
+            }
+
+            AddSuccessEdge(from, new NodeId(targetIndex));
+        }
+
+        _pendingGotos.Clear();
     }
 
     /// <summary>Add a sync-only node. Wraps it in a <see cref="SyncLogicAdapter"/>.</summary>
@@ -86,6 +208,8 @@ public sealed partial class GraphBuilder
     /// <exception cref="InvalidOperationException">Thrown if no start node has been added or if there are inconsistencies in the graph structure.</exception>
     private Graph InternalBuild()
     {
+        ResolvePendingGotos();
+
         int maxIndex = 0;
         foreach (NodeId id in _nodes.Keys)
         {
@@ -105,8 +229,12 @@ public sealed partial class GraphBuilder
             edges[i] = Transition.Empty;
         }
 
-        nodes[NodeId.Start.Index] =
-            _startNode ?? throw new InvalidOperationException("No start node has been added to the graph.");
+        if (_startNode is null)
+        {
+            throw new InvalidOperationException("No start node has been added to the graph.");
+        }
+
+        nodes[NodeId.Start.Index] = CreateNode(_startNode.Id, _startNode.AsyncLogic);
 
         // Place the rest (null-safe checks)
         foreach ((NodeId id, IAsyncLogic? logic) in _nodes)
@@ -125,7 +253,7 @@ public sealed partial class GraphBuilder
 
             if (logic != null)
             {
-                nodes[idx] = new LogicNode(id, logic);
+                nodes[idx] = CreateNode(id, logic);
             }
             else
             {
@@ -142,11 +270,51 @@ public sealed partial class GraphBuilder
                 throw new InvalidOperationException($"Transition 'from' {from} is out of bounds.");
             }
 
-            edges[idx] = t;
+            edges[idx] = new Transition(ApplyName(t.Destination), ApplyName(t.FailureDestination));
         }
 
+        LogicNode CreateNode(NodeId id, IAsyncLogic logic)
+        {
+            _enterActions.TryGetValue(id.Index, out Action? enter);
+            _exitActions.TryGetValue(id.Index, out Action? exit);
+            return new LogicNode(ApplyName(id), logic, enter, exit);
+        }
+
+        RetryPolicy[]? retries = null;
+        if (_retryPolicies.Count > 0)
+        {
+            retries = new RetryPolicy[length];
+            foreach ((int idx, RetryPolicy policy) in _retryPolicies)
+            {
+                if ((uint)idx >= (uint)retries.Length)
+                {
+                    throw new InvalidOperationException($"Retry policy node index {idx} is out of bounds.");
+                }
+
+                retries[idx] = policy;
+            }
+        }
+
+        int[]? outcomes = null;
+        if (_outcomeCodes.Count > 0)
+        {
+            outcomes = new int[length];
+            foreach ((int idx, int code) in _outcomeCodes)
+            {
+                if ((uint)idx >= (uint)outcomes.Length)
+                {
+                    throw new InvalidOperationException($"Outcome code node index {idx} is out of bounds.");
+                }
+
+                outcomes[idx] = code;
+            }
+        }
+
+        IReadOnlyDictionary<int, string>? outcomeNames =
+            _outcomeNames.Count > 0 ? new Dictionary<int, string>(_outcomeNames) : null;
+
         NodeId graphId = _next.Next();
-        return new Graph(graphId, nodes, edges);
+        return new Graph(graphId, nodes, edges, logic: null, retries, outcomes, outcomeNames);
     }
 
 
@@ -207,7 +375,8 @@ public sealed partial class GraphBuilder
     }
 
     /// <summary>
-    /// Sets the name of a node in the graph.
+    /// Sets the display name of a node. Names are presentation data only — node identity
+    /// is the index — and are applied to the emitted <see cref="NodeId"/>s at <c>Build()</c>.
     /// </summary>
     public void SetName(NodeId id, string name)
     {
@@ -216,82 +385,86 @@ public sealed partial class GraphBuilder
             throw new ArgumentException("Node name cannot be null or whitespace.", nameof(name));
         }
 
-        NodeId oldId = id;
-        NodeId namedId = oldId.WithName(name);
-
-        bool isStart = _startNode is not null && _startNode.Id.Index == oldId.Index;
-        if (isStart)
+        bool isStart = _startNode is not null && _startNode.Id.Index == id.Index;
+        if (!isStart && !_nodes.ContainsKey(id))
         {
-            if (_startNode != null)
-            {
-                _startNode = new LogicNode(namedId, _startNode.AsyncLogic);
-            }
-            else
-            {
-                throw new InvalidOperationException("Start node is not defined.");
-            }
-        }
-        else if (_nodes.Remove(oldId, out IAsyncLogic? existingLogic))
-        {
-            // Normal path when callers pass in the exact key we stored
-            _nodes[namedId] = existingLogic;
-        }
-        else
-        {
-            // Fallback: look up by index only (in case callers passed an id with the right
-            // index but a different name than what we have as the key).
-            NodeId? keyToRename = null;
-            foreach (NodeId key in _nodes.Keys)
-            {
-                if (key.Index == oldId.Index)
-                {
-                    keyToRename = key;
-                    break;
-                }
-            }
-
-            if (keyToRename is null)
-            {
-                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
-            }
-
-            IAsyncLogic? logic = _nodes[keyToRename.Value];
-            if (logic == null)
-            {
-                throw new InvalidOperationException($"Node with index {oldId.Index} does not exist in the graph.");
-            }
-            _nodes.Remove(keyToRename.Value);
-            _nodes[namedId] = logic;
+            throw new InvalidOperationException($"Node with index {id.Index} does not exist in the graph.");
         }
 
-        // Update logic->id map so future AddNode(sameLogic) returns the named id
-        foreach (KeyValuePair<object, NodeId> pair in _byLogic.ToList())
+        _names[id.Index] = name;
+    }
+
+    private NodeId ApplyName(NodeId id)
+        => _names.TryGetValue(id.Index, out string? name) ? id.WithName(name) : id;
+
+    /// <summary>
+    /// Attaches an action fired when the machine enters the node (once per visit,
+    /// before its first execution).
+    /// </summary>
+    public GraphBuilder SetEnterAction(NodeId id, Action action)
+    {
+        Guard.NotNull(action, nameof(action));
+        RequireExistingNode(id);
+        _enterActions[id.Index] = action;
+        return this;
+    }
+
+    /// <summary>
+    /// Attaches an action fired when the machine leaves the node (once per visit,
+    /// after its final execution, regardless of outcome).
+    /// </summary>
+    public GraphBuilder SetExitAction(NodeId id, Action action)
+    {
+        Guard.NotNull(action, nameof(action));
+        RequireExistingNode(id);
+        _exitActions[id.Index] = action;
+        return this;
+    }
+
+    /// <summary>
+    /// Declares the terminal outcome reported when a run ends at this node
+    /// (e.g. "Approved" vs "Rejected"), with an optional display name for the code.
+    /// </summary>
+    public GraphBuilder SetOutcome(NodeId id, int code, string? name = null)
+    {
+        RequireExistingNode(id);
+        _outcomeCodes[id.Index] = code;
+        if (name is not null)
         {
-            if (pair.Value.Index == oldId.Index)
-            {
-                _byLogic[pair.Key] = namedId;
-            }
+            _outcomeNames[code] = name;
         }
 
-        // Update transitions: sources and destinations that reference this index
-        foreach ((NodeId from, Transition t) in _transitions.ToList())
+        return this;
+    }
+
+    private void RequireExistingNode(NodeId id)
+    {
+        bool isStart = _startNode is not null && _startNode.Id.Index == id.Index;
+        if (!isStart && !_nodes.ContainsKey(id))
         {
-            bool fromMatches = from.Index == oldId.Index;
-            bool toMatches = t.Destination.Index == oldId.Index;
-
-            NodeId newFrom = fromMatches ? namedId : from;
-            Transition newTransition = toMatches ? new Transition(namedId) : t;
-
-            if (fromMatches)
-            {
-                _transitions.Remove(from);
-                _transitions[newFrom] = newTransition;
-            }
-            else if (toMatches)
-            {
-                _transitions[from] = newTransition;
-            }
+            throw new InvalidOperationException($"Node with index {id.Index} does not exist in the graph.");
         }
+    }
+
+    /// <summary>
+    /// Declares a retry policy for a node: on <c>Failure</c> the node is re-run in place
+    /// until it succeeds or the policy's attempts are exhausted.
+    /// </summary>
+    public GraphBuilder SetRetryPolicy(NodeId id, RetryPolicy policy)
+    {
+        if (policy.MaxAttempts == 0)
+        {
+            throw new ArgumentException("Retry policy must allow at least one attempt.", nameof(policy));
+        }
+
+        bool isStart = _startNode is not null && _startNode.Id.Index == id.Index;
+        if (!isStart && !_nodes.ContainsKey(id))
+        {
+            throw new InvalidOperationException($"Node with index {id.Index} does not exist in the graph.");
+        }
+
+        _retryPolicies[id.Index] = policy;
+        return this;
     }
 
     public static void SetName(Graph graph, string name)
@@ -305,6 +478,21 @@ public sealed partial class GraphBuilder
         graph.Id = graph.Id.WithName(name);
     }
 
+    /// <summary>
+    /// Wraps an already-added node in a <see cref="StateToken"/> so detached chains
+    /// (e.g. failure handlers) can be built fluently with the same builder.
+    /// </summary>
+    public StateToken TokenFor(NodeId id)
+    {
+        bool isStart = _startNode is not null && _startNode.Id.Index == id.Index;
+        if (!isStart && !_nodes.ContainsKey(id))
+        {
+            throw new InvalidOperationException($"Node with index {id.Index} does not exist in the graph.");
+        }
+
+        return new StateToken(id, this);
+    }
+
     public IReadOnlyList<NodeId>? GetAllNodeIds()
     {
         if (_nodes.Count == 0 || _startNode == null)
@@ -312,10 +500,10 @@ public sealed partial class GraphBuilder
             return null;
         }
 
-        List<NodeId> ids = new(_nodes.Keys.Count) { _startNode.Id };
+        List<NodeId> ids = new(_nodes.Keys.Count) { ApplyName(_startNode.Id) };
         foreach (NodeId id in _nodes.Keys)
         {
-            ids.Add(id);
+            ids.Add(ApplyName(id));
         }
 
         return ids;

@@ -12,6 +12,8 @@ public sealed class Graph : INode, IGraph
 {
     private readonly INode[] _nodes; // index = NodeId.Index
     private readonly Transition[] _edges; // index = from.Index
+    private readonly RetryPolicy[]? _retryPolicies; // index = NodeId.Index; null when no node has a policy
+    private readonly int[]? _outcomeCodes; // index = NodeId.Index; null when no node declares an outcome
 
     /// <summary>
     /// The unique identifier for this graph. 
@@ -52,7 +54,9 @@ public sealed class Graph : INode, IGraph
     /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
     /// <param name="logic">The logic associated with the graph. If null, an empty logic is used.</param>
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
-    public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null)
+    public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null,
+        RetryPolicy[]? retryPolicies = null, int[]? outcomeCodes = null,
+        IReadOnlyDictionary<int, string>? outcomeNames = null)
     {
         Guard.NotNull(nodes, nameof(nodes));
         Guard.NotNull(edges, nameof(edges));
@@ -67,12 +71,46 @@ public sealed class Graph : INode, IGraph
             throw new ArgumentException("Nodes/edges arrays must be non-empty and have equal length.");
         }
 
+        if (retryPolicies is not null && retryPolicies.Length != nodes.Length)
+        {
+            throw new ArgumentException("Retry policy array must match the nodes array length.",
+                nameof(retryPolicies));
+        }
+
+        if (outcomeCodes is not null && outcomeCodes.Length != nodes.Length)
+        {
+            throw new ArgumentException("Outcome code array must match the nodes array length.",
+                nameof(outcomeCodes));
+        }
+
         Id = id;
         StartNode = nodes[0];
         _nodes = nodes;
         _edges = edges;
+        _retryPolicies = retryPolicies;
+        _outcomeCodes = outcomeCodes;
+        OutcomeNames = outcomeNames;
         AsyncLogic = logic ?? new EmptyAsyncLogic();
     }
+
+    /// <summary>
+    /// The per-node retry policies indexed by <see cref="NodeId.Index"/>, or <c>null</c>
+    /// when no node declares one. Exposed for the runtimes and serializers.
+    /// </summary>
+    public RetryPolicy[]? RetryPolicies => _retryPolicies;
+
+    /// <summary>
+    /// Per-node terminal outcome codes indexed by <see cref="NodeId.Index"/>, or <c>null</c>
+    /// when no node declares one. When a run terminates at a node, the machine reports the
+    /// node's code (default 0) as <c>LastOutcome</c>.
+    /// </summary>
+    public int[]? OutcomeCodes => _outcomeCodes;
+
+    /// <summary>
+    /// Optional display names for outcome codes, resolved lazily for reporting —
+    /// never on the run loop.
+    /// </summary>
+    public IReadOnlyDictionary<int, string>? OutcomeNames { get; }
 
     /// <summary>
     /// Attempts to retrieve the transition from a given node.
@@ -170,14 +208,20 @@ public sealed class Graph : INode, IGraph
                 continue;
             }
 
-            // Non-generic nested state machines do not implement IAgentSettable<TAgent>, so
-            // the direct match misses them. Walk their inner graph explicitly so
-            // IAgentSettable<TAgent> nodes deeper in the tree still receive the agent.
-            Graph? nested = (logicNode.AsyncLogic as AsyncStateMachine)?.Graph
-                         ?? (logicNode.Logic as StateMachine)?.Graph;
-            if (nested is not null && !ReferenceEquals(nested, this))
+            // Composite logic (nested machines, history/parallel composites, user-defined
+            // containers) surfaces its children via ISubGraphProvider — walk them without
+            // knowing the concrete types, so new composites need no changes here.
+            ISubGraphProvider? provider =
+                logicNode.AsyncLogic as ISubGraphProvider
+                ?? logicNode.Logic as ISubGraphProvider;
+            if (provider is null)
             {
-                if (nested.SetAgentRecursive(agent))
+                continue;
+            }
+
+            foreach (Graph nested in provider.SubGraphs)
+            {
+                if (!ReferenceEquals(nested, this) && nested.SetAgentRecursive(agent))
                 {
                     found = true;
                 }

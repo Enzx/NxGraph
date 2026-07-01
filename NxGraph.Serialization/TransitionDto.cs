@@ -1,4 +1,4 @@
-﻿
+
 namespace NxGraph.Serialization;
 
-internal sealed record TransitionDto(int Destination);
+internal sealed record TransitionDto(int Destination, int FailureDestination = -1);

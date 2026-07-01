@@ -1,4 +1,4 @@
-﻿namespace NxGraph.Fsm.Async;
+namespace NxGraph.Fsm.Async;
 
 /// <summary>
 /// AsyncRelayState is a state that can be used to encapsulate a function that returns a Result.
@@ -16,7 +16,7 @@ public sealed class AsyncRelayState(
 
     protected override  ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return onEnter?.Invoke(ct) ?? ResultHelpers.Continue;
+        return onEnter?.Invoke(ct) ?? ResultHelpers.InProgress;
     }
 
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
@@ -47,7 +47,7 @@ public sealed class AsyncRelayState<TAgent>(
 
     protected override ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
-        return onEnter?.Invoke(Agent, ct) ?? ResultHelpers.Continue;
+        return onEnter?.Invoke(Agent, ct) ?? ResultHelpers.InProgress;
     }
 
     protected override ValueTask<Result> OnRunAsync(CancellationToken ct)

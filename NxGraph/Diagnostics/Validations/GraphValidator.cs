@@ -45,6 +45,27 @@ public static class GraphValidator
                 continue;
             }
 
+            // Failure edges apply to every node kind, directors included, so walk them
+            // before the director-specific handling below.
+            if (graph.TryGetTransition(current, out Transition outgoing) && outgoing.HasFailureDestination)
+            {
+                NodeId failureDest = outgoing.FailureDestination;
+                if (!graph.TryGetNode(failureDest, out _))
+                {
+                    result.Add(Severity.Error,
+                        $"Failure transition points to non-existent node #{failureDest.Index}.", current);
+                }
+                else
+                {
+                    if (options.WarnOnSelfLoop && failureDest.Index == current.Index)
+                    {
+                        result.Add(Severity.Warning, "Self-loop transition detected.", current);
+                    }
+
+                    queue.Enqueue(failureDest);
+                }
+            }
+
             // Director nodes route at runtime; their statically-known targets must be walked
             // explicitly because TryGetTransition returns Empty for them. EnumerateStaticTargets
             // returns the empty sequence for opaque custom directors — those remain invisible
@@ -62,8 +83,10 @@ public static class GraphValidator
             if (directorTargets is not null)
             {
                 bool sawTerminalBranch = false;
+                bool sawAnyTarget = false;
                 foreach (NodeId branchDest in directorTargets)
                 {
+                    sawAnyTarget = true;
                     if (branchDest.Equals(NodeId.Default))
                     {
                         // NodeId.Default is the runtime sentinel for "exit successfully" from
@@ -90,6 +113,14 @@ public static class GraphValidator
                 if (sawTerminalBranch)
                 {
                     sawTerminal = true;
+                }
+
+                if (!sawAnyTarget)
+                {
+                    result.Add(Severity.Warning,
+                        "Director exposes no static targets — its branches are invisible to reachability " +
+                        "validation and Mermaid export. Override EnumerateStaticTargets() to surface them.",
+                        current);
                 }
 
                 // Director nodes do not have a static fall-through transition; skip the

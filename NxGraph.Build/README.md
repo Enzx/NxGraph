@@ -154,7 +154,7 @@ sensible defaults for local development.
 | Variable | Used by | Default | Description |
 |---|---|---|---|
 | `CONFIGURATION` | `build`, `test` | `Release` | Build configuration |
-| `COVERAGE_THRESHOLD` | `test` | `0` | Minimum coverage % (Coverlet) |
+| `COVERAGE_THRESHOLD` | `test` | `70` | Minimum line coverage % per instrumented module (Coverlet); raise as coverage grows, don't lower it |
 | `TARGET` | `pack` | _(from git tag)_ | Which packages to pack: `all`, `nxgraph`, `serialization`, `serialization-abstraction` |
 | `VERSION` | `pack`, `upm-patch-version`, `upm-tarball` | _(from git tag)_ | SemVer version string (e.g. `1.2.3` or `1.0.0-beta.1`) |
 | `NUGET_API_KEY` | `push` | _(required)_ | NuGet.org API key |

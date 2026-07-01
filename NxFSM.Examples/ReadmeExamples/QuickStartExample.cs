@@ -42,8 +42,8 @@ public static class QuickStartExample
             .ToStateMachine();
 
         // Execute() advances one node per call; loop to run to completion.
-        Result result = Result.Continue;
-        while (result == Result.Continue)
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
             result = fsm.Execute();
 
         Console.WriteLine($"Result: {result}");

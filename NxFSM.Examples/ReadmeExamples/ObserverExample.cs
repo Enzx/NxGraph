@@ -40,8 +40,8 @@ public static class ObserverExample
             .To(() => Result.Success).SetName("Finish")
             .ToStateMachine(new DiagnosticObserver());
 
-        Result result = Result.Continue;
-        while (result == Result.Continue)
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
             result = sm.Execute();
 
         Console.WriteLine($"Result: {result}");

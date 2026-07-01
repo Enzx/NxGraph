@@ -151,7 +151,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         {
             Transition tr = graph.GetTransitionByIndex(index);
             int dest = tr.IsEmpty ? -1 : tr.Destination.Index;
-            transitions[index] = new TransitionDto(dest);
+            int failureDest = tr.HasFailureDestination ? tr.FailureDestination.Index : -1;
+            transitions[index] = new TransitionDto(dest, failureDest);
         }
 
         int nodeCount = graph.NodeCount;
@@ -197,7 +198,54 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             }
         }
 
-        return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name);
+        RetryPolicyDto[]? retryPolicies = null;
+        if (graph.RetryPolicies is { } policies)
+        {
+            List<RetryPolicyDto> entries = [];
+            for (int index = 0; index < policies.Length; index++)
+            {
+                RetryPolicy policy = policies[index];
+                if (policy.MaxAttempts == 0)
+                {
+                    continue;
+                }
+
+                entries.Add(new RetryPolicyDto(index, policy.MaxAttempts, policy.Backoff.Ticks,
+                    (byte)policy.BackoffKind));
+            }
+
+            retryPolicies = entries.ToArray();
+        }
+
+        OutcomeCodeDto[]? outcomeCodes = null;
+        if (graph.OutcomeCodes is { } codes)
+        {
+            List<OutcomeCodeDto> entries = [];
+            for (int index = 0; index < codes.Length; index++)
+            {
+                if (codes[index] != 0)
+                {
+                    entries.Add(new OutcomeCodeDto(index, codes[index]));
+                }
+            }
+
+            outcomeCodes = entries.ToArray();
+        }
+
+        OutcomeNameDto[]? outcomeNames = null;
+        if (graph.OutcomeNames is { Count: > 0 } names)
+        {
+            List<OutcomeNameDto> entries = [];
+            foreach ((int code, string outcomeName) in names)
+            {
+                entries.Add(new OutcomeNameDto(code, outcomeName));
+            }
+
+            outcomeNames = entries.ToArray();
+        }
+
+        return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
+            outcomeCodes, outcomeNames);
     }
 
     private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
@@ -324,14 +372,65 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             if (trDto.Destination < -1 || trDto.Destination >= nodesLength)
                 throw new InvalidOperationException(
                     $"Transition DTO destination index {trDto.Destination} is out of range (-1..{nodesLength - 1}).");
+            if (trDto.FailureDestination < -1 || trDto.FailureDestination >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Transition DTO failure destination index {trDto.FailureDestination} is out of range (-1..{nodesLength - 1}).");
 
-            transitions[i] = trDto.Destination == Transition.Empty.Destination.Index
-                ? Transition.Empty
-                : new Transition(nodes[trDto.Destination].Id);
+            NodeId dest = trDto.Destination == -1 ? NodeId.Default : nodes[trDto.Destination].Id;
+            NodeId failureDest = trDto.FailureDestination == -1 ? NodeId.Default : nodes[trDto.FailureDestination].Id;
+            transitions[i] = new Transition(dest, failureDest);
+        }
+
+        RetryPolicy[]? retryPolicies = null;
+        if (dto.RetryPolicies is { Length: > 0 })
+        {
+            retryPolicies = new RetryPolicy[nodesLength];
+            foreach (RetryPolicyDto entry in dto.RetryPolicies)
+            {
+                if (entry.Index < 0 || entry.Index >= nodesLength)
+                    throw new InvalidOperationException(
+                        $"Retry policy DTO index {entry.Index} is out of range (0..{nodesLength - 1}).");
+                if (entry.MaxAttempts == 0)
+                    throw new InvalidOperationException(
+                        $"Retry policy DTO for node {entry.Index} must allow at least one attempt.");
+                if (entry.BackoffTicks < 0)
+                    throw new InvalidOperationException(
+                        $"Retry policy DTO for node {entry.Index} has a negative backoff.");
+                if (entry.BackoffKind > (byte)BackoffKind.Exponential)
+                    throw new InvalidOperationException(
+                        $"Retry policy DTO for node {entry.Index} has unknown backoff kind {entry.BackoffKind}.");
+
+                retryPolicies[entry.Index] = new RetryPolicy(entry.MaxAttempts,
+                    TimeSpan.FromTicks(entry.BackoffTicks), (BackoffKind)entry.BackoffKind);
+            }
+        }
+
+        int[]? outcomeCodes = null;
+        if (dto.OutcomeCodes is { Length: > 0 })
+        {
+            outcomeCodes = new int[nodesLength];
+            foreach (OutcomeCodeDto entry in dto.OutcomeCodes)
+            {
+                if (entry.NodeIndex < 0 || entry.NodeIndex >= nodesLength)
+                    throw new InvalidOperationException(
+                        $"Outcome code DTO index {entry.NodeIndex} is out of range (0..{nodesLength - 1}).");
+
+                outcomeCodes[entry.NodeIndex] = entry.Code;
+            }
+        }
+
+        Dictionary<int, string>? outcomeNames = null;
+        if (dto.OutcomeNames is { Length: > 0 })
+        {
+            outcomeNames = new Dictionary<int, string>(dto.OutcomeNames.Length);
+            foreach (OutcomeNameDto entry in dto.OutcomeNames)
+            {
+                outcomeNames[entry.Code] = entry.Name;
+            }
         }
 
         NodeId graphId = new(dto.Index, dto.Name);
-        return new Graph(graphId, nodes, transitions);
+        return new Graph(graphId, nodes, transitions, logic: null, retryPolicies, outcomeCodes, outcomeNames);
     }
 
 

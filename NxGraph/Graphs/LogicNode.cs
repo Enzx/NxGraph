@@ -15,11 +15,13 @@ public interface INode
 
 public class LogicNode : INode
 {
-    public LogicNode(NodeId id, IAsyncLogic asyncLogic)
+    public LogicNode(NodeId id, IAsyncLogic asyncLogic, Action? enterAction = null, Action? exitAction = null)
     {
         Id = id;
         AsyncLogic = asyncLogic;
         Logic = asyncLogic is SyncLogicAdapter sla ? sla.Logic : asyncLogic as ILogic;
+        EnterAction = enterAction;
+        ExitAction = exitAction;
     }
 
     public NodeId Id { get; }
@@ -30,6 +32,19 @@ public class LogicNode : INode
     /// unwraps <see cref="SyncLogicAdapter"/>, or detects direct <see cref="ILogic"/> implementations.
     /// </summary>
     public ILogic? Logic { get; }
+
+    /// <summary>
+    /// Optional action invoked by the run loops when the machine enters this node —
+    /// once per visit, before the node's first execution (retries do not re-fire it).
+    /// Cached at build time; a null check plus a cached-delegate invoke costs nothing.
+    /// </summary>
+    public Action? EnterAction { get; }
+
+    /// <summary>
+    /// Optional action invoked by the run loops when the machine leaves this node —
+    /// once per visit, after its final execution, regardless of outcome.
+    /// </summary>
+    public Action? ExitAction { get; }
 
     public static readonly LogicNode Empty = new(NodeId.Default, new EmptyAsyncLogic());
     public static readonly LogicNode StateMachineMarker = new(NodeId.Default, new EmptyAsyncLogic());

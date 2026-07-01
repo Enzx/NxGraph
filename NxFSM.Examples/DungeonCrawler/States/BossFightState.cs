@@ -1,4 +1,4 @@
-﻿using NxGraph;
+using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
@@ -52,8 +52,8 @@ public sealed class BossFightState : State<DungeonContext>
             .WithAgent(Agent);
 
         // Loop to completion — Execute() is stepped; a nested FSM must run to a terminal result.
-        Result result = Result.Continue;
-        while (result == Result.Continue)
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
             result = childFsm.Execute();
 
         if (result == Result.Success && Agent.BossHp <= 0)
