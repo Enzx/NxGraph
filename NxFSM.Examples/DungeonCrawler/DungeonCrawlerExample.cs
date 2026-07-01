@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Diagnostics.Export;
@@ -144,8 +144,8 @@ public static class DungeonCrawlerExample
         Console.WriteLine();
 
         // Execute() advances one node per call; loop until a terminal result.
-        Result result = Result.Continue;
-        while (result == Result.Continue)
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
             result = fsm.Execute();
 
         Console.WriteLine();

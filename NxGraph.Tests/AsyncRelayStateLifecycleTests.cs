@@ -15,7 +15,7 @@ public class AsyncRelayStateLifecycleTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWithAsync(new AsyncRelayState(
                 run: _ => ResultHelpers.Success,
-                onEnter: _ => { entered = true; return ResultHelpers.Continue; },
+                onEnter: _ => { entered = true; return ResultHelpers.InProgress; },
                 onExit: _ => { exited = true; return default; }))
             .ToAsyncStateMachine();
 
@@ -50,7 +50,7 @@ public class AsyncRelayStateLifecycleTests
         AsyncStateMachine fsm = GraphBuilder
             .StartWithAsync(new AsyncRelayState(
                 run: _ => { log.Add("run"); return ResultHelpers.Success; },
-                onEnter: _ => { log.Add("enter"); return ResultHelpers.Continue; },
+                onEnter: _ => { log.Add("enter"); return ResultHelpers.InProgress; },
                 onExit: _ => { log.Add("exit"); return default; }))
             .ToAsyncStateMachine();
 

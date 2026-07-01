@@ -591,9 +591,9 @@ public class StateMachineTests
     /// </summary>
     private static Result RunToCompletion(StateMachine fsm, int maxSteps = 1000)
     {
-        Result result = Result.Continue;
+        Result result = Result.InProgress;
         int steps = 0;
-        while (result == Result.Continue)
+        while (result == Result.InProgress)
         {
             Assert.That(steps, Is.LessThan(maxSteps),
                 $"StateMachine did not terminate within {maxSteps} steps.");

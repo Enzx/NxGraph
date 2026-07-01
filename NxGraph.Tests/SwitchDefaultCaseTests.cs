@@ -65,7 +65,7 @@ public class SwitchDefaultCaseTests
         do
         {
             result = fsm.Execute();
-        } while (result == Result.Continue);
+        } while (result == Result.InProgress);
 
         Assert.That(result, Is.EqualTo(Result.Success));
     }

@@ -1,0 +1,11 @@
+interface NxGraph.Serialization.Abstraction.IGraphBinarySerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IGraphJsonSerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromJsonAsync(System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IGraphSerializer
+interface NxGraph.Serialization.Abstraction.ILogicCodec
+interface NxGraph.Serialization.Abstraction.ILogicCodec`1 : NxGraph.Serialization.Abstraction.ILogicCodec
+  method NxGraph.Graphs.IAsyncLogic Deserialize(TWire)
+  method TWire Serialize(NxGraph.Graphs.IAsyncLogic)

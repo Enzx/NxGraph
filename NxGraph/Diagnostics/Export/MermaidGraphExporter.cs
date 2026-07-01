@@ -112,6 +112,23 @@ public sealed class MermaidGraphExporter : IGraphExporter
             }
         }
 
+        // Failure edges: emitted as labeled dashed arrows so fault routing is visible
+        // alongside the solid success flow.
+        for (int i = 0; i < graph.TransitionCount; i++)
+        {
+            Transition edge = graph.GetTransitionByIndex(i);
+            if (!edge.HasFailureDestination)
+            {
+                continue;
+            }
+
+            int dstIdx = edge.FailureDestination.Index;
+            if ((uint)dstIdx < (uint)graph.NodeCount)
+            {
+                sb.Append("  ").Append(NodeVar(i)).Append(" -. fail .-> ").Append(NodeVar(dstIdx)).AppendLine();
+            }
+        }
+
         // Director edges: directors don't carry a static transition (the runtime calls
         // SelectNext at execution time), so they're missed by the static-edge loop above.
         // Emit dashed edges to every statically-known target so the rendered diagram

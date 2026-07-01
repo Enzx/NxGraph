@@ -1,0 +1,12 @@
+sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstraction.IGraphBinarySerializer, NxGraph.Serialization.Abstraction.IGraphJsonSerializer, NxGraph.Serialization.Abstraction.IGraphSerializer
+  ctor Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec)
+  method NxGraph.Serialization.Abstraction.IGraphBinarySerializer AsBinarySerializer()
+  method NxGraph.Serialization.Abstraction.IGraphJsonSerializer AsJsonSerializer()
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromJsonAsync(System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.ILogicBinaryCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.ReadOnlyMemory`1[[System.Byte, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
+interface NxGraph.Serialization.ILogicTextCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
+static class NxGraph.Serialization.SerializationVersion
+  field static System.Int32 Version

@@ -11,7 +11,28 @@ namespace NxGraph.Fsm;
 public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer = null)
     : StateMachine(graph, observer), IAgentSettable<TAgent>
 {
-    public void SetAgent(TAgent agent) => Graph.SetAgent(agent);
+    private TAgent? _agent;
+    private bool _hasAgent;
+
+    /// <summary>
+    /// Binds the agent (typed context) to this machine. It is applied to the graph's nodes
+    /// immediately and re-applied at the start of every run, so several machines can share
+    /// one <see cref="Graph"/> with distinct contexts as long as their runs do not interleave.
+    /// </summary>
+    public void SetAgent(TAgent agent)
+    {
+        _agent = agent;
+        _hasAgent = true;
+        Graph.SetAgent(agent);
+    }
+
+    private protected override void ApplyExecutionContext()
+    {
+        if (_hasAgent)
+        {
+            Graph.SetAgent(_agent!);
+        }
+    }
 }
 
 /// <summary>
@@ -41,9 +62,11 @@ public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer =
 /// must have its <see cref="INode.Logic"/> populated (i.e. implement <see cref="ILogic"/>).
 /// </para>
 /// </summary>
-public class StateMachine : State
+public class StateMachine : State, ISubGraphProvider
 {
     public readonly Graph Graph;
+
+    IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Graph];
     private readonly IStateMachineObserver? _observer;
 
     private ExecutionStatus _status = ExecutionStatus.Created;
@@ -60,6 +83,24 @@ public class StateMachine : State
     // skips OnEnter entirely and never observes _executeGate.
     private bool _reentranceGuard;
     private readonly Action<string> _cachedLogReportCallback;
+    private readonly State?[] _logReportStates; // indexed by NodeId.Index, resolved once at construction
+    private readonly RetryPolicy[]? _retryPolicies; // graph-owned; null when no node declares one
+    private int _attempts; // executions of the current node in this run
+    private bool _nodeEntered; // the current node's EnterAction has fired for this visit
+    private readonly int[]? _outcomeCodes; // graph-owned; null when no node declares one
+
+    /// <summary>
+    /// The outcome code of the node the last run terminated at (default 0).
+    /// Reset when a new run starts.
+    /// </summary>
+    public int LastOutcome { get; private set; }
+
+    /// <summary>
+    /// The display name registered for <see cref="LastOutcome"/>, or <c>null</c>.
+    /// Resolved lazily — never on the run loop.
+    /// </summary>
+    public string? LastOutcomeName =>
+        Graph.OutcomeNames is { } names && names.TryGetValue(LastOutcome, out string? name) ? name : null;
 
     /// <summary>Public execution status.</summary>
     public ExecutionStatus Status
@@ -75,6 +116,33 @@ public class StateMachine : State
         _initial = graph.StartNode.Id;
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
+        _logReportStates = BuildLogReportTable(graph);
+        _retryPolicies = graph.RetryPolicies;
+        _outcomeCodes = graph.OutcomeCodes;
+    }
+
+    private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
+
+    /// <summary>
+    /// Hook for derived machines to (re)apply per-machine execution context (e.g. the typed
+    /// agent) to the graph's nodes. Runs under the execute gate, right before Starting.
+    /// </summary>
+    private protected virtual void ApplyExecutionContext()
+    {
+    }
+
+    private static State?[] BuildLogReportTable(Graph graph)
+    {
+        State?[] table = new State?[graph.NodeCount];
+        for (int i = 0; i < table.Length; i++)
+        {
+            if (graph.TryGetNodeByIndex(i, out INode? node) && node is LogicNode logicNode)
+            {
+                table[i] = logicNode.Logic as State;
+            }
+        }
+
+        return table;
     }
 
     /// <summary>
@@ -122,14 +190,84 @@ public class StateMachine : State
 
         TransitionTo(ExecutionStatus.Resetting);
         _current = _initial;
+        _attempts = 0;
+        _nodeEntered = false;
         TransitionTo(ExecutionStatus.Ready);
         return Result.Success;
+    }
+
+    /// <summary>
+    /// Captures the machine's runtime position into a serializable snapshot. The sync runtime
+    /// is frame-stepped, so any point between <see cref="State.Execute"/> calls is a legal
+    /// step boundary — including the middle of a run (the machine stays Running between ticks).
+    /// Only calling from <i>inside</i> node logic is rejected.
+    /// </summary>
+    public StateMachineSnapshot Suspend()
+    {
+        if (_reentranceGuard)
+        {
+            throw new InvalidOperationException(
+                "Cannot suspend from inside node logic. Suspend between Execute() calls.");
+        }
+
+        ExecutionStatus status = _status;
+        if (status is ExecutionStatus.Starting or ExecutionStatus.Transitioning or ExecutionStatus.Resetting)
+        {
+            throw new InvalidOperationException($"Cannot suspend in transient status '{status}'.");
+        }
+
+        return new StateMachineSnapshot(_current.Index, status, _attempts, _nodeEntered,
+            MidRun: _executeGate, LastOutcome);
+    }
+
+    /// <summary>
+    /// Restores a snapshot produced by <see cref="Suspend"/> onto this machine. The graph must
+    /// be structurally equivalent to the one the snapshot was taken from (same node indices).
+    /// A mid-run snapshot is continued by calling <see cref="State.Execute"/> until it returns
+    /// a terminal result; re-attach the user context via <c>SetAgent</c> before resuming if
+    /// the graph uses one. No observer events are replayed by the restore itself.
+    /// </summary>
+    public void Resume(StateMachineSnapshot snapshot)
+    {
+        if (snapshot is null)
+        {
+            throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        if (_reentranceGuard)
+        {
+            throw new InvalidOperationException("Cannot resume from inside node logic.");
+        }
+
+        if (snapshot.Status is ExecutionStatus.Starting or ExecutionStatus.Transitioning
+            or ExecutionStatus.Resetting)
+        {
+            throw new InvalidOperationException(
+                $"Snapshot captured in transient status '{snapshot.Status}' cannot be resumed.");
+        }
+
+        if ((uint)snapshot.CurrentNodeIndex >= (uint)Graph.NodeCount)
+        {
+            throw new InvalidOperationException(
+                $"Snapshot node index {snapshot.CurrentNodeIndex} is out of range for this graph " +
+                $"(0..{Graph.NodeCount - 1}).");
+        }
+
+        _current = Graph.GetNodeByIndex(snapshot.CurrentNodeIndex).Id;
+        _attempts = snapshot.Attempts;
+        _nodeEntered = snapshot.NodeEntered;
+        LastOutcome = snapshot.LastOutcome;
+        // Mid-run: the gate stays held between ticks and the State lifecycle must skip
+        // OnEnter (which would restart the run from the initial node) on the next Execute().
+        _executeGate = snapshot.MidRun;
+        HasEntered = snapshot.MidRun;
+        _status = snapshot.Status;
     }
 
     // ── State overrides — Execute() is the stepped entry point ────────────
     // Call Execute() once per frame from Unity's Update().
     // It initialises on the first call, advances one node, and returns:
-    //   Result.Continue  — more nodes remain; call again next frame.
+    //   Result.InProgress  — more nodes remain; call again next frame.
     //   Result.Success / Result.Failure — machine has finished.
 
     protected override void OnEnter()
@@ -152,8 +290,14 @@ public class StateMachine : State
 
         _executeGate = true;
 
+        // Re-stamp this machine's context onto the (potentially shared) graph before running.
+        ApplyExecutionContext();
+
         TransitionTo(ExecutionStatus.Starting);
         _current = _initial;
+        _attempts = 0;
+        _nodeEntered = false;
+        LastOutcome = 0;
         _observer?.OnStateEntered(_current);
         TransitionTo(ExecutionStatus.Running);
     }
@@ -175,8 +319,8 @@ public class StateMachine : State
         try
         {
             Result result = TickInternal();
-            if (result == Result.Continue)
-                return Result.Continue; // not finished; caller will Execute() again next frame
+            if (result == Result.InProgress)
+                return Result.InProgress; // not finished; caller will Execute() again next frame
 
             Finalise(result);
             return result;
@@ -235,7 +379,7 @@ public class StateMachine : State
     }
 
     /// <summary>
-    /// Executes the current node. Returns <see cref="Result.Continue"/> when the machine
+    /// Executes the current node. Returns <see cref="Result.InProgress"/> when the machine
     /// transitions to a next node, or a terminal result (<see cref="Result.Success"/> /
     /// <see cref="Result.Failure"/>) when the run is finished.
     /// </summary>
@@ -249,8 +393,10 @@ public class StateMachine : State
 
         LogicNode logicNode = (LogicNode)node;
 
-        // Wire log-report callback for nodes that support it.
-        if (logicNode.Logic is State stateForLog)
+        // Wire log-report callback for nodes that support it. Reassigned on every visit so
+        // interleaved machines sharing a graph each attribute reports to their own observer.
+        State? stateForLog = _logReportStates[_current.Index];
+        if (stateForLog is not null)
         {
             stateForLog.SyncLogReport = _cachedLogReportCallback;
         }
@@ -261,12 +407,25 @@ public class StateMachine : State
                 $"Node '{_current}' logic ({logicNode.AsyncLogic.GetType().Name}) does not implement ILogic. " +
                 "All nodes in a StateMachine must implement ILogic.");
 
+        if (!_nodeEntered)
+        {
+            _nodeEntered = true;
+            logicNode.EnterAction?.Invoke();
+        }
+
         Result result = syncLogic.Execute();
+        if (result.Code != Result.StatusCode.InProgress)
+        {
+            _attempts++;
+        }
 
         switch (result.Code)
         {
             case Result.StatusCode.Success:
             {
+                _nodeEntered = false;
+                logicNode.ExitAction?.Invoke();
+
                 _observer?.OnStateExited(_current);
 
                 NodeId next;
@@ -276,6 +435,7 @@ public class StateMachine : State
                     next = director.SelectNext();
                     if (next.Equals(NodeId.Default))
                     {
+                        LastOutcome = OutcomeOf(_current);
                         return Result.Success;
                     }
                 }
@@ -287,11 +447,13 @@ public class StateMachine : State
                             _current,
                             new InvalidOperationException($"No transition found for state '{_current}'."));
 
+                        LastOutcome = OutcomeOf(_current);
                         return Result.Failure;
                     }
 
                     if (edge.IsEmpty)
                     {
+                        LastOutcome = OutcomeOf(_current);
                         return Result.Success; // terminal
                     }
 
@@ -303,19 +465,58 @@ public class StateMachine : State
                 _observer?.OnTransition(_current, next);
 
                 _current = next;
+                _attempts = 0;
 
                 _observer?.OnStateEntered(_current);
 
                 TransitionTo(ExecutionStatus.Running);
 
-                return Result.Continue;
+                return Result.InProgress;
             }
             case Result.StatusCode.Failure:
-                return Result.Failure;
-            case Result.StatusCode.Continue:
+            {
+                if (_retryPolicies is not null)
+                {
+                    RetryPolicy retry = _retryPolicies[_current.Index];
+                    if (_attempts < retry.MaxAttempts)
+                    {
+                        // Frame-stepped runtime: the retry happens on the next tick and the
+                        // configured backoff is intentionally not honored (never block a frame).
+                        return Result.InProgress;
+                    }
+                }
+
+                _nodeEntered = false;
+                logicNode.ExitAction?.Invoke();
+
+                if (!Graph.TryGetTransition(_current, out Transition failEdge) ||
+                    !failEdge.HasFailureDestination)
+                {
+                    LastOutcome = OutcomeOf(_current);
+                    return Result.Failure;
+                }
+
+                _observer?.OnStateFailed(_current, null);
+
+                NodeId handler = failEdge.FailureDestination;
+
+                TransitionTo(ExecutionStatus.Transitioning);
+
+                _observer?.OnTransition(_current, handler);
+
+                _current = handler;
+                _attempts = 0;
+
+                _observer?.OnStateEntered(_current);
+
+                TransitionTo(ExecutionStatus.Running);
+
+                return Result.InProgress;
+            }
+            case Result.StatusCode.InProgress:
                 // Node is still in progress (e.g. a multi-frame Unity state).
                 // Tick() will call it again next frame; Execute()'s while-loop will spin.
-                return Result.Continue;
+                return Result.InProgress;
             default:
                 throw new InvalidOperationException("Unknown node result.");
         }

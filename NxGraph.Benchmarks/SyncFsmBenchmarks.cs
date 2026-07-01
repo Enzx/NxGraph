@@ -46,8 +46,8 @@ public class SyncFsmBenchmarks
 
     private static Result Run(StateMachine sm)
     {
-        Result result = Result.Continue;
-        while (result == Result.Continue)
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
             result = sm.Execute();
         return result;
     }

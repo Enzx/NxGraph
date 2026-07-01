@@ -15,6 +15,7 @@ public class AsyncTimeoutState : IAsyncLogic
     private readonly TimeSpan _timeout;
     private readonly TimeoutBehavior _behavior;
     private readonly Action<object?> _cachedCancelCallback = CancelCallback;
+    private readonly string _timeoutMessage;
 
     public AsyncTimeoutState(IAsyncLogic inner, TimeSpan timeout, TimeoutBehavior behavior = TimeoutBehavior.Fail)
     {
@@ -26,6 +27,7 @@ public class AsyncTimeoutState : IAsyncLogic
 
         _timeout = timeout;
         _behavior = behavior;
+        _timeoutMessage = $"Node timed out after {timeout}.";
     }
 
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
@@ -58,10 +60,13 @@ public class AsyncTimeoutState : IAsyncLogic
             {
                 if (_behavior == TimeoutBehavior.Throw)
                 {
-                    throw new TimeoutException($"Node timed out after {_timeout}.");
+                    throw new TimeoutException(_timeoutMessage);
                 }
 
-                return Result.Failure;
+                // A timeout is an ordinary node failure: it participates in the unified
+                // fault model — per-node retry policies and failure edges — exactly like
+                // a node returning Failure itself.
+                return Result.Fail(_timeoutMessage);
             }
         }
         finally

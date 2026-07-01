@@ -56,7 +56,7 @@ public class SteppedExecutionTests
 
         Result first = fsm.Execute();
 
-        Assert.That(first, Is.EqualTo(Result.Continue));
+        Assert.That(first, Is.EqualTo(Result.InProgress));
     }
 
     [Test]
@@ -85,10 +85,10 @@ public class SteppedExecutionTests
             .ToStateMachine();
         fsm.SetResetPolicy(RestartPolicy.Manual);
 
-        Assert.That(fsm.Execute(), Is.EqualTo(Result.Continue));
+        Assert.That(fsm.Execute(), Is.EqualTo(Result.InProgress));
         Assert.That(counter, Is.EqualTo(1));
 
-        Assert.That(fsm.Execute(), Is.EqualTo(Result.Continue));
+        Assert.That(fsm.Execute(), Is.EqualTo(Result.InProgress));
         Assert.That(counter, Is.EqualTo(2));
 
         Assert.That(fsm.Execute(), Is.EqualTo(Result.Success));
@@ -265,7 +265,7 @@ public class SteppedExecutionTests
         int enterCount = 0, exitCount = 0, runCount = 0;
         StateMachine fsm = GraphBuilder
             .StartWith(new RelayState(
-                run: () => { runCount++; return runCount < 3 ? Result.Continue : Result.Success; },
+                run: () => { runCount++; return runCount < 3 ? Result.InProgress : Result.Success; },
                 onEnter: () => enterCount++,
                 onExit: () => exitCount++))
             .ToStateMachine();
@@ -291,7 +291,7 @@ public class SteppedExecutionTests
             .StartWith(() =>
             {
                 callCount++;
-                return callCount < 3 ? Result.Continue : Result.Success;
+                return callCount < 3 ? Result.InProgress : Result.Success;
             })
             .ToStateMachine();
         fsm.SetResetPolicy(RestartPolicy.Manual);
@@ -302,8 +302,8 @@ public class SteppedExecutionTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(r1, Is.EqualTo(Result.Continue));
-            Assert.That(r2, Is.EqualTo(Result.Continue));
+            Assert.That(r1, Is.EqualTo(Result.InProgress));
+            Assert.That(r2, Is.EqualTo(Result.InProgress));
             Assert.That(r3, Is.EqualTo(Result.Success));
             Assert.That(callCount, Is.EqualTo(3));
         }
@@ -317,7 +317,7 @@ public class SteppedExecutionTests
             .StartWith(() =>
             {
                 nodeACount++;
-                return nodeACount < 2 ? Result.Continue : Result.Success;
+                return nodeACount < 2 ? Result.InProgress : Result.Success;
             })
             .To(() => { nodeBCount++; return Result.Success; })
             .ToStateMachine();
@@ -428,9 +428,9 @@ public class SteppedExecutionTests
             Assert.That(Result.Failure.IsFailure, Is.True);
             Assert.That(Result.Failure.IsCompleted, Is.True);
 
-            Assert.That(Result.Continue.IsSuccess, Is.False);
-            Assert.That(Result.Continue.IsFailure, Is.False);
-            Assert.That(Result.Continue.IsCompleted, Is.False);
+            Assert.That(Result.InProgress.IsSuccess, Is.False);
+            Assert.That(Result.InProgress.IsFailure, Is.False);
+            Assert.That(Result.InProgress.IsCompleted, Is.False);
         }
     }
 

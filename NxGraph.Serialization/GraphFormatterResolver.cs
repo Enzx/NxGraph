@@ -49,6 +49,42 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(RetryPolicyDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)RetryPolicyDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(RetryPolicyDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)RetryPolicyArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(OutcomeCodeDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)OutcomeCodeDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(OutcomeCodeDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)OutcomeCodeArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(OutcomeNameDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)OutcomeNameDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(OutcomeNameDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)OutcomeNameArrayDtoFormatter.Instance;
+                return;
+            }
+
             if (typeof(T) == typeof(SubGraphDto))
             {
                 Formatter = (IMessagePackFormatter<T>)(object)SubGraphDtoFormatter.Instance;

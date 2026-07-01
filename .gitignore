@@ -10,6 +10,8 @@ riderModule.iml
 artifacts/
 NxGraph.Serialization.Tests/TestResults
 NxGraph.Tests/TestResults
+coverage.info
+coverage.json
 /BenchmarkDotNet.Artifacts/
 upm/com.enzx.nxgraph/Runtime/**/*.dll
 upm/com.enzx.nxgraph/Runtime/**/*.pdb

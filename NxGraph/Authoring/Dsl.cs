@@ -20,6 +20,66 @@ public static partial class Dsl
         return prev.ToAsync(asyncLogic);
     }
 
+    /// <summary>
+    /// Adds a child graph as a composite state and wires a transition to it. The child runs
+    /// to completion within the parent's step. With <paramref name="history"/> enabled, a
+    /// failed child resumes at its last-active node when the parent re-enters the composite
+    /// (see <see cref="AsyncHistoryState"/>); without it, re-entry restarts the child.
+    /// </summary>
+    public static StateToken SubGraph(this StateToken prev, Graph child, bool history = false)
+    {
+        Guard.NotNull(child, nameof(child));
+        return prev.ToAsync(history ? new AsyncHistoryState(child) : new AsyncStateMachine(child));
+    }
+
+    /// <summary>
+    /// Starts the graph with a child graph as its first (composite) state.
+    /// </summary>
+    public static StateToken SubGraph(this StartToken root, Graph child, bool history = false)
+    {
+        Guard.NotNull(child, nameof(child));
+        IAsyncLogic composite = history ? new AsyncHistoryState(child) : new AsyncStateMachine(child);
+        NodeId id = root.Builder.AddNode(composite, true);
+        return new StateToken(id, root.Builder);
+    }
+
+    /// <summary>
+    /// Adds an orthogonal-regions composite and wires a transition to it: every region graph
+    /// progresses one node per round (cooperative interleaving) until all reach a terminal
+    /// result. Succeeds only when every region succeeded (see <see cref="AsyncParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, params Graph[] regions)
+    {
+        return prev.ToAsync(new AsyncParallelState(regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with an orthogonal-regions composite as its first state.
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, params Graph[] regions)
+    {
+        NodeId id = root.Builder.AddNode(new AsyncParallelState(regions), true);
+        return new StateToken(id, root.Builder);
+    }
+
+    /// <summary>
+    /// Routes this state's <c>Failure</c> outcome to a new sync handler state defined by a lambda.
+    /// </summary>
+    public static StateToken OnError(this StateToken prev, Func<Result> handler)
+    {
+        Guard.NotNull(handler, nameof(handler));
+        return prev.OnError(new RelayState(handler));
+    }
+
+    /// <summary>
+    /// Routes this state's <c>Failure</c> outcome to a new async handler state defined by a lambda.
+    /// </summary>
+    public static StateToken OnErrorAsync(this StateToken prev, Func<CancellationToken, ValueTask<Result>> handler)
+    {
+        Guard.NotNull(handler, nameof(handler));
+        return prev.OnErrorAsync(new AsyncRelayState(handler));
+    }
+
     public static StateToken SetName(this StateToken prev, string name)
     {
         Guard.NotNull(name, nameof(name));

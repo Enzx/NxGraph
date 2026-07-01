@@ -10,7 +10,9 @@ internal sealed class GraphDto
     /// Minimal DTO for a graph that can be serialized/deserialized.
     /// Keeps indices stable and captures names and edges.
     /// </summary>
-    public GraphDto(INodeDto[] nodes, TransitionDto[] transitions,SubGraphDto[]? subGraphs = null, int index = -1, string? name = null)
+    public GraphDto(INodeDto[] nodes, TransitionDto[] transitions, SubGraphDto[]? subGraphs = null, int index = -1,
+        string? name = null, RetryPolicyDto[]? retryPolicies = null, OutcomeCodeDto[]? outcomeCodes = null,
+        OutcomeNameDto[]? outcomeNames = null)
     {
         if (nodes.Length != transitions.Length)
             throw new ArgumentException("Nodes and transitions must have the same length.", nameof(transitions));
@@ -19,6 +21,9 @@ internal sealed class GraphDto
         SubGraphs =   subGraphs ?? [];
         Name = name;
         Index = index;
+        RetryPolicies = retryPolicies ?? [];
+        OutcomeCodes = outcomeCodes ?? [];
+        OutcomeNames = outcomeNames ?? [];
     }
 
     /// <summary>
@@ -34,5 +39,8 @@ internal sealed class GraphDto
     public SubGraphDto[] SubGraphs { get; set; }
     public string? Name { get; set; }
     public int Index { get; set; }
+    public RetryPolicyDto[] RetryPolicies { get; set; }
+    public OutcomeCodeDto[] OutcomeCodes { get; set; }
+    public OutcomeNameDto[] OutcomeNames { get; set; }
 
 }

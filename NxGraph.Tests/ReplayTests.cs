@@ -316,7 +316,7 @@ public class ReplayTests
 
         // Run to completion — sync machine ticks via Execute().
         Result r;
-        do { r = fsm.Execute(); } while (r == Result.Continue);
+        do { r = fsm.Execute(); } while (r == Result.InProgress);
 
         ReadOnlyMemory<ReplayEvent> events = recorder.GetEvents();
         Assert.Multiple(() =>
@@ -342,7 +342,7 @@ public class ReplayTests
         fsm.SetResetPolicy(RestartPolicy.Manual);
 
         Result r;
-        do { r = fsm.Execute(); } while (r == Result.Continue);
+        do { r = fsm.Execute(); } while (r == Result.InProgress);
 
         Assert.That(recorder.DroppedCount, Is.GreaterThan(0),
             "A four-node sync machine emits more than four events; ring of size 4 must have dropped some.");

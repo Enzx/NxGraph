@@ -31,6 +31,18 @@ public abstract class State : ILogic, ILogReporter
     private bool _hasEntered;
 
     /// <summary>
+    /// Lifecycle position for same-assembly runtimes: whether <see cref="OnEnter"/> has run
+    /// for the current pass. <see cref="StateMachine.Resume"/> sets this so a restored
+    /// mid-run machine skips <see cref="OnEnter"/> (which would restart the run) on its
+    /// next <see cref="Execute"/> call.
+    /// </summary>
+    private protected bool HasEntered
+    {
+        get => _hasEntered;
+        set => _hasEntered = value;
+    }
+
+    /// <summary>
     /// Executes the state lifecycle: OnEnter once on first call, OnRun every call,
     /// OnExit once when a terminal result (non-Continue) is returned or an exception is thrown.
     /// </summary>
