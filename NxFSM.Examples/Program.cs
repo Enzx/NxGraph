@@ -3,6 +3,7 @@
 using NxFSM.Examples;
 using NxFSM.Examples.BlackboardDemo;
 using NxFSM.Examples.DungeonCrawler;
+using NxFSM.Examples.ParallelDemo;
 using NxFSM.Examples.ReadmeExamples;
 using NxGraph;
 using NxGraph.Authoring;
@@ -55,6 +56,10 @@ DungeonCrawlerExample.Run();
 Console.WriteLine();
 Console.WriteLine();
 await BlackboardDemoExample.RunAsync();
+
+Console.WriteLine();
+Console.WriteLine();
+ParallelDemoExample.Run();
 
 Console.WriteLine();
 Console.WriteLine();
