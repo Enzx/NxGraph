@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using NxGraph.Blackboards;
+using NxGraph.Compatibility;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
@@ -28,6 +30,7 @@ public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer =
 
     private protected override void ApplyExecutionContext()
     {
+        base.ApplyExecutionContext(); // blackboards first, then the agent
         if (_hasAgent)
         {
             Graph.SetAgent(_agent!);
@@ -62,9 +65,10 @@ public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer =
 /// must have its <see cref="INode.Logic"/> populated (i.e. implement <see cref="ILogic"/>).
 /// </para>
 /// </summary>
-public class StateMachine : State, ISubGraphProvider
+public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable
 {
     public readonly Graph Graph;
+    private BlackboardContext _blackboards;
 
     IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Graph];
     private readonly IStateMachineObserver? _observer;
@@ -126,9 +130,63 @@ public class StateMachine : State, ISubGraphProvider
     /// <summary>
     /// Hook for derived machines to (re)apply per-machine execution context (e.g. the typed
     /// agent) to the graph's nodes. Runs under the execute gate, right before Starting.
+    /// The base implementation re-stamps the bound blackboard context.
     /// </summary>
     private protected virtual void ApplyExecutionContext()
     {
+        if (!_blackboards.IsEmpty)
+        {
+            Graph.SetBlackboards(in _blackboards);
+        }
+    }
+
+    /// <summary>
+    /// Binds a blackboard into the scope slot its schema declares (replace semantics — like
+    /// <c>SetAgent</c>, rebinding swaps the board, which enables machine pooling). Applied to
+    /// the graph's nodes immediately and re-applied at the start of every run. Validated
+    /// against the graph's schema declarations when present.
+    /// </summary>
+    public void SetBlackboard(Blackboard blackboard)
+    {
+        Guard.NotNull(blackboard, nameof(blackboard));
+        ValidateBoardAgainstDeclarations(blackboard);
+        _blackboards = _blackboards.With(blackboard);
+        Graph.SetBlackboards(in _blackboards);
+    }
+
+    /// <summary>
+    /// Receives the whole context from a parent machine's stamping walk (nested composite
+    /// path). Validates against this machine's own graph declarations, so a conflicting
+    /// child schema fails loudly at stamp time.
+    /// </summary>
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        if (context.Graph is { } graphBoard)
+        {
+            ValidateBoardAgainstDeclarations(graphBoard);
+        }
+
+        if (context.Global is { } globalBoard)
+        {
+            ValidateBoardAgainstDeclarations(globalBoard);
+        }
+
+        _blackboards = context;
+        Graph.SetBlackboards(in context);
+    }
+
+    private void ValidateBoardAgainstDeclarations(Blackboard blackboard)
+    {
+        BlackboardSchema? declared = blackboard.Schema.Scope == BlackboardScope.Global
+            ? Graph.GlobalSchema
+            : Graph.Schema;
+
+        if (declared is not null && !ReferenceEquals(declared, blackboard.Schema))
+        {
+            throw new InvalidOperationException(
+                $"Blackboard schema '{blackboard.Schema.Name ?? "<unnamed>"}' does not match the " +
+                $"{blackboard.Schema.Scope} schema '{declared.Name ?? "<unnamed>"}' declared on graph '{Graph.Id}'.");
+        }
     }
 
     private static State?[] BuildLogReportTable(Graph graph)

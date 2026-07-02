@@ -1,3 +1,12 @@
+enum NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Skip = 1
+  Strict = 0
+interface NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer
+  method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
+  method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
 interface NxGraph.Serialization.Abstraction.IGraphBinarySerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
   method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)

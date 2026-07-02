@@ -159,6 +159,44 @@ var sm = g.ToAsyncStateMachine<AppAgent>();
 sm.SetAgent(new AppAgent { Log = logger });
 ```
 
+### Blackboards (scoped shared memory)
+
+Orthogonal to the agent: typed-key working memory with **Global** (one board shared across machines) and **Graph** (one board per machine) scopes. Keys live on a `BlackboardSchema`; nodes access everything through the routed `Bb` context on the state bases — zero-boxing, zero-allocation reads/writes. Avoid `Dictionary<string, object>` contexts (string hashing + boxing per access).
+
+```csharp
+static class Keys
+{
+    public static readonly BlackboardSchema World = new("world", BlackboardScope.Global);
+    public static readonly BlackboardKey<bool> Alarm = World.Register<bool>("Alarm");
+
+    public static readonly BlackboardSchema Enemy = new("enemy"); // Graph scope
+    public static readonly BlackboardKey<int> Distance = Enemy.Register<int>("Distance", 10);
+}
+
+sealed class ChaseState : AsyncState
+{
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        if (Bb.Get(Keys.Alarm)) Bb.GetRef(Keys.Distance)--; // routed by schema scope
+        return ResultHelpers.Success;
+    }
+}
+
+Graph graph = GraphBuilder
+    .StartWithAsync(new ChaseState())
+    .If(bb => bb.Get(Keys.Alarm)).ThenAsync((bb, ct) => ResultHelpers.Success)
+                                 .ElseAsync((bb, ct) => ResultHelpers.Success)
+    .WithSchema(Keys.Enemy).WithSchema(Keys.World)   // opt-in bind-time validation
+    .Build();
+
+Blackboard world = new(Keys.World);                  // shared by every machine
+var sm = graph.ToAsyncStateMachine()
+    .WithBlackboard(world)
+    .WithBlackboard(new Blackboard(Keys.Enemy));     // this machine's own memory
+```
+
+Boards serialize independently via `BlackboardSerializer` (`NxGraph.Serialization`) — one payload per board, restored into a live board over the same schema.
+
 ---
 
 ## Execution

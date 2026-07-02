@@ -1,27 +1,53 @@
+using NxGraph.Blackboards;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm.Async;
 
-public sealed class AsyncSwitchState<TKey>(
-    Func<ValueTask<TKey>> selector,
-    IReadOnlyDictionary<TKey, NodeId> cases,
-    NodeId defaultNode = default)
-    : IAsyncLogic, IAsyncDirector
+/// <summary>
+/// Async switch/case director. The blackboard-context overload receives the machine-bound
+/// routed context (see <see cref="BlackboardContext"/>), so the selector can read shared
+/// memory instead of closing over ad-hoc state.
+/// </summary>
+public sealed class AsyncSwitchState<TKey> : IAsyncLogic, IAsyncDirector, IBlackboardSettable
     where TKey : notnull
 {
-    private readonly Func<ValueTask<TKey>> _selector = selector ?? throw new ArgumentNullException(nameof(selector));
-    private readonly IReadOnlyDictionary<TKey, NodeId> _cases = cases ?? throw new ArgumentNullException(nameof(cases));
+    private readonly Func<ValueTask<TKey>>? _selector;
+    private readonly Func<BlackboardContext, ValueTask<TKey>>? _bbSelector;
+    private readonly IReadOnlyDictionary<TKey, NodeId> _cases;
     // When no explicit default is supplied, fall back to NodeId.Default — the async runtime
     // (AsyncStateMachine.InternalRunAsync) treats that as a terminal-success exit from the
     // director. Defaulting to default(NodeId) would silently route to Start (index 0).
-    private NodeId _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
+    private NodeId _defaultNode;
+    private BlackboardContext _blackboards;
 
+    public AsyncSwitchState(
+        Func<ValueTask<TKey>> selector,
+        IReadOnlyDictionary<TKey, NodeId> cases,
+        NodeId defaultNode = default)
+    {
+        _selector = selector ?? throw new ArgumentNullException(nameof(selector));
+        _cases = cases ?? throw new ArgumentNullException(nameof(cases));
+        _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
+    }
+
+    public AsyncSwitchState(
+        Func<BlackboardContext, ValueTask<TKey>> selector,
+        IReadOnlyDictionary<TKey, NodeId> cases,
+        NodeId defaultNode = default)
+    {
+        _bbSelector = selector ?? throw new ArgumentNullException(nameof(selector));
+        _cases = cases ?? throw new ArgumentNullException(nameof(cases));
+        _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
+    }
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => _blackboards = context;
 
     public async ValueTask<NodeId> SelectNextAsync(CancellationToken ct = default)
     {
-        TKey key = await _selector();
+        TKey key = _bbSelector is not null
+            ? await _bbSelector(_blackboards).ConfigureAwait(false)
+            : await _selector!().ConfigureAwait(false);
         return _cases.GetValueOrDefault(key, _defaultNode);
-
     }
 
     /// <inheritdoc />

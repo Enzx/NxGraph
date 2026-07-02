@@ -37,6 +37,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Waits and timeouts](#waits-and-timeouts)
   - [Naming nodes](#naming-nodes)
   - [Agents / context injection](#agents--context-injection)
+  - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution--stepped-model)
@@ -264,6 +265,59 @@ AsyncStateMachine<AppAgent> fsm = GraphBuilder
 
 await fsm.ExecuteAsync();
 ```
+
+### Blackboards (scoped shared memory)
+
+The agent is *who* is acting (an `Enemy`, a workflow context); a **blackboard** is the graph's *working memory*. They are orthogonal channels — both reach nodes simultaneously. Blackboards are typed-key slot stores with two scopes: **Global** (one user-owned board shared by every machine — world state) and **Graph** (one board per machine/entity). Reads and writes are zero-boxing, zero-allocation array accesses.
+
+```csharp
+using NxGraph.Blackboards;
+
+// Schemas are code: declare keys once, share the schema across N boards.
+static class WorldKeys
+{
+    public static readonly BlackboardSchema Schema = new("world", BlackboardScope.Global);
+    public static readonly BlackboardKey<bool> AlarmRaised = Schema.Register<bool>("AlarmRaised");
+}
+
+static class EnemyKeys
+{
+    public static readonly BlackboardSchema Schema = new("enemy"); // Graph scope (default)
+    public static readonly BlackboardKey<int> TargetDistance = Schema.Register<int>("TargetDistance", 10);
+}
+
+sealed class ChaseState : AsyncState<Enemy>
+{
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        // One call site — the key's schema scope picks the board:
+        if (Bb.Get(WorldKeys.AlarmRaised))          // routed → shared global board
+            Bb.GetRef(EnemyKeys.TargetDistance)--;   // routed → this machine's board
+        return ResultHelpers.Success;
+    }
+}
+
+// Declare schemas on the graph (opt-in bind-time validation), bind boards per machine:
+Graph graph = GraphBuilder
+    .StartWithAsync(new ChaseState())
+    .If(bb => bb.Get(WorldKeys.AlarmRaised))         // blackboard-driven branching
+        .ThenAsync((bb, ct) => ResultHelpers.Success)
+        .ElseAsync((bb, ct) => ResultHelpers.Success)
+    .WithSchema(EnemyKeys.Schema)
+    .WithSchema(WorldKeys.Schema)
+    .Build();
+
+Blackboard world = new(WorldKeys.Schema);            // one world board for everyone
+
+AsyncStateMachine<Enemy> fsm = graph.ToAsyncStateMachine<Enemy>()
+    .WithBlackboard(world)                           // routed by schema scope
+    .WithBlackboard(new Blackboard(EnemyKeys.Schema)) // this enemy's own memory
+    .WithAgent(enemy);
+```
+
+> **Anti-pattern:** don't use `Dictionary<string, object>` as a context — every access pays string hashing plus boxing. A `BlackboardKey<T>` slot is a schema-checked array read: type-safe, allocation-free, and serializable (see `BlackboardSerializer` in `NxGraph.Serialization` — each board is its own durability artifact alongside the graph payload and machine snapshot).
+
+Like the state machines, a blackboard is owned by a single runner at a time (not thread-safe).
 
 ---
 

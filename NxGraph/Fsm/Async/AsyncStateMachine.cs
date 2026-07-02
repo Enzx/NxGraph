@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using NxGraph.Blackboards;
+using NxGraph.Compatibility;
 using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
@@ -28,6 +30,7 @@ public class AsyncStateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? 
 
     private protected override void ApplyExecutionContext()
     {
+        base.ApplyExecutionContext(); // blackboards first, then the agent
         if (_hasAgent)
         {
             Graph.SetAgent(_agent!);
@@ -38,9 +41,10 @@ public class AsyncStateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? 
 /// <summary>
 /// Non-generic AsyncStateMachine.
 /// </summary>
-public class AsyncStateMachine : AsyncState, ISubGraphProvider
+public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable
 {
     public readonly Graph Graph;
+    private BlackboardContext _blackboards;
 
     IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Graph];
     private readonly IAsyncStateMachineObserver? _observer;
@@ -94,9 +98,63 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider
     /// <summary>
     /// Hook for derived machines to (re)apply per-machine execution context (e.g. the typed
     /// agent) to the graph's nodes. Runs under the execute gate, right before Starting.
+    /// The base implementation re-stamps the bound blackboard context.
     /// </summary>
     private protected virtual void ApplyExecutionContext()
     {
+        if (!_blackboards.IsEmpty)
+        {
+            Graph.SetBlackboards(in _blackboards);
+        }
+    }
+
+    /// <summary>
+    /// Binds a blackboard into the scope slot its schema declares (replace semantics — like
+    /// <c>SetAgent</c>, rebinding swaps the board, which enables machine pooling). Applied to
+    /// the graph's nodes immediately and re-applied at the start of every execution.
+    /// Validated against the graph's schema declarations when present.
+    /// </summary>
+    public void SetBlackboard(Blackboard blackboard)
+    {
+        Guard.NotNull(blackboard, nameof(blackboard));
+        ValidateBoardAgainstDeclarations(blackboard);
+        _blackboards = _blackboards.With(blackboard);
+        Graph.SetBlackboards(in _blackboards);
+    }
+
+    /// <summary>
+    /// Receives the whole context from a parent machine's stamping walk (nested composite
+    /// path). Validates against this machine's own graph declarations, so a conflicting
+    /// child schema fails loudly at stamp time.
+    /// </summary>
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        if (context.Graph is { } graphBoard)
+        {
+            ValidateBoardAgainstDeclarations(graphBoard);
+        }
+
+        if (context.Global is { } globalBoard)
+        {
+            ValidateBoardAgainstDeclarations(globalBoard);
+        }
+
+        _blackboards = context;
+        Graph.SetBlackboards(in context);
+    }
+
+    private void ValidateBoardAgainstDeclarations(Blackboard blackboard)
+    {
+        BlackboardSchema? declared = blackboard.Schema.Scope == BlackboardScope.Global
+            ? Graph.GlobalSchema
+            : Graph.Schema;
+
+        if (declared is not null && !ReferenceEquals(declared, blackboard.Schema))
+        {
+            throw new InvalidOperationException(
+                $"Blackboard schema '{blackboard.Schema.Name ?? "<unnamed>"}' does not match the " +
+                $"{blackboard.Schema.Scope} schema '{declared.Name ?? "<unnamed>"}' declared on graph '{Graph.Id}'.");
+        }
     }
 
     private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
@@ -581,6 +639,18 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider
                     if (logic.AsyncLogic is IAsyncDirector director)
                     {
                         next = await director.SelectNextAsync(ct).ConfigureAwait(false);
+                        if (next.Equals(NodeId.Default))
+                        {
+                            LastOutcome = OutcomeOf(_current);
+                            return Result.Success;
+                        }
+                    }
+                    // Sync directors (ChoiceState/SwitchState behind a SyncLogicAdapter) route
+                    // here too — mirroring the sync runtime's `Logic is IDirector` check, and
+                    // matching the validator/exporter, which already probe both logic slots.
+                    else if (logic.Logic is IDirector syncDirector)
+                    {
+                        next = syncDirector.SelectNext();
                         if (next.Equals(NodeId.Default))
                         {
                             LastOutcome = OutcomeOf(_current);

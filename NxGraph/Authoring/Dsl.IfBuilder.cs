@@ -1,4 +1,5 @@
-﻿using NxGraph.Fsm;
+﻿using NxGraph.Blackboards;
+using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
@@ -30,6 +31,23 @@ public static partial class Dsl
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
             _builder.AddNode(new AsyncChoiceState(() => new ValueTask<bool>(predicate()), _truePad, _falsePad), true);
+        }
+
+        internal IfBuilder(StateToken prev, Func<BlackboardContext, bool> predicate)
+        {
+            _builder = prev.Builder;
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
+            _builder.AddTransition(prev.Id, choiceId);
+        }
+
+        internal IfBuilder(StartToken root, Func<BlackboardContext, bool> predicate)
+        {
+            _builder = root.Builder;
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
         /// <summary>Adds an async "then" branch.</summary>

@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
@@ -24,6 +25,40 @@ public sealed partial class GraphBuilder
     private readonly Dictionary<int, Action> _exitActions = new(); // sparse; attached to LogicNodes at Build()
     private readonly Dictionary<int, int> _outcomeCodes = new(); // sparse; materialized at Build()
     private readonly Dictionary<int, string> _outcomeNames = new(); // code -> display name
+    private BlackboardSchema? _graphSchema; // Graph-scoped declaration, baked into the Graph at Build()
+    private BlackboardSchema? _globalSchema; // required Global-scoped schema, baked into the Graph at Build()
+
+    /// <summary>
+    /// Declares a blackboard schema on the graph, routed by the schema's scope: a
+    /// Graph-scoped schema becomes the graph's own declaration, a Global-scoped schema
+    /// records the global board the graph requires. Declaring the same scope twice throws —
+    /// declaration is one-time authoring intent (runtime rebinding is a machine concern).
+    /// </summary>
+    public GraphBuilder WithSchema(BlackboardSchema schema)
+    {
+        Guard.NotNull(schema, nameof(schema));
+
+        if (schema.Scope == BlackboardScope.Global)
+        {
+            if (_globalSchema is not null)
+            {
+                throw new InvalidOperationException("A Global-scoped schema has already been declared on this graph.");
+            }
+
+            _globalSchema = schema;
+        }
+        else
+        {
+            if (_graphSchema is not null)
+            {
+                throw new InvalidOperationException("A Graph-scoped schema has already been declared on this graph.");
+            }
+
+            _graphSchema = schema;
+        }
+
+        return this;
+    }
 
     /// <summary>Add a node. If <paramref name="isStart"/> is true, this becomes the Start node (index 0).</summary>
     public NodeId AddNode(IAsyncLogic asyncLogic, bool isStart = false)
@@ -314,7 +349,8 @@ public sealed partial class GraphBuilder
             _outcomeNames.Count > 0 ? new Dictionary<int, string>(_outcomeNames) : null;
 
         NodeId graphId = _next.Next();
-        return new Graph(graphId, nodes, edges, logic: null, retries, outcomes, outcomeNames);
+        return new Graph(graphId, nodes, edges, logic: null, retries, outcomes, outcomeNames,
+            _graphSchema, _globalSchema);
     }
 
 
@@ -359,6 +395,30 @@ public sealed partial class GraphBuilder
     /// <param name="run">The synchronous function to execute in the start state.</param>
     /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
     public static StateToken StartWith(Func<Result> run)
+    {
+        Guard.NotNull(run, nameof(run));
+        return StartWith(new RelayState(run));
+    }
+
+    /// <summary>
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/>
+    /// asynchronously, receiving the machine-bound routed blackboard context.
+    /// </summary>
+    /// <param name="run">The async function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWithAsync(Func<BlackboardContext, CancellationToken, ValueTask<Result>> run)
+    {
+        Guard.NotNull(run, nameof(run));
+        return StartWithAsync(new AsyncRelayState(run));
+    }
+
+    /// <summary>
+    /// Creates a new graph whose first (start) node executes <paramref name="run"/>
+    /// synchronously, receiving the machine-bound routed blackboard context.
+    /// </summary>
+    /// <param name="run">The synchronous function to execute in the start state.</param>
+    /// <returns>A <see cref="StateToken"/> pointing at the start node.</returns>
+    public static StateToken StartWith(Func<BlackboardContext, Result> run)
     {
         Guard.NotNull(run, nameof(run));
         return StartWith(new RelayState(run));
