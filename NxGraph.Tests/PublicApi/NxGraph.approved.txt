@@ -27,9 +27,13 @@ static class NxGraph.Authoring.Dsl
   method NxGraph.Authoring.StateToken OnError(NxGraph.Authoring.StateToken, System.Func`1[NxGraph.Result])
   method NxGraph.Authoring.StateToken OnErrorAsync(NxGraph.Authoring.StateToken, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
   method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
   method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
   method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
   method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
   method NxGraph.Authoring.StateToken SetName(NxGraph.Authoring.StateToken, System.String)
   method NxGraph.Authoring.StateToken StartWithTimeoutAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
   method NxGraph.Authoring.StateToken SubGraph(NxGraph.Authoring.StartToken, NxGraph.Graphs.Graph, Boolean)
@@ -349,6 +353,10 @@ sealed class NxGraph.Fsm.Async.AsyncChoiceState : NxGraph.Blackboards.IBlackboar
 class NxGraph.Fsm.Async.AsyncCompositeState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
   ctor Void .ctor(NxGraph.Graphs.IAsyncLogic)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncDynamicParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
 sealed class NxGraph.Fsm.Async.AsyncHistoryState : NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Graphs.Graph)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
@@ -425,6 +433,11 @@ sealed class NxGraph.Fsm.ChoiceState : NxGraph.Blackboards.IBlackboardSettable, 
   method NxGraph.Graphs.NodeId SelectNext()
   method NxGraph.Result Execute()
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+sealed class NxGraph.Fsm.DynamicParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor Void .ctor(NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Result Execute()
+  property NxGraph.Fsm.ParallelStepMode Mode { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.StateMachine] Regions { get; }
 enum NxGraph.Fsm.ExecutionStatus : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Cancelled = 6
   Completed = 4
@@ -490,6 +503,21 @@ sealed class NxGraph.Fsm.ParallelState : NxGraph.Graphs.ILogic, NxGraph.Graphs.I
 enum NxGraph.Fsm.ParallelStepMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   RoundPerTick = 1
   RunToJoin = 0
+struct NxGraph.Fsm.RegionMask : System.IEquatable`1[[NxGraph.Fsm.RegionMask, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+  method Boolean Contains(Int32)
+  method Boolean Equals(NxGraph.Fsm.RegionMask)
+  method Boolean Equals(System.Object)
+  method Int32 GetHashCode()
+  method NxGraph.Fsm.RegionMask All(Int32)
+  method NxGraph.Fsm.RegionMask Bit(Int32)
+  method NxGraph.Fsm.RegionMask Of(Int32[])
+  method System.String ToString()
+  operator Boolean op_Equality(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  operator Boolean op_Inequality(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  operator NxGraph.Fsm.RegionMask op_BitwiseOr(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  property Boolean IsEmpty { get; }
+  property Int32 Count { get; }
+  property NxGraph.Fsm.RegionMask None { get; }
 sealed class NxGraph.Fsm.RelayState : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
   ctor Void .ctor(System.Func`1[NxGraph.Result], System.Action, System.Action)
   ctor Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result], System.Action`1[NxGraph.Blackboards.BlackboardContext], System.Action`1[NxGraph.Blackboards.BlackboardContext])

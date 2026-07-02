@@ -1,4 +1,5 @@
-﻿using NxGraph.Compatibility;
+﻿using NxGraph.Blackboards;
+using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -81,6 +82,48 @@ public static partial class Dsl
     public static StateToken Parallel(this StartToken root, ParallelStepMode mode, params Graph[] regions)
     {
         return root.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Adds a <b>dynamic</b> orthogonal-regions composite: at entry <paramref name="selector"/>
+    /// reads the machine-bound blackboard context and returns the <see cref="RegionMask"/> of
+    /// regions to run this execution (see <see cref="AsyncDynamicParallelState"/>). An empty
+    /// mask succeeds immediately as a vacuous join.
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, Func<BlackboardContext, RegionMask> selector,
+        params Graph[] regions)
+    {
+        return prev.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a dynamic orthogonal-regions composite as its first state
+    /// (see <see cref="AsyncDynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, Func<BlackboardContext, RegionMask> selector,
+        params Graph[] regions)
+    {
+        return root.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Adds a <b>sync</b> dynamic orthogonal-regions composite — the runtime-parity twin of the
+    /// selector overload (see <see cref="DynamicParallelState"/> and <see cref="ParallelStepMode"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+    {
+        return prev.To(new DynamicParallelState(mode, selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync dynamic orthogonal-regions composite as its first state
+    /// (see <see cref="DynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+    {
+        return root.To(new DynamicParallelState(mode, selector, regions));
     }
 
     /// <summary>

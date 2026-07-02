@@ -272,6 +272,57 @@ public class AllocationGateTests
         AssertZeroAlloc(parent.ToStateMachine());
     }
 
+    [Test]
+    public async Task async_dynamic_parallel_regions_are_allocation_free()
+    {
+        (Blackboard world, _, BlackboardKey<bool> alarm, _, _) = DualScopeBoards();
+
+        Graph parent = GraphBuilder
+            .Start()
+            .Parallel(
+                bb => bb.Get(alarm)
+                    ? RegionMask.Bit(0) | RegionMask.Bit(1)
+                    : RegionMask.Bit(0) | RegionMask.Bit(2),
+                AsyncChain(3).Build(), AsyncChain(2).Build(), AsyncChain(2).Build())
+            .Build();
+
+        await AssertZeroAllocAsync(parent.ToAsyncStateMachine().WithBlackboard(world));
+    }
+
+    [Test]
+    public void sync_dynamic_parallel_run_to_join_is_allocation_free()
+    {
+        (Blackboard world, _, BlackboardKey<bool> alarm, _, _) = DualScopeBoards();
+
+        Graph parent = GraphBuilder
+            .Start()
+            .Parallel(ParallelStepMode.RunToJoin,
+                bb => bb.Get(alarm)
+                    ? RegionMask.Bit(0) | RegionMask.Bit(1)
+                    : RegionMask.Bit(0) | RegionMask.Bit(2),
+                SyncChain(3).Build(), SyncChain(2).Build(), SyncChain(2).Build())
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine().WithBlackboard(world));
+    }
+
+    [Test]
+    public void sync_dynamic_parallel_round_per_tick_is_allocation_free()
+    {
+        (Blackboard world, _, BlackboardKey<bool> alarm, _, _) = DualScopeBoards();
+
+        Graph parent = GraphBuilder
+            .Start()
+            .Parallel(ParallelStepMode.RoundPerTick,
+                bb => bb.Get(alarm)
+                    ? RegionMask.Bit(0) | RegionMask.Bit(1)
+                    : RegionMask.Bit(0) | RegionMask.Bit(2),
+                SyncChain(3).Build(), SyncChain(2).Build(), SyncChain(2).Build())
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine().WithBlackboard(world));
+    }
+
     // ── Blackboards: dual-scope routing on the hot path ─────────────────
 
     private sealed class GateAgent
