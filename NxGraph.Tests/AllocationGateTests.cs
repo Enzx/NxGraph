@@ -239,6 +239,39 @@ public class AllocationGateTests
         await AssertZeroAllocAsync(parent.ToAsyncStateMachine());
     }
 
+    private static StateToken SyncChain(int length)
+    {
+        StateToken token = GraphBuilder.StartWith(() => Result.Success);
+        for (int i = 1; i < length; i++)
+        {
+            token = token.To(() => Result.Success);
+        }
+
+        return token;
+    }
+
+    [Test]
+    public void sync_parallel_regions_run_to_join_are_allocation_free()
+    {
+        Graph parent = GraphBuilder
+            .Start()
+            .Parallel(ParallelStepMode.RunToJoin, SyncChain(3).Build(), SyncChain(2).Build())
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_parallel_regions_round_per_tick_are_allocation_free()
+    {
+        Graph parent = GraphBuilder
+            .Start()
+            .Parallel(ParallelStepMode.RoundPerTick, SyncChain(3).Build(), SyncChain(2).Build())
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine());
+    }
+
     // ── Blackboards: dual-scope routing on the hot path ─────────────────
 
     private sealed class GateAgent

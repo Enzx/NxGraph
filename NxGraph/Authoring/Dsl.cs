@@ -63,6 +63,27 @@ public static partial class Dsl
     }
 
     /// <summary>
+    /// Adds a <b>sync</b> orthogonal-regions composite and wires a transition to it — the
+    /// runtime-parity twin of the async overload (see <see cref="ParallelState"/>).
+    /// <paramref name="mode"/> decides whether the join completes within one tick
+    /// (<see cref="ParallelStepMode.RunToJoin"/>) or spreads one round per tick across frames
+    /// (<see cref="ParallelStepMode.RoundPerTick"/>, sync runtime only).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode, params Graph[] regions)
+    {
+        return prev.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync orthogonal-regions composite as its first state
+    /// (see <see cref="ParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode, params Graph[] regions)
+    {
+        return root.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
     /// Routes this state's <c>Failure</c> outcome to a new sync handler state defined by a lambda.
     /// </summary>
     public static StateToken OnError(this StateToken prev, Func<Result> handler)
