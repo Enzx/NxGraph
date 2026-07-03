@@ -104,7 +104,9 @@ public static partial class BuildHelpers
         {
             "pack", projectRelPath,
             "--configuration", configuration,
-            "--no-build",
+            // No --no-build: ContinuousIntegrationBuild/Deterministic/Version only take
+            // effect at compile time. Packing a --no-build output produced assemblies
+            // stamped 1.0.0.0 with none of the determinism flags applied.
             "-o", artifactsDir,
             "-p:ContinuousIntegrationBuild=true",
             "-p:Deterministic=true",
@@ -112,6 +114,7 @@ public static partial class BuildHelpers
             "-p:SymbolPackageFormat=snupkg",
             "-p:DebugType=portable",
             $"-p:PackageVersion={version}",
+            $"-p:Version={version}",
         };
 
         if (!string.IsNullOrEmpty(repoUrl))

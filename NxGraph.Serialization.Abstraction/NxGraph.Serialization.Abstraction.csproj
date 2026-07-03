@@ -4,16 +4,22 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Description>NxGraph Serialization Abstraction</Description>
-        <Copyright>Moe Iraji</Copyright>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <Title>NxGraph.Serialization.Abstraction</Title>
+        <Authors>Moe Iraji</Authors>
+        <Description>Serializer and codec abstractions for NxGraph — reference this package to implement custom graph serializers or node-logic codecs without depending on a concrete format.</Description>
         <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
         <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
-        <PackageTags>Statemachine, FSM, Serialization</PackageTags>
+        <PackageTags>statemachine fsm serialization abstractions</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>

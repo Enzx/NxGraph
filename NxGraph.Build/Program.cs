@@ -9,6 +9,7 @@ public static class Program
     private static readonly string[] DirectoriesToCopy =
     [
         Path.Combine("Authoring"),
+        Path.Combine("Blackboards"),
         Path.Combine("Compatibility"),
         Path.Combine("Diagnostics", "Export"),
         Path.Combine("Diagnostics", "Replay"),

@@ -4,20 +4,23 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Description>NxGraph Serialization (Json and Binary)</Description>
-        <Copyright>Moe Iraji</Copyright>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <Title>NxGraph.Serialization</Title>
+        <Authors>Moe Iraji</Authors>
+        <Description>JSON and MessagePack serialization for NxGraph: durable graph payloads, state-machine snapshots, and blackboard payloads with pluggable node-logic codecs.</Description>
         <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
         <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
-        <PackageTags>Statemachine, FSM, Serialization</PackageTags>
+        <PackageTags>statemachine fsm serialization messagepack json durability</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
 
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MessagePack" Version="3.1.4" />
+      <PackageReference Include="MessagePack" Version="3.1.7" />
+      <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup>
