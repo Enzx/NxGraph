@@ -63,6 +63,10 @@ ParallelDemoExample.Run();
 
 Console.WriteLine();
 Console.WriteLine();
+await AsyncParallelDemoExample.RunAsync();
+
+Console.WriteLine();
+Console.WriteLine();
 Console.WriteLine("=== README Examples ===");
 Console.WriteLine();
 await QuickStartExample.RunAsync();
@@ -76,6 +80,8 @@ Console.WriteLine();
 await BlackboardExample.RunAsync();
 Console.WriteLine();
 ObserverExample.Run();
+Console.WriteLine();
+await FeatureExamples.RunAsync();
 
 return 0;
 
