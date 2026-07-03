@@ -196,4 +196,37 @@ public class GraphSerializerTestsTextCodec
         await _serializer.FromJsonAsync(s1);
         Assert.DoesNotThrow(() => s1.WriteByte(0x21)); // still open
     }
+
+    private sealed class RawStringCodec : ILogicTextCodec
+    {
+        public IAsyncLogic Deserialize(string s) => new DummyState { Data = s };
+        public string Serialize(IAsyncLogic data) => ((DummyState)data).Data;
+    }
+
+    [Test]
+    public async Task Logic_payload_equal_to_the_marker_string_is_not_misread_as_a_subgraph()
+    {
+        // Regression: subgraph owners were detected purely by comparing the node's logic
+        // string against the marker, so a codec legitimately emitting that string for
+        // ordinary logic produced an unreadable payload ("marked as a StateMachine but has
+        // no associated subgraph"). The marker is now honored only when a subgraph payload
+        // actually claims the node index.
+        GraphSerializer serializer = new(new RawStringCodec());
+        Graph graph = GraphBuilder
+            .StartWithAsync(new DummyState { Data = "Default" })
+            .ToAsync(new DummyState { Data = "StateMachine" })
+            .Build();
+
+        await using MemoryStream stream = new();
+        await serializer.ToJsonAsync(graph, stream);
+        stream.Position = 0;
+
+        Graph roundTripped = await serializer.FromJsonAsync(stream);
+        Assert.Multiple(() =>
+        {
+            Assert.That(((DummyState)((LogicNode)roundTripped.StartNode).AsyncLogic).Data, Is.EqualTo("Default"));
+            Assert.That(((DummyState)((LogicNode)roundTripped.GetNodeByIndex(1)).AsyncLogic).Data,
+                Is.EqualTo("StateMachine"));
+        });
+    }
 }

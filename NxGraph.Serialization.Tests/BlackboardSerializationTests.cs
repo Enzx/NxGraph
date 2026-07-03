@@ -127,6 +127,71 @@ public class BlackboardSerializationTests
         });
     }
 
+    [Test]
+    public async Task generic_key_type_names_are_runtime_stable_and_round_trip()
+    {
+        // Regression: Type.FullName embeds the core-lib assembly version for constructed
+        // generics ("...List`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, ...]]"),
+        // so a payload saved on one runtime failed Strict verification (or silently dropped
+        // values under Skip) after a runtime upgrade.
+        BlackboardSchema schema = NewSchema("inventory");
+        BlackboardKey<List<string>> items = schema.Register<List<string>>("items", []);
+        BlackboardKey<int?> optional = schema.Register<int?>("optional");
+
+        Blackboard source = new(schema);
+        source.Set(items, ["sword", "shield"]);
+        source.Set(optional, 5);
+
+        await using MemoryStream stream = await SaveJson(_serializer, source);
+        string payload = Encoding.UTF8.GetString(stream.ToArray());
+        stream.Position = 0;
+
+        Blackboard target = new(schema);
+        await _serializer.RestoreFromJsonAsync(target, stream);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(payload, Does.Not.Contain("Version="),
+                "Payload type names must not embed runtime assembly versions.");
+            Assert.That(target.Get(items), Is.EqualTo(new List<string> { "sword", "shield" }));
+            Assert.That(target.Get(optional), Is.EqualTo(5));
+        });
+    }
+
+    [Test]
+    public async Task strict_restore_failure_leaves_the_target_board_untouched()
+    {
+        // Regression: restore used to ResetToDefaults before validating entries, so a Strict
+        // mismatch part-way through destroyed the caller's pre-restore state (defaults +
+        // partial payload). Restore is now all-or-nothing.
+        BlackboardSchema savedSchema = NewSchema();
+        BlackboardKey<int> savedScore = savedSchema.Register<int>("score");
+        BlackboardKey<int> extra = savedSchema.Register<int>("renamed_key");
+
+        Blackboard source = new(savedSchema);
+        source.Set(savedScore, 42);
+        source.Set(extra, 7);
+        await using MemoryStream jsonStream = await SaveJson(_serializer, source);
+        await using MemoryStream binaryStream = await SaveBinary(_serializer, source);
+
+        // The live schema no longer declares "renamed_key" — Strict restore must throw.
+        BlackboardSchema liveSchema = NewSchema();
+        BlackboardKey<int> liveScore = liveSchema.Register<int>("score");
+
+        Blackboard target = new(liveSchema);
+        target.Set(liveScore, 1234); // live mid-run value that a failed restore must not destroy
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _serializer.RestoreFromJsonAsync(target, jsonStream));
+        Assert.That(target.Get(liveScore), Is.EqualTo(1234),
+            "A failed JSON restore must leave the target unmodified.");
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _serializer.RestoreFromBinaryAsync(target, binaryStream));
+        Assert.That(target.Get(liveScore), Is.EqualTo(1234),
+            "A failed binary restore must leave the target unmodified.");
+    }
+
     // ── Mismatch matrix ──────────────────────────────────────────────────
 
     [Test]

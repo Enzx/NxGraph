@@ -59,7 +59,7 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
             BlackboardKeyDescriptor descriptor = keys[i];
             JsonElement value = JsonSerializer.SerializeToElement(
                 descriptor.GetValue(blackboard), descriptor.ValueType, _jsonOptions);
-            entries[i] = new BlackboardEntryDto(descriptor.Name, descriptor.ValueType.FullName!, value);
+            entries[i] = new BlackboardEntryDto(descriptor.Name, StableTypeName(descriptor.ValueType), value);
         }
 
         BlackboardDto dto = new(entries, blackboard.Schema.Name, (int)blackboard.Schema.Scope);
@@ -83,6 +83,13 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
         BlackboardDto dto = JsonSerializer.Deserialize<BlackboardDto>(json, _jsonOptions) ??
                             throw new InvalidOperationException("Failed to parse Blackboard JSON.");
 
+        // Records don't enforce non-nullable reference properties during deserialization;
+        // a payload missing "values" would otherwise surface as a NullReferenceException.
+        if (dto.Values is null)
+        {
+            throw new InvalidOperationException("Failed to parse Blackboard JSON.");
+        }
+
         if (dto.Version > PayloadVersion)
         {
             throw new InvalidOperationException(
@@ -94,12 +101,17 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
             return; // Skip policy: header mismatch — leave the target untouched.
         }
 
-        // Deterministic post-state: defaults + payload. Keys absent from the payload land on
-        // their registered defaults (schema evolution), and stale pre-restore values never leak.
-        target.ResetToDefaults();
-
+        // Two-phase restore: match and deserialize every entry before touching the board, so
+        // a Strict mismatch or corrupt value part-way through leaves the target unmodified —
+        // the documented post-state ("defaults + payload") holds even on the failure path.
+        List<(BlackboardKeyDescriptor Descriptor, object? Value)> staged = new(dto.Values.Length);
         foreach (BlackboardEntryDto entry in dto.Values)
         {
+            if (entry.Key is null)
+            {
+                throw new InvalidOperationException("Failed to parse Blackboard JSON.");
+            }
+
             if (!TryMatchEntry(target, entry.Key, entry.Type, policy, out BlackboardKeyDescriptor? descriptor))
             {
                 continue;
@@ -117,6 +129,14 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
                     $"Failed to deserialize blackboard key '{entry.Key}' as {descriptor!.ValueType}.", ex);
             }
 
+            staged.Add((descriptor!, value));
+        }
+
+        // Deterministic post-state: defaults + payload. Keys absent from the payload land on
+        // their registered defaults (schema evolution), and stale pre-restore values never leak.
+        target.ResetToDefaults();
+        foreach ((BlackboardKeyDescriptor descriptor, object? value) in staged)
+        {
             descriptor.SetValue(target, value);
         }
     }
@@ -154,7 +174,7 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
         {
             writer.WriteArrayHeader(3);
             writer.Write(descriptor.Name);
-            writer.Write(descriptor.ValueType.FullName);
+            writer.Write(StableTypeName(descriptor.ValueType));
             MessagePackSerializer.Serialize(descriptor.ValueType, ref writer,
                 descriptor.GetValue(blackboard), _binaryOptions);
         }
@@ -200,9 +220,10 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
             return; // Skip policy: header mismatch — leave the target untouched.
         }
 
-        target.ResetToDefaults();
-
+        // Two-phase restore, matching the JSON path: fully parse and stage every entry before
+        // mutating the board, so a mid-payload failure leaves the target unmodified.
         int entryCount = reader.ReadArrayHeader();
+        List<(BlackboardKeyDescriptor Descriptor, object? Value)> staged = new(entryCount);
         for (int i = 0; i < entryCount; i++)
         {
             int entryLength = reader.ReadArrayHeader();
@@ -233,7 +254,7 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
                         $"Failed to deserialize blackboard key '{key}' as {descriptor!.ValueType}.", ex);
                 }
 
-                descriptor.SetValue(target, value);
+                staged.Add((descriptor!, value));
             }
 
             for (int extra = 3; extra < entryLength; extra++)
@@ -245,6 +266,12 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
         for (int extra = 4; extra < headerCount; extra++)
         {
             reader.Skip(); // forward compatibility: ignore future header elements
+        }
+
+        target.ResetToDefaults();
+        foreach ((BlackboardKeyDescriptor descriptor, object? value) in staged)
+        {
+            descriptor.SetValue(target, value);
         }
     }
 
@@ -295,17 +322,55 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
                 : false;
         }
 
-        if (!string.Equals(payloadTypeName, found.ValueType.FullName, StringComparison.Ordinal))
+        // Match against the version-agnostic name; also accept the raw FullName for payloads
+        // written before the stable-name fix (FullName embeds core-lib assembly versions for
+        // constructed generics, so it breaks across runtime upgrades).
+        if (!string.Equals(payloadTypeName, StableTypeName(found.ValueType), StringComparison.Ordinal) &&
+            !string.Equals(payloadTypeName, found.ValueType.FullName, StringComparison.Ordinal))
         {
             descriptor = null;
             return policy == BlackboardMismatchPolicy.Strict
                 ? throw new InvalidOperationException(
                     $"Blackboard key '{key}' was saved as '{payloadTypeName}' but the schema now declares " +
-                    $"'{found.ValueType.FullName}'.")
+                    $"'{StableTypeName(found.ValueType)}'.")
                 : false;
         }
 
         descriptor = found;
         return true;
+    }
+
+    /// <summary>
+    /// Renders a runtime-stable type name for payload verification. <see cref="Type.FullName"/>
+    /// embeds assembly-qualified argument names (including core-lib version) for constructed
+    /// generics — e.g. <c>List`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, ...]]</c> —
+    /// which breaks Strict restores (and silently drops values under Skip) after a runtime
+    /// upgrade. This renders <c>System.Collections.Generic.List`1[System.Int32]</c> instead.
+    /// </summary>
+    internal static string StableTypeName(Type type)
+    {
+        if (type.IsArray)
+        {
+            int rank = type.GetArrayRank();
+            return StableTypeName(type.GetElementType()!) + (rank == 1 ? "[]" : $"[{new string(',', rank - 1)}]");
+        }
+
+        if (!type.IsConstructedGenericType)
+        {
+            return type.FullName ?? type.Name;
+        }
+
+        Type definition = type.GetGenericTypeDefinition();
+        Type[] arguments = type.GetGenericArguments();
+        StringBuilder sb = new(definition.FullName ?? definition.Name);
+        sb.Append('[');
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append(StableTypeName(arguments[i]));
+        }
+
+        sb.Append(']');
+        return sb.ToString();
     }
 }

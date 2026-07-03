@@ -17,6 +17,10 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     // the cap an attacker can stack-overflow the deserializer with a deeply nested payload.
     internal const int MaxSubGraphDepth = 64;
 
+    // Pre-fix payloads wrote the nested-machine marker as "Default" (LogicNode.StateMachineMarker
+    // was constructed with NodeId.Default). Still accepted on read for back compatibility.
+    private const string LegacyStateMachineMarkerName = "Default";
+
     private readonly ILogicCodec _codec;
     private readonly MessagePackSerializerOptions _options;
 
@@ -173,6 +177,19 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
+                    // Other composites (history states, parallel states, custom containers)
+                    // carry child graphs a user codec structurally cannot serialize — only
+                    // GraphSerializer can recurse into them, and it doesn't yet. Fail with a
+                    // targeted error instead of handing the composite to the codec, which
+                    // would either throw an opaque cast error or silently drop the children.
+                    if (logicNode.AsyncLogic is ISubGraphProvider || logicNode.Logic is ISubGraphProvider)
+                    {
+                        throw new NotSupportedException(
+                            $"Node '{node.Id}' holds composite logic '{logicNode.AsyncLogic.GetType().Name}' " +
+                            "which is not serializable. Only plain nested state machines " +
+                            "(.SubGraph(child) without history) are supported by GraphSerializer.");
+                    }
+
                     // Unwrap SyncLogicAdapter so the codec receives the actual IAsyncLogic/ILogic,
                     // not the adapter wrapper. If the inner ILogic also implements IAsyncLogic, use it.
                     IAsyncLogic logicForCodec = logicNode.AsyncLogic;
@@ -189,12 +206,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         _ => throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.")
                     };
                     break;
-                case Graph childGraph:
-                {
-                    GraphDto childDto = ToDto(childGraph, depth + 1);
-                    subGraphs.Add(new SubGraphDto(index, childDto));
-                    break;
-                }
+                default:
+                    // Raw Graph-as-node never comes out of GraphBuilder (it always wraps in
+                    // LogicNode); the old branch here emitted a SubGraphDto while leaving a
+                    // null slot in Nodes[], producing an unreadable payload.
+                    throw new NotSupportedException(
+                        $"Node at index {index} of type '{node.GetType().Name}' is not serializable.");
             }
         }
 
@@ -259,11 +276,28 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while deserializing.");
         }
 
+        // Version-gate every nesting level (the JSON entry point only checks the root DTO;
+        // the MessagePack formatter checks per-graph — this makes both formats consistent).
+        if (dto.Version > SerializationVersion.Version)
+        {
+            throw new InvalidOperationException(
+                $"GraphDto: payload version {dto.Version} is newer than serializer version {SerializationVersion.Version}.");
+        }
+
         int nodesLength = dto.Nodes.Length;
         if (nodesLength == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
 
         var binaryCodec = _codec as ILogicCodec<ReadOnlyMemory<byte>>;
         var textCodec = _codec as ILogicCodec<string>;
+
+        // Owner indices of subgraph payloads, resolved up front: a node is only treated as a
+        // nested-machine marker when a SubGraphDto actually claims it. This kills the in-band
+        // collision where a codec legitimately emits the marker string for ordinary logic.
+        HashSet<int>? subGraphOwners = null;
+        foreach (SubGraphDto subDto in dto.SubGraphs)
+        {
+            (subGraphOwners ??= []).Add(subDto.OwnerIndex);
+        }
 
         INode[] nodes = new INode[nodesLength];
         bool[] slotFilled = new bool[nodesLength];
@@ -280,16 +314,22 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             switch (nodeDto)
             {
                 case NodeTextDto textDto:
-                    if (textCodec is null)
-                        throw new InvalidOperationException(
-                            "GraphSerializer has no ILogicCodec<string> configured, cannot decode text nodes.");
-
-                    if (textDto.Logic == LogicNode.StateMachineMarker.Id.Name)
+                    // Marker check runs before the codec guard: the marker needs no codec, so a
+                    // binary-codec serializer can read back the subgraph payloads it wrote.
+                    // "Default" is the legacy marker string (pre-fix payloads); both are only
+                    // honored when a subgraph payload actually claims this node index.
+                    if ((textDto.Logic == LogicNode.StateMachineMarker.Id.Name ||
+                         textDto.Logic == LegacyStateMachineMarkerName) &&
+                        subGraphOwners is not null && subGraphOwners.Contains(nodeDto.Index))
                     {
                         // Keep a marker; we'll replace it after we rebuild subgraphs.
                         nodes[nodeDto.Index] = LogicNode.StateMachineMarker;
                         break;
                     }
+
+                    if (textCodec is null)
+                        throw new InvalidOperationException(
+                            "GraphSerializer has no ILogicCodec<string> configured, cannot decode text nodes.");
 
                 {
                     IAsyncLogic asyncLogic = textCodec.Deserialize(textDto.Logic);
@@ -333,15 +373,16 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
 
+            // A subgraph may only attach to a marker node. The old fallback installed the raw
+            // child Graph as the node itself — with the child graph's own (negative) NodeId —
+            // silently corrupting transition routing; a crafted payload could also use it to
+            // swap decoded logic for a nested machine.
+            if (nodes[subDto.OwnerIndex] != LogicNode.StateMachineMarker)
+                throw new InvalidOperationException(
+                    $"Subgraph DTO owner index {subDto.OwnerIndex} does not reference a state-machine marker node.");
+
             Graph childGraph = FromDto(subDto.Graph, depth + 1);
-            if (nodes[subDto.OwnerIndex] == LogicNode.StateMachineMarker)
-            {
-                ownerToSubGraph[subDto.OwnerIndex] = childGraph;
-            }
-            else
-            {
-                nodes[subDto.OwnerIndex] = childGraph;
-            }
+            ownerToSubGraph[subDto.OwnerIndex] = childGraph;
         }
 
         for (int i = 0; i < nodesLength; i++)

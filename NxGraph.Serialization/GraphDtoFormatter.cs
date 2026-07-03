@@ -31,6 +31,12 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
     {
+        // Depth accounting: GraphDto → SubGraphDto → GraphDto recursion is driven purely by
+        // payload content. Without DepthStep a crafted payload nesting thousands of subgraph
+        // levels overflows the stack (uncatchable) before GraphSerializer's own MaxSubGraphDepth
+        // check — which only runs after the DTO tree is fully materialized.
+        options.Security.DepthStep(ref reader);
+
         int count = reader.ReadArrayHeader();
 
         int version = reader.ReadInt32();
@@ -67,6 +73,8 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             outcomeNames = options.Resolver.GetFormatterWithVerify<OutcomeNameDto[]>()
                 .Deserialize(ref reader, options);
         }
+
+        reader.Depth--;
 
         return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames)
             { Version = version };
