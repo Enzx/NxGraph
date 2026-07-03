@@ -1,3 +1,4 @@
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Graphs;
 
@@ -18,12 +19,20 @@ namespace NxGraph.Fsm.Async;
 /// only on the failure-recovery path, which is off the hot loop by definition.
 /// </para>
 /// </summary>
-public sealed class AsyncHistoryState : IAsyncLogic, ISubGraphProvider
+public sealed class AsyncHistoryState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
 {
     /// <summary>The wrapped child machine.</summary>
     public AsyncStateMachine Child { get; }
 
     IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Child.Graph];
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        // The recursive stamping walk stops at IBlackboardSettable nodes — forward to the
+        // child machine so it validates against its own graph's declarations at stamp time
+        // (uniform with plain .SubGraph nesting and the dynamic parallel composite).
+        ((IBlackboardSettable)Child).SetBlackboards(in context);
+    }
 
     public AsyncHistoryState(Graph child)
     {

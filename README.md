@@ -14,6 +14,10 @@ NxGraph is a lean, high-performance finite state machine / stateflow library for
 - explicit branching through director nodes
 - sync and async runtimes
 - stepped execution for Unity (`Update()`-loop friendly)
+- a unified fault model: per-node retries, failure edges (`.OnError`), and timeouts
+- composites: subgraphs (with history), parallel regions, and blackboard-selected dynamic regions
+- durable suspend/resume via serializable snapshots
+- scoped blackboards (typed, zero-boxing shared memory)
 - graph validation
 - observers, tracing, replay, and Mermaid export
 - optional graph serialization via a codec-based serializer
@@ -35,13 +39,19 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Branching with `If`](#branching-with-if)
   - [Branching with `Switch`](#branching-with-switch)
   - [Waits and timeouts](#waits-and-timeouts)
+  - [Error handling: retries and failure edges](#error-handling-retries-and-failure-edges)
+  - [Loops with `Goto`](#loops-with-goto)
+  - [Named outcomes](#named-outcomes)
   - [Naming nodes](#naming-nodes)
   - [Agents / context injection](#agents--context-injection)
+  - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution--stepped-model)
   - [Unity integration](#unity-integration)
   - [Nested machines](#nested-machines)
+  - [Composites: subgraphs, history, and parallel regions](#composites-subgraphs-history-and-parallel-regions)
+  - [Durable suspend / resume](#durable-suspend--resume)
   - [Restart policy](#restart-policy)
 - [Validation](#validation)
 - [Observability](#observability)
@@ -63,7 +73,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 
 ## Why NxGraph
 
-- **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one direct outgoing edge.
+- **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
 - **Predictable branching**: fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`.
 - **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`, and `.ToWithTimeoutAsync(...)`.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
@@ -129,6 +139,7 @@ dotnet test -c Release
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 
 static ValueTask<Result> Acquire(CancellationToken _) => ResultHelpers.Success;
 static ValueTask<Result> Process(CancellationToken _) => ResultHelpers.Success;
@@ -222,6 +233,59 @@ var timed = GraphBuilder
     .Build();
 ```
 
+With `TimeoutBehavior.Fail` an expired timeout is an ordinary node failure — it consumes the node's retry budget and follows its failure edge like any other `Result.Failure` (see the next section). `TimeoutBehavior.Throw` raises a `TimeoutException` instead.
+
+### Error handling: retries and failure edges
+
+A node returning `Result.Failure` flows through one unified fault model: first its per-node `RetryPolicy` re-runs it in place, then its **failure edge** (if any) routes to a handler, and only when neither applies does the machine terminate with `Failure`.
+
+```csharp
+var graph = GraphBuilder
+    .StartWithAsync(CallFlakyService).SetName("Call")
+        .Retry(maxAttempts: 3, backoff: 100.Milliseconds(), BackoffKind.Exponential)
+        .OnErrorAsync(_ => Cleanup()).SetName("Cleanup")
+    .Build();
+```
+
+- `.Retry(maxAttempts, backoff, kind)` re-runs the node in place; `BackoffKind` is `Fixed`, `Linear`, or `Exponential`. Backoff delays apply to the async runtime; the sync runtime retries on the next tick.
+- `.OnError(...)` / `.OnErrorAsync(...)` set the failure destination. The success chain continues from the original node, so failure handlers branch off without disturbing the happy path; `.OnError(StateToken)` wires an already-built detached chain as the handler.
+- Retries fire **before** the failure edge: with the graph above, `Call` runs up to 3 times before `Cleanup` is entered.
+
+### Loops with `Goto`
+
+`.Goto("name")` wires a back-edge to a named node, resolved at `Build()` — unknown or ambiguous names fail the build:
+
+```csharp
+int laps = 0;
+
+var loop = GraphBuilder
+    .StartWith(() => Result.Success).SetName("Gather")
+    .To(() => ++laps < 3 ? Result.Success : Result.Failure).SetName("Craft")
+    .Goto("Gather") // Craft's success edge loops back to Gather
+    .Build();
+```
+
+A `Goto` consumes the node's one success edge and closes the chain, so the loop needs an exit: a node that eventually returns `Failure` (routed by `.OnError` or terminating the run), or a director (`If`/`Switch`) placed inside the loop.
+
+### Named outcomes
+
+Terminal nodes can report *which* outcome ended the run, beyond `Success`/`Failure`:
+
+```csharp
+const int Delivered = 1;
+
+var graph = GraphBuilder
+    .StartWithAsync(ProcessOrder).SetName("Process")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Deliver").WithOutcome(Delivered, "Delivered")
+    .Build();
+
+AsyncStateMachine fsm = graph.ToAsyncStateMachine();
+await fsm.ExecuteAsync();
+Console.WriteLine($"{fsm.LastOutcome}: {fsm.LastOutcomeName}"); // "1: Delivered"
+```
+
+`.WithOutcome(code, name)` tags a node; when a run terminates at that node, the machine exposes the code via `LastOutcome` and the registered name via `LastOutcomeName` (0 / `null` when the terminal node has no outcome). Branch graphs give each terminal branch its own code, so callers can tell *how* the flow ended. `LastOutcome` resets at every run start and survives suspend/resume (it is part of the snapshot).
+
 ### Naming nodes
 
 Names are optional but strongly recommended for diagnostics, Mermaid export, replay, and observer output.
@@ -242,6 +306,7 @@ Use typed state machines when your states need shared mutable context or service
 using NxGraph;
 using NxGraph.Authoring;
 using NxGraph.Fsm;
+using NxGraph.Fsm.Async;
 
 public sealed class AppAgent
 {
@@ -264,6 +329,59 @@ AsyncStateMachine<AppAgent> fsm = GraphBuilder
 
 await fsm.ExecuteAsync();
 ```
+
+### Blackboards (scoped shared memory)
+
+The agent is *who* is acting (an `Enemy`, a workflow context); a **blackboard** is the graph's *working memory*. They are orthogonal channels — both reach nodes simultaneously. Blackboards are typed-key slot stores with two scopes: **Global** (one user-owned board shared by every machine — world state) and **Graph** (one board per machine/entity). Reads and writes are zero-boxing, zero-allocation array accesses.
+
+```csharp
+using NxGraph.Blackboards;
+
+// Schemas are code: declare keys once, share the schema across N boards.
+static class WorldKeys
+{
+    public static readonly BlackboardSchema Schema = new("world", BlackboardScope.Global);
+    public static readonly BlackboardKey<bool> AlarmRaised = Schema.Register<bool>("AlarmRaised");
+}
+
+static class EnemyKeys
+{
+    public static readonly BlackboardSchema Schema = new("enemy"); // Graph scope (default)
+    public static readonly BlackboardKey<int> TargetDistance = Schema.Register<int>("TargetDistance", 10);
+}
+
+sealed class ChaseState : AsyncState<Enemy>
+{
+    protected override ValueTask<Result> OnRunAsync(CancellationToken ct)
+    {
+        // One call site — the key's schema scope picks the board:
+        if (Bb.Get(WorldKeys.AlarmRaised))          // routed → shared global board
+            Bb.GetRef(EnemyKeys.TargetDistance)--;   // routed → this machine's board
+        return ResultHelpers.Success;
+    }
+}
+
+// Declare schemas on the graph (opt-in bind-time validation), bind boards per machine:
+Graph graph = GraphBuilder
+    .StartWithAsync(new ChaseState())
+    .If(bb => bb.Get(WorldKeys.AlarmRaised))         // blackboard-driven branching
+        .ThenAsync((bb, ct) => ResultHelpers.Success)
+        .ElseAsync((bb, ct) => ResultHelpers.Success)
+    .WithSchema(EnemyKeys.Schema)
+    .WithSchema(WorldKeys.Schema)
+    .Build();
+
+Blackboard world = new(WorldKeys.Schema);            // one world board for everyone
+
+AsyncStateMachine<Enemy> fsm = graph.ToAsyncStateMachine<Enemy>()
+    .WithBlackboard(world)                           // routed by schema scope
+    .WithBlackboard(new Blackboard(EnemyKeys.Schema)) // this enemy's own memory
+    .WithAgent(enemy);
+```
+
+> **Anti-pattern:** don't use `Dictionary<string, object>` as a context — every access pays string hashing plus boxing. A `BlackboardKey<T>` slot is a schema-checked array read: type-safe, allocation-free, and serializable (see `BlackboardSerializer` in `NxGraph.Serialization` — each board is its own durability artifact alongside the graph payload and machine snapshot).
+
+Like the state machines, a blackboard is owned by a single runner at a time (not thread-safe).
 
 ---
 
@@ -371,6 +489,95 @@ Result result = await parentFsm.ExecuteAsync();
 ```
 
 Nesting can be arbitrarily deep. Each level is stepped independently; the parent treats a running child as `Result.InProgress` and a completed child as `Result.Success`.
+
+### Composites: subgraphs, history, and parallel regions
+
+**Subgraphs.** `.SubGraph(child)` nests a whole child graph as a single node of the parent — the DSL shorthand for the nested-machine pattern above. With `history: true`, a child that *failed* resumes at its last-active node when the parent re-enters the composite (e.g. after a failure edge and a `Goto` back), instead of restarting from its start node; a child that *completed* restarts from the top:
+
+```csharp
+Graph child = GraphBuilder
+    .StartWithAsync(_ => ResultHelpers.Success)
+    .ToAsync(_ => ResultHelpers.Success)
+    .Build();
+
+Graph flow = GraphBuilder
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Prepare")
+    .SubGraph(child, history: true).SetName("Work")
+    .ToAsync(_ => ResultHelpers.Success).SetName("Finish")
+    .Build();
+```
+
+**Parallel regions (AND-states).** `.Parallel(regions...)` runs N region graphs via **cooperative interleaving**: each round advances every still-running region by one node, and the composite joins when all regions reach a terminal result — `Success` only if every region succeeded, otherwise `Failure` through the parent's fault model (failure edges, retries). This is deliberately not thread-concurrent, which keeps the hot path allocation-free:
+
+```csharp
+AsyncStateMachine fsm = GraphBuilder
+    .Start()
+    .Parallel(tents, fire, scouts) // three region graphs, one node each per round
+    .ToAsyncStateMachine();
+
+Result joined = await fsm.ExecuteAsync();
+```
+
+The sync twin takes a `ParallelStepMode`: `RunToJoin` completes the whole join inside one `Execute()` call, while `RoundPerTick` advances one round per call and returns `Result.InProgress` in between — so region progress aligns 1:1 with game-loop frames:
+
+```csharp
+StateMachine fsm = GraphBuilder
+    .Start()
+    .Parallel(ParallelStepMode.RoundPerTick, watchtower, gateCrew)
+    .ToStateMachine();
+
+// From Update(): each call advances every still-running region by one node.
+Result r = fsm.Execute();
+```
+
+`RoundPerTick` is sync-only (the async loop rejects node-level `InProgress`); `RunToJoin` composites also run under the async machine via the sync-logic adapter.
+
+**Dynamic (some-of-many) regions.** The selector overloads pick which regions run at every composite entry, from the machine-bound [blackboard](#blackboards-scoped-shared-memory):
+
+```csharp
+RegionMask SelectDefenses(BlackboardContext bb)
+{
+    RegionMask mask = RegionMask.Bit(0);                    // archers always
+    if (bb.Get(Threat) >= 2) mask |= RegionMask.Bit(1);     // cauldrons
+    if (bb.Get(Threat) >= 3) mask |= RegionMask.Bit(2);     // catapults
+    return mask;
+}
+
+StateMachine fsm = GraphBuilder
+    .Start()
+    .Parallel(ParallelStepMode.RunToJoin, SelectDefenses, archers, cauldrons, catapults)
+    .ToStateMachine()
+    .WithBlackboard(board);
+```
+
+The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
+
+### Durable suspend / resume
+
+Both runtimes can pause a run at a step boundary, persist it, and continue later — on the same machine, a fresh machine, another process, or even the **other runtime** (snapshots are interchangeable):
+
+```csharp
+using System.Text.Json;
+
+AsyncStateMachine first = graph.ToAsyncStateMachine();
+await first.StepAsync();                              // advance one node
+StateMachineSnapshot snapshot = first.Suspend();      // primitives-only record
+
+string json = JsonSerializer.Serialize(snapshot);     // any serializer works
+
+// Later — possibly after a process restart, on the sync runtime:
+StateMachine second = graph.ToStateMachine();
+second.Resume(JsonSerializer.Deserialize<StateMachineSnapshot>(json)!);
+
+Result result = Result.InProgress;
+while (result == Result.InProgress)
+    result = second.Execute();                        // continues at the next node
+```
+
+- `Suspend()` is legal between `StepAsync()`/`Execute()` calls of a stepped run, or on an idle/terminal machine; it captures the current node, status, retry attempts, and `LastOutcome`.
+- `Resume(snapshot)` requires a graph that is structurally equivalent (same node indices); re-attach agents/blackboards before continuing.
+- A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), the snapshot, and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
+- Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a resumed composite starts its visit fresh.
 
 ### Restart policy
 
@@ -644,9 +851,12 @@ Notes:
 The solution includes a runnable examples project with:
 
 - a simple async FSM
-- an AI enemy example
+- an AI enemy example (typed agent injection)
 - Mermaid export example
+- a serialization round-trip example
 - a sync Dungeon Crawler example using the DSL, observers, director nodes, loops, and named states
+- a blackboard demo (scoped shared memory, schema declarations, per-entity boards)
+- **parallel-region demos**: the sync Stronghold Siege (`ParallelStepMode.RoundPerTick` frame ticking, `RunToJoin` waves, blackboard-selected dynamic regions) and the async Expedition Camp (cooperative round-robin interleaving under `AsyncStateMachine`, dynamic region selection)
 
 Run it with:
 
@@ -696,7 +906,7 @@ dotnet run --project NxGraph.Benchmarks -c Release
 
 Key observations:
 
-- **Zero allocations**, both runtimes are fully alloc-free after graph construction. The earlier 80 B figure was the `async Task<T>` wrapper on the benchmark method itself; benchmarks now return `ValueTask<Result>` directly.
+- **Zero allocations**: both runtimes are fully alloc-free after graph construction.
 - **Sync is ~8× faster on a single node**: 24 ns vs 199 ns, reflecting the absence of async machinery and `Interlocked` operations.
 - **Observer overhead is constant** and runtime-dependent: +3 ns for sync, +40 ns for async, independent of chain length.
 - **Per-node cost falls with chain length**: async 199 ns for 1 node → 80 ns/node for 10 → 67 ns/node for 50.
@@ -728,8 +938,8 @@ The tests cover:
 
 ## FAQ
 
-**Why is there only one direct outgoing transition per node?**  
-Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable.
+**Why is there only one direct success transition per node?**  
+Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path.
 
 **Can I share a graph across machines?**  
 Yes. `Graph` is immutable after build and can be reused across multiple state machine instances.
@@ -753,9 +963,9 @@ The machine has more nodes to process but is returning control to the caller (e.
 
 ## Roadmap
 
-- richer package docs and example coverage
-- additional validation/reporting improvements
-- more visualization tooling
+- sync twins for the remaining async-only constructs (history subgraphs, waits, timeouts)
+- hierarchical snapshots so composite-internal progress survives durable suspend/resume
+- validator and Mermaid-export awareness of composite interiors
 - continued ergonomics improvements around DSL authoring and serialization
 
 ---

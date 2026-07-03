@@ -6,14 +6,12 @@ using UnityEngine;
 namespace NxGraph.Samples.QuickStart
 {
     /// <summary>
-    /// Demonstrates two ways of running an NxGraph <see cref="StateMachine"/> in Unity:
-    /// <list type="bullet">
-    ///   <item><b>Frame-stepped</b> – <see cref="StateMachine.Tick"/> advances one node
-    ///         per frame. Auto-starts on first call; ideal for gameplay FSMs.</item>
-    ///   <item><b>Blocking</b> – <see cref="StateMachine.Execute"/> (inherited from
-    ///         <see cref="State"/>) runs the entire FSM in a single call
-    ///         (fine for trivial graphs).</item>
-    /// </list>
+    /// Demonstrates running an NxGraph <see cref="StateMachine"/> in Unity. The sync machine
+    /// is <b>frame-stepped</b>: each <see cref="State.Execute"/> call advances exactly one
+    /// node and returns <see cref="Result.InProgress"/> until the run reaches a terminal
+    /// result — a natural fit for calling once per frame from <c>Update()</c>. The first
+    /// call auto-starts the run; <see cref="RestartPolicy"/> controls what happens after a
+    /// terminal result (Auto restarts on the next call).
     /// </summary>
     public sealed class NxGraphQuickStartBehaviour : MonoBehaviour
     {

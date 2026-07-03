@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
@@ -56,19 +57,32 @@ public sealed class Graph : INode, IGraph
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
     public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null,
         RetryPolicy[]? retryPolicies = null, int[]? outcomeCodes = null,
-        IReadOnlyDictionary<int, string>? outcomeNames = null)
+        IReadOnlyDictionary<int, string>? outcomeNames = null,
+        BlackboardSchema? schema = null, BlackboardSchema? globalSchema = null)
     {
+        if (schema is not null && schema.Scope != BlackboardScope.Graph)
+        {
+            throw new ArgumentException("The graph-owned schema must be Graph-scoped.", nameof(schema));
+        }
+
+        if (globalSchema is not null && globalSchema.Scope != BlackboardScope.Global)
+        {
+            throw new ArgumentException("The required global schema must be Global-scoped.", nameof(globalSchema));
+        }
+
         Guard.NotNull(nodes, nameof(nodes));
         Guard.NotNull(edges, nameof(edges));
 
-        if (nodes[0].Id != NodeId.Start)
-        {
-            throw new ArgumentException("Start node (nodes[0]) Id must be NodeId.Start (index 0).", nameof(nodes));
-        }
-
+        // Length checks first: an empty nodes array must produce the documented
+        // ArgumentException, not an IndexOutOfRangeException from nodes[0] below.
         if (nodes.Length == 0 || edges.Length == 0 || nodes.Length != edges.Length)
         {
             throw new ArgumentException("Nodes/edges arrays must be non-empty and have equal length.");
+        }
+
+        if (nodes[0] is null || nodes[0].Id != NodeId.Start)
+        {
+            throw new ArgumentException("Start node (nodes[0]) Id must be NodeId.Start (index 0).", nameof(nodes));
         }
 
         if (retryPolicies is not null && retryPolicies.Length != nodes.Length)
@@ -90,8 +104,23 @@ public sealed class Graph : INode, IGraph
         _retryPolicies = retryPolicies;
         _outcomeCodes = outcomeCodes;
         OutcomeNames = outcomeNames;
+        Schema = schema;
+        GlobalSchema = globalSchema;
         AsyncLogic = logic ?? new EmptyAsyncLogic();
     }
+
+    /// <summary>
+    /// The Graph-scoped <see cref="BlackboardSchema"/> declared at authoring time via
+    /// <c>WithSchema(...)</c>, or <c>null</c> when the graph declares none. Declarations are
+    /// opt-in validation for machine binding; a graph round-tripped through serialization
+    /// has no declarations and binds permissively.
+    /// </summary>
+    public BlackboardSchema? Schema { get; }
+
+    /// <summary>
+    /// The Global-scoped schema this graph requires, or <c>null</c> when it declares none.
+    /// </summary>
+    public BlackboardSchema? GlobalSchema { get; }
 
     /// <summary>
     /// The per-node retry policies indexed by <see cref="NodeId.Index"/>, or <c>null</c>
@@ -187,8 +216,25 @@ public sealed class Graph : INode, IGraph
         }
     }
 
-    private bool SetAgentRecursive<TAgent>(TAgent agent)
+    /// <summary>
+    /// Cap on composite nesting for the agent/blackboard stamping walks. Indirect graph
+    /// cycles (A nests a machine over B, B nests one over A) are constructible with public
+    /// APIs; without a cap the walk would recurse to a process-killing StackOverflowException.
+    /// Depth-capping instead of a visited set keeps run-start stamping allocation-free.
+    /// </summary>
+    private const int MaxStampingDepth = 64;
+
+    private bool SetAgentRecursive<TAgent>(TAgent agent) => SetAgentRecursive(agent, 0);
+
+    private bool SetAgentRecursive<TAgent>(TAgent agent, int depth)
     {
+        if (depth > MaxStampingDepth)
+        {
+            throw new InvalidOperationException(
+                $"Composite nesting exceeds {MaxStampingDepth} levels while stamping the agent — " +
+                "check for a cycle between graphs nested as composites.");
+        }
+
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
         {
@@ -221,7 +267,7 @@ public sealed class Graph : INode, IGraph
 
             foreach (Graph nested in provider.SubGraphs)
             {
-                if (!ReferenceEquals(nested, this) && nested.SetAgentRecursive(agent))
+                if (!ReferenceEquals(nested, this) && nested.SetAgentRecursive(agent, depth + 1))
                 {
                     found = true;
                 }
@@ -229,6 +275,64 @@ public sealed class Graph : INode, IGraph
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Stamps the routed blackboard context onto every node that implements
+    /// <see cref="IBlackboardSettable"/>, recursing into composites via
+    /// <see cref="ISubGraphProvider"/>. Unlike <see cref="SetAgent{TAgent}"/> this never
+    /// throws when nothing accepts: the state base classes accept automatically, so zero
+    /// acceptors carries no bug signal — the lint lives in the graph validator instead.
+    /// </summary>
+    public void SetBlackboards(in BlackboardContext context)
+    {
+        SetBlackboardsRecursive(in context);
+    }
+
+    private void SetBlackboardsRecursive(in BlackboardContext context) => SetBlackboardsRecursive(in context, 0);
+
+    private void SetBlackboardsRecursive(in BlackboardContext context, int depth)
+    {
+        if (depth > MaxStampingDepth)
+        {
+            throw new InvalidOperationException(
+                $"Composite nesting exceeds {MaxStampingDepth} levels while stamping blackboards — " +
+                "check for a cycle between graphs nested as composites.");
+        }
+
+        for (int i = 0; i < _nodes.Length; i++)
+        {
+            if (_nodes[i] is not LogicNode logicNode) continue;
+
+            // Check the async logic first, then the sync logic (for States wrapped in SyncLogicAdapter).
+            IBlackboardSettable? settable =
+                logicNode.AsyncLogic as IBlackboardSettable
+                ?? logicNode.Logic as IBlackboardSettable;
+
+            if (settable is not null)
+            {
+                settable.SetBlackboards(in context);
+                // Nested machines validate and re-walk their inner graph via their own
+                // SetBlackboards — no additional recursion needed.
+                continue;
+            }
+
+            ISubGraphProvider? provider =
+                logicNode.AsyncLogic as ISubGraphProvider
+                ?? logicNode.Logic as ISubGraphProvider;
+            if (provider is null)
+            {
+                continue;
+            }
+
+            foreach (Graph nested in provider.SubGraphs)
+            {
+                if (!ReferenceEquals(nested, this))
+                {
+                    nested.SetBlackboardsRecursive(in context, depth + 1);
+                }
+            }
+        }
     }
 
     public INode GetNodeByIndex(int index)

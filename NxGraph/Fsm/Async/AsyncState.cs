@@ -1,3 +1,4 @@
+using NxGraph.Blackboards;
 using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
@@ -6,8 +7,17 @@ namespace NxGraph.Fsm.Async;
 /// <summary>
 /// Base class for all async states in a finite state machine.
 /// </summary>
-public abstract class AsyncState : IAsyncLogic, ILogReporter
+public abstract class AsyncState : IAsyncLogic, ILogReporter, IBlackboardSettable
 {
+    /// <summary>
+    /// Routed blackboard access (see <see cref="BlackboardContext"/>). Non-nullable: when the
+    /// machine has no boards bound, the empty context makes any key access throw a precise
+    /// unbound-scope error. Stamped at bind time and re-stamped at every run start.
+    /// </summary>
+    protected BlackboardContext Bb { get; private set; }
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => Bb = context;
+
     /// <summary>
     /// Executes the state asynchronously, entering and exiting the state as needed.
     /// </summary>
@@ -34,7 +44,7 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter
     {
         if (LogReport != null)
         {
-            await LogReport(message, ct);
+            await LogReport(message, ct).ConfigureAwait(false);
         }
     }
 

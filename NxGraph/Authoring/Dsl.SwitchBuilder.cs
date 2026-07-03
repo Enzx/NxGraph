@@ -1,4 +1,5 @@
-﻿using NxGraph.Fsm;
+﻿using NxGraph.Blackboards;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 namespace NxGraph.Authoring;
@@ -26,6 +27,22 @@ public static partial class Dsl
         }
 
         internal SwitchBuilder(StartToken start, Func<TKey> selector)
+        {
+            _prev = new StateToken(NodeId.Default, start.Builder);
+            _builder = start.Builder;
+            _isStart = true;
+            _switchNode = new SwitchState<TKey>(selector, _map);
+        }
+
+        internal SwitchBuilder(StateToken prev, Func<BlackboardContext, TKey> selector)
+        {
+            _prev = prev;
+            _builder = prev.Builder;
+            _isStart = false;
+            _switchNode = new SwitchState<TKey>(selector, _map);
+        }
+
+        internal SwitchBuilder(StartToken start, Func<BlackboardContext, TKey> selector)
         {
             _prev = new StateToken(NodeId.Default, start.Builder);
             _builder = start.Builder;

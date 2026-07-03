@@ -80,4 +80,71 @@ public class ObserverExceptionTests
 
         Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
     }
+
+    private sealed class ThrowOnceOnStartedObserver : IAsyncStateMachineObserver
+    {
+        private bool _thrown;
+
+        public ValueTask OnStateMachineStarted(NodeId graphId, CancellationToken ct = default)
+        {
+            if (!_thrown)
+            {
+                _thrown = true;
+                throw new InvalidOperationException("observer started boom");
+            }
+
+            return default;
+        }
+    }
+
+    [Test]
+    public async Task observer_exception_at_run_start_does_not_permanently_lock_the_machine()
+    {
+        // Regression: an observer throwing during ExecuteAsync's run-start sequence escaped
+        // with the execute gate still held, so every later call threw "already executing"
+        // forever with no recovery API.
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsyncStateMachine(new ThrowOnceOnStartedObserver());
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+
+        Result result = await fsm.ExecuteAsync();
+        Assert.That(result, Is.EqualTo(Result.Success),
+            "The machine must stay usable after an observer throw at run start.");
+    }
+
+    private sealed class CompletionRecordingThrowingObserver : IAsyncStateMachineObserver
+    {
+        public readonly List<Result> CompletedResults = [];
+
+        public ValueTask OnStateMachineCompleted(NodeId graphId, Result result, CancellationToken ct = default)
+        {
+            CompletedResults.Add(result);
+            throw new InvalidOperationException("observer completed boom");
+        }
+    }
+
+    [Test]
+    public void observer_exception_at_completion_does_not_refire_completed_or_flip_the_result()
+    {
+        // Regression: an observer throwing inside the Completed notification fell into the
+        // generic failure handler, which re-transitioned Completed -> Failed and fired a
+        // second OnStateMachineCompleted(Failure) for a run that actually succeeded.
+        CompletionRecordingThrowingObserver observer = new();
+        AsyncStateMachine fsm = GraphBuilder
+            .StartWithAsync(_ => ResultHelpers.Success)
+            .ToAsyncStateMachine(observer);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fsm.ExecuteAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(observer.CompletedResults, Is.EqualTo(new[] { Result.Success }),
+                "OnStateMachineCompleted must fire exactly once, with the run's true result.");
+            Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed),
+                "A successful run must not be flipped to Failed by an observer throw.");
+        });
+    }
 }

@@ -141,4 +141,29 @@ public class SuspendResumeTests
             Assert.That(executed, Is.EqualTo(new[] { 0, 1, 2 }));
         });
     }
+
+    [Test]
+    public async Task resumed_failed_snapshot_under_ignore_policy_reports_failure()
+    {
+        // Regression: _terminalResult was not reconstructed on Resume, so a machine restored
+        // from a Failed snapshot under RestartPolicy.Ignore returned the field initializer's
+        // Success — contradicting its own restored status.
+        Graph graph = GraphBuilder.StartWithAsync(_ => ResultHelpers.Failure).Build();
+
+        AsyncStateMachine first = graph.ToAsyncStateMachine();
+        first.SetRestartPolicy(RestartPolicy.Manual); // keep the terminal status for Suspend
+        Result firstRun = await first.ExecuteAsync();
+        Assert.That(firstRun, Is.EqualTo(Result.Failure));
+
+        StateMachineSnapshot snapshot = first.Suspend();
+        Assert.That(snapshot.Status, Is.EqualTo(ExecutionStatus.Failed));
+
+        AsyncStateMachine second = graph.ToAsyncStateMachine();
+        second.SetRestartPolicy(RestartPolicy.Ignore);
+        second.Resume(snapshot);
+
+        Result ignored = await second.ExecuteAsync();
+        Assert.That(ignored, Is.EqualTo(Result.Failure),
+            "Ignore policy must report the restored run's true terminal result.");
+    }
 }

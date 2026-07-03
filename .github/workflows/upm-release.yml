@@ -78,6 +78,11 @@ jobs:
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
 
+          # Park the tarball outside the worktree: `git clean -fdx` below would delete it
+          # (it is untracked and not covered by the package-dir exclusion), and the release
+          # step needs it as an asset.
+          mv "com.enzx.nxgraph-${VER}.tgz" /tmp/
+
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -90,10 +95,16 @@ jobs:
           cp -r ${UPM_PACKAGE_DIR}/* .
           cp -r ${UPM_PACKAGE_DIR}/.* . 2>/dev/null || true
 
+          # Drop the nested copy so the published branch is only the package layout.
+          rm -rf upm
+
           git add -A
           git commit -m "Release UPM v${VER}"
 
           git push origin upm-staging:upm --force
+
+          # Restore the tarball for the release step.
+          mv "/tmp/com.enzx.nxgraph-${VER}.tgz" .
 
           echo "Pushed UPM package v${VER} to 'upm' branch."
 
@@ -102,6 +113,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "UPM v${{ steps.meta.outputs.version }}"
+          fail_on_unmatched_files: true
           body: |
             ## Unity Package Manager Release
 

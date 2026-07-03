@@ -1,3 +1,9 @@
+sealed class NxGraph.Serialization.BlackboardSerializer : NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer, NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
+  ctor Void .ctor(System.Text.Json.JsonSerializerOptions, MessagePack.MessagePackSerializerOptions)
+  method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
 sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstraction.IGraphBinarySerializer, NxGraph.Serialization.Abstraction.IGraphJsonSerializer, NxGraph.Serialization.Abstraction.IGraphSerializer
   ctor Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec)
   method NxGraph.Serialization.Abstraction.IGraphBinarySerializer AsBinarySerializer()

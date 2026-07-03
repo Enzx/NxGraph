@@ -29,9 +29,9 @@ public sealed class DungeonObserver : IStateMachineObserver
         WriteColour(ConsoleColor.DarkYellow, $"{Indent}→ Transition: [{from.Name}] ──► [{to.Name}]");
     }
 
-    public void OnStateFailed(NodeId id, Exception ex)
+    public void OnStateFailed(NodeId id, Exception? ex)
     {
-        WriteColour(ConsoleColor.Red, $"{Indent}✖ FAILED [{id.Name}]: {ex.Message}");
+        WriteColour(ConsoleColor.Red, $"{Indent}✖ FAILED [{id.Name}]: {ex?.Message ?? "node returned Failure"}");
     }
 
     // ── Machine lifecycle ───────────────────────────────────────────────

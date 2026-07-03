@@ -1,4 +1,5 @@
-﻿using NxGraph.Compatibility;
+﻿using NxGraph.Blackboards;
+using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -216,6 +217,99 @@ public static class GraphValidator
                 NodeId.Default);
         }
 
+        // 6) Blackboard schema declarations: lint-only — binding stays permissive at runtime.
+        ValidateBlackboardDeclarations(graph, result);
+
         return result;
+    }
+
+    private static void ValidateBlackboardDeclarations(Graph graph, GraphValidationResult result)
+    {
+        if ((graph.Schema is not null || graph.GlobalSchema is not null) &&
+            !AnyBlackboardSettable(graph))
+        {
+            result.Add(Severity.Info,
+                "A blackboard schema is declared but no node implements IBlackboardSettable — " +
+                "bound boards will never reach any logic.", graph.Id);
+        }
+
+        WarnOnConflictingChildSchemas(graph, graph, result);
+    }
+
+    private static bool AnyBlackboardSettable(Graph graph)
+    {
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            if (logicNode.AsyncLogic is IBlackboardSettable || logicNode.Logic is IBlackboardSettable)
+            {
+                return true;
+            }
+
+            ISubGraphProvider? provider =
+                logicNode.AsyncLogic as ISubGraphProvider ?? logicNode.Logic as ISubGraphProvider;
+            if (provider is null)
+            {
+                continue;
+            }
+
+            foreach (Graph nested in provider.SubGraphs)
+            {
+                if (!ReferenceEquals(nested, graph) && AnyBlackboardSettable(nested))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static void WarnOnConflictingChildSchemas(Graph root, Graph current, GraphValidationResult result)
+    {
+        for (int i = 0; i < current.NodeCount; i++)
+        {
+            if (!current.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            ISubGraphProvider? provider =
+                logicNode.AsyncLogic as ISubGraphProvider ?? logicNode.Logic as ISubGraphProvider;
+            if (provider is null)
+            {
+                continue;
+            }
+
+            foreach (Graph nested in provider.SubGraphs)
+            {
+                if (ReferenceEquals(nested, current))
+                {
+                    continue;
+                }
+
+                if (nested.Schema is not null && root.Schema is not null &&
+                    !ReferenceEquals(nested.Schema, root.Schema))
+                {
+                    result.Add(Severity.Warning,
+                        $"Subgraph '{nested.Id}' declares a different Graph-scoped blackboard schema than its " +
+                        "parent — binding a board to the parent machine will fail at stamp time.", node.Id);
+                }
+
+                if (nested.GlobalSchema is not null && root.GlobalSchema is not null &&
+                    !ReferenceEquals(nested.GlobalSchema, root.GlobalSchema))
+                {
+                    result.Add(Severity.Warning,
+                        $"Subgraph '{nested.Id}' requires a different Global-scoped blackboard schema than its " +
+                        "parent — binding a board to the parent machine will fail at stamp time.", node.Id);
+                }
+
+                WarnOnConflictingChildSchemas(root, nested, result);
+            }
+        }
     }
 }

@@ -1,7 +1,9 @@
 // See https://aka.ms/new-console-template for more information
 
 using NxFSM.Examples;
+using NxFSM.Examples.BlackboardDemo;
 using NxFSM.Examples.DungeonCrawler;
+using NxFSM.Examples.ParallelDemo;
 using NxFSM.Examples.ReadmeExamples;
 using NxGraph;
 using NxGraph.Authoring;
@@ -53,6 +55,18 @@ DungeonCrawlerExample.Run();
 
 Console.WriteLine();
 Console.WriteLine();
+await BlackboardDemoExample.RunAsync();
+
+Console.WriteLine();
+Console.WriteLine();
+ParallelDemoExample.Run();
+
+Console.WriteLine();
+Console.WriteLine();
+await AsyncParallelDemoExample.RunAsync();
+
+Console.WriteLine();
+Console.WriteLine();
 Console.WriteLine("=== README Examples ===");
 Console.WriteLine();
 await QuickStartExample.RunAsync();
@@ -63,7 +77,11 @@ await DslExamples.RunAsync();
 Console.WriteLine();
 await AgentExample.RunAsync();
 Console.WriteLine();
+await BlackboardExample.RunAsync();
+Console.WriteLine();
 ObserverExample.Run();
+Console.WriteLine();
+await FeatureExamples.RunAsync();
 
 return 0;
 

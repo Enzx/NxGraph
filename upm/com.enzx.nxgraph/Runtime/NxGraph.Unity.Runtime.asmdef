@@ -1,5 +1,5 @@
 {
-    "name": "NxGraph.Unity",
+    "name": "NxGraph.Unity.Runtime",
     "rootNamespace": "NxGraph",
     "references": [],
     "includePlatforms": [],

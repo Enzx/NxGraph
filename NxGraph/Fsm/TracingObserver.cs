@@ -45,15 +45,20 @@ public sealed class TracingObserver : IAsyncStateMachineObserver
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+    public ValueTask OnStateFailed(NodeId id, Exception? ex, CancellationToken ct = default)
     {
         Activity? act = _current.Value;
         if (act is null) return ValueTask.CompletedTask;
 
-        act.SetTag("exception.type", ex.GetType().FullName);
-        act.SetTag("exception.message", ex.Message);
-        act.SetTag("exception.stacktrace", ex.StackTrace);
-        act.SetStatus(ActivityStatusCode.Error, ex.Message);
+        // ex is null when the node returned Result.Failure without throwing.
+        if (ex is not null)
+        {
+            act.SetTag("exception.type", ex.GetType().FullName);
+            act.SetTag("exception.message", ex.Message);
+            act.SetTag("exception.stacktrace", ex.StackTrace);
+        }
+
+        act.SetStatus(ActivityStatusCode.Error, ex?.Message ?? "node returned Failure");
 
         return ValueTask.CompletedTask;
     }

@@ -1,4 +1,5 @@
-﻿using NxGraph.Compatibility;
+﻿using NxGraph.Blackboards;
+using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -60,6 +61,69 @@ public static partial class Dsl
     {
         NodeId id = root.Builder.AddNode(new AsyncParallelState(regions), true);
         return new StateToken(id, root.Builder);
+    }
+
+    /// <summary>
+    /// Adds a <b>sync</b> orthogonal-regions composite and wires a transition to it — the
+    /// runtime-parity twin of the async overload (see <see cref="ParallelState"/>).
+    /// <paramref name="mode"/> decides whether the join completes within one tick
+    /// (<see cref="ParallelStepMode.RunToJoin"/>) or spreads one round per tick across frames
+    /// (<see cref="ParallelStepMode.RoundPerTick"/>, sync runtime only).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode, params Graph[] regions)
+    {
+        return prev.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync orthogonal-regions composite as its first state
+    /// (see <see cref="ParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode, params Graph[] regions)
+    {
+        return root.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Adds a <b>dynamic</b> orthogonal-regions composite: at entry <paramref name="selector"/>
+    /// reads the machine-bound blackboard context and returns the <see cref="RegionMask"/> of
+    /// regions to run this execution (see <see cref="AsyncDynamicParallelState"/>). An empty
+    /// mask succeeds immediately as a vacuous join.
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, Func<BlackboardContext, RegionMask> selector,
+        params Graph[] regions)
+    {
+        return prev.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a dynamic orthogonal-regions composite as its first state
+    /// (see <see cref="AsyncDynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, Func<BlackboardContext, RegionMask> selector,
+        params Graph[] regions)
+    {
+        return root.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Adds a <b>sync</b> dynamic orthogonal-regions composite — the runtime-parity twin of the
+    /// selector overload (see <see cref="DynamicParallelState"/> and <see cref="ParallelStepMode"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+    {
+        return prev.To(new DynamicParallelState(mode, selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync dynamic orthogonal-regions composite as its first state
+    /// (see <see cref="DynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+    {
+        return root.To(new DynamicParallelState(mode, selector, regions));
     }
 
     /// <summary>

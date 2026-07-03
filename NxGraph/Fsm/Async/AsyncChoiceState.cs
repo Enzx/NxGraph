@@ -1,15 +1,44 @@
-﻿using NxGraph.Graphs;
+using NxGraph.Blackboards;
+using NxGraph.Graphs;
 
 namespace NxGraph.Fsm.Async;
 
-public sealed class AsyncChoiceState(Func<ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode) : IAsyncLogic, IAsyncDirector
+/// <summary>
+/// Async director that picks between two destinations via a predicate. The
+/// blackboard-context overload receives the machine-bound routed context (see
+/// <see cref="BlackboardContext"/>), so branching can read shared memory instead of
+/// closing over ad-hoc state.
+/// </summary>
+public sealed class AsyncChoiceState : IAsyncLogic, IAsyncDirector, IBlackboardSettable
 {
-    private readonly Func<ValueTask<bool>> _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
-    
+    private readonly Func<ValueTask<bool>>? _predicate;
+    private readonly Func<BlackboardContext, ValueTask<bool>>? _bbPredicate;
+    private readonly NodeId _trueNode;
+    private readonly NodeId _falseNode;
+    private BlackboardContext _blackboards;
+
+    public AsyncChoiceState(Func<ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
+    {
+        _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        _trueNode = trueNode;
+        _falseNode = falseNode;
+    }
+
+    public AsyncChoiceState(Func<BlackboardContext, ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
+    {
+        _bbPredicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
+        _trueNode = trueNode;
+        _falseNode = falseNode;
+    }
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => _blackboards = context;
+
     public async ValueTask<NodeId> SelectNextAsync(CancellationToken ct = default)
     {
-        bool result = await _predicate().ConfigureAwait(false);
-        return result ? trueNode : falseNode;
+        bool result = _bbPredicate is not null
+            ? await _bbPredicate(_blackboards).ConfigureAwait(false)
+            : await _predicate!().ConfigureAwait(false);
+        return result ? _trueNode : _falseNode;
     }
 
     public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
@@ -20,7 +49,7 @@ public sealed class AsyncChoiceState(Func<ValueTask<bool>> predicate, NodeId tru
     /// <inheritdoc />
     public IEnumerable<NodeId> EnumerateStaticTargets()
     {
-        yield return trueNode;
-        yield return falseNode;
+        yield return _trueNode;
+        yield return _falseNode;
     }
 }

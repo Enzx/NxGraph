@@ -49,7 +49,11 @@ public interface IAsyncStateMachineObserver
         return default;
     }
 
-    ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+    /// <summary>
+    /// Raised when a node fails. <paramref name="ex"/> is <c>null</c> when the node returned
+    /// <see cref="Result.Failure"/> without throwing (a result-based failure).
+    /// </summary>
+    ValueTask OnStateFailed(NodeId id, Exception? ex, CancellationToken ct = default)
     {
         return default;
     }

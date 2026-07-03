@@ -1,17 +1,48 @@
-﻿# NxGraph for Unity
+# NxGraph for Unity
 
 NxGraph is a lean finite state machine / stateflow library with:
 
 - a fluent authoring DSL
 - sync and async runtimes
-- graph validation
-- observers, replay, and Mermaid export
+- failure edges, retries, and timeouts (unified fault model)
+- composites: subgraphs, history, parallel regions
+- durable suspend/resume via snapshots
+- scoped blackboards
+- graph validation, observers, replay, and Mermaid export
 
 ## Install
 
+### Git package (recommended)
+
+Releases are published to the `upm` branch. Add to your Unity project's `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm"
+  }
+}
+```
+
+Or pin a specific release tag:
+
+```json
+{
+  "dependencies": {
+    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm/v2.0.1-alpha"
+  }
+}
+```
+
+Do **not** consume the `upm/com.enzx.nxgraph` folder from the `main` branch — its staged artifacts are not refreshed on every commit and may lag the released version.
+
+### Tarball
+
+Each GitHub release under the `upm/v*` tags carries a `.tgz` asset. Install via Unity Package Manager → "Add package from tarball".
+
 ### Local package
 
-Add this package to your Unity project's `Packages/manifest.json`:
+For local development against a checkout:
 
 ```json
 {
@@ -21,23 +52,16 @@ Add this package to your Unity project's `Packages/manifest.json`:
 }
 ```
 
-### Git package
+Stage fresh artifacts into the folder first (see Staging below).
 
-Once the package folder is committed, it can also be consumed through Git:
+## Staging
 
-```json
-{
-  "dependencies": {
-    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git?path=/upm/com.enzx.nxgraph"
-  }
-}
-```
+Staging is driven by the C# build system (`NxGraph.Build`), run from the repo root:
 
-## Source-first package layout
+- Source mode (runtime source staged into `Runtime/NxGraph`): `dotnet run --project NxGraph.Build -- stage-source`
+- Binary mode (netstandard2.1 DLL staged into `Runtime/Plugins`): `dotnet run --project NxGraph.Build -- stage-binary`
 
-This package is designed to be staged from source so consumers can navigate the implementation directly inside Unity projects.
-
-Runtime source is staged into `Runtime/NxGraph` by `scripts/build-upm.ps1`.
+Do not stage both source and runtime DLLs at the same time. Source staging mirrors the current runtime source exactly, so actual Unity editor compatibility depends on the C# features used by the staged files.
 
 ## Quick start
 
@@ -51,14 +75,11 @@ StateMachine fsm = GraphBuilder
     .To(() => Result.Success).SetName("Finish")
     .ToStateMachine();
 
-Result result = fsm.Execute();
+// Execute() is stepped: it advances one node per call and returns
+// Result.InProgress until the machine reaches a terminal result.
+Result result;
+do
+{
+    result = fsm.Execute();
+} while (result == Result.InProgress);
 ```
-
-## Notes
-
-- Use `scripts/build-upm.ps1 -Mode Source` for source staging.
-- Use `scripts/build-upm.ps1 -Mode Binary` for binary staging.
-- `scripts/build-upm-binary.ps1` remains available as a backward-compatible shortcut for binary staging.
-- Do not stage both source and runtime DLLs at the same time.
-- Source staging mirrors the current runtime source exactly, so actual Unity editor compatibility depends on the C# features used by the staged files.
-

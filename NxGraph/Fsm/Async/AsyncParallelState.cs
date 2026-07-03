@@ -1,3 +1,4 @@
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Graphs;
 
@@ -18,10 +19,21 @@ namespace NxGraph.Fsm.Async;
 /// library targets; run truly CPU-parallel work inside a single node instead.
 /// </para>
 /// </summary>
-public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider
+public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
 {
     private readonly AsyncStateMachine[] _regions;
     private readonly bool[] _done;
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        // The recursive stamping walk stops at IBlackboardSettable nodes — forward to the
+        // region machines ourselves (each validates against its own graph's declarations),
+        // matching AsyncDynamicParallelState.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            ((IBlackboardSettable)_regions[i]).SetBlackboards(in context);
+        }
+    }
 
     /// <summary>The region machines.</summary>
     public IReadOnlyList<AsyncStateMachine> Regions => _regions;

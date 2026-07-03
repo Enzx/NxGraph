@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using NxGraph.Blackboards;
 using NxGraph.Diagnostics.Replay;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -15,8 +16,17 @@ namespace NxGraph.Fsm;
 /// <see cref="IAsyncLogic.ExecuteAsync"/> (zero-allocation on .NET 8+).
 /// </para>
 /// </summary>
-public abstract class State : ILogic, ILogReporter
+public abstract class State : ILogic, ILogReporter, IBlackboardSettable
 {
+    /// <summary>
+    /// Routed blackboard access (see <see cref="BlackboardContext"/>). Non-nullable: when the
+    /// machine has no boards bound, the empty context makes any key access throw a precise
+    /// unbound-scope error. Stamped at bind time and re-stamped at every run start.
+    /// </summary>
+    protected BlackboardContext Bb { get; private set; }
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => Bb = context;
+
     /// <summary>
     /// Callback set by the sync runtime so the state can emit log messages.
     /// Uses <see cref="Action{String}"/> instead of an async delegate.
