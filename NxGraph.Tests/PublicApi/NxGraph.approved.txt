@@ -350,18 +350,18 @@ sealed class NxGraph.Fsm.Async.AsyncChoiceState : NxGraph.Blackboards.IBlackboar
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
   method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.NodeId] SelectNextAsync(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
-class NxGraph.Fsm.Async.AsyncCompositeState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+class NxGraph.Fsm.Async.AsyncCompositeState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Graphs.IAsyncLogic)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
 sealed class NxGraph.Fsm.Async.AsyncDynamicParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
   property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
-sealed class NxGraph.Fsm.Async.AsyncHistoryState : NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+sealed class NxGraph.Fsm.Async.AsyncHistoryState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Graphs.Graph)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
   property NxGraph.Fsm.Async.AsyncStateMachine Child { get; }
-sealed class NxGraph.Fsm.Async.AsyncParallelState : NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+sealed class NxGraph.Fsm.Async.AsyncParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Graphs.Graph[])
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
   property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
@@ -495,7 +495,7 @@ sealed class NxGraph.Fsm.NodeStatusTrackingObserver : NxGraph.Fsm.IAsyncStateMac
   method System.Threading.Tasks.ValueTask OnStateExited(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask OnStateFailed(NxGraph.Graphs.NodeId, System.Exception, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask OnTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
-sealed class NxGraph.Fsm.ParallelState : NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+sealed class NxGraph.Fsm.ParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
   method NxGraph.Result Execute()
   property NxGraph.Fsm.ParallelStepMode Mode { get; }

@@ -134,10 +134,12 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     /// </summary>
     private protected virtual void ApplyExecutionContext()
     {
-        if (!_blackboards.IsEmpty)
-        {
-            Graph.SetBlackboards(in _blackboards);
-        }
+        // Unconditional re-stamp, empty context included. Skipping the empty case let a
+        // board-less machine sharing a Graph silently execute against the boards a previous
+        // machine stamped — it must get the unbound-scope throw instead. Composite children
+        // receive their context through IBlackboardSettable forwarding, so the empty re-stamp
+        // no longer erases a parent's stamp.
+        Graph.SetBlackboards(in _blackboards);
     }
 
     /// <summary>
@@ -315,6 +317,11 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _attempts = snapshot.Attempts;
         _nodeEntered = snapshot.NodeEntered;
         LastOutcome = snapshot.LastOutcome;
+        // Reconstruct the cached terminal result so RestartPolicy.Ignore reports the
+        // restored run's true outcome instead of the field initializer's Success.
+        _terminalResult = snapshot.Status is ExecutionStatus.Failed or ExecutionStatus.Cancelled
+            ? Result.Failure
+            : Result.Success;
         // Mid-run: the gate stays held between ticks and the State lifecycle must skip
         // OnEnter (which would restart the run from the initial node) on the next Execute().
         _executeGate = snapshot.MidRun;

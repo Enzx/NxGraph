@@ -162,7 +162,7 @@ public class SyncSuspendResumeTests
     }
 
     [Test]
-    public void snapshot_taken_by_async_machine_resumes_on_sync_machine()
+    public void sync_snapshot_survives_a_resume_suspend_roundtrip_through_the_async_machine()
     {
         // Same graph shape, sync-executable nodes: the snapshot format is runtime-agnostic.
         List<int> executed = [];
@@ -185,6 +185,63 @@ public class SyncSuspendResumeTests
         {
             Assert.That(result, Is.EqualTo(Result.Success));
             Assert.That(executed, Is.EqualTo(new[] { 0, 1, 2 }));
+        });
+    }
+
+    [Test]
+    public async Task async_mid_run_snapshot_completes_on_the_sync_machine()
+    {
+        // True cross-runtime interchange: nodes execute under the async runtime, the run is
+        // suspended mid-flight, and the sync runtime finishes it.
+        List<int> executed = [];
+        Graph graph = CountingChain(executed);
+
+        Fsm.Async.AsyncStateMachine first = graph.ToAsyncStateMachine();
+        Result tick = await first.StepAsync();
+        Assert.That(tick, Is.EqualTo(Result.InProgress));
+
+        StateMachineSnapshot snapshot = first.Suspend();
+
+        StateMachine second = graph.ToStateMachine();
+        second.Resume(snapshot);
+        Result result = RunToCompletion(second);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(executed, Is.EqualTo(new[] { 0, 1, 2 }),
+                "Node 0 ran under the async machine; the sync machine continued at node 1.");
+        });
+    }
+
+    [Test]
+    public async Task sync_mid_run_snapshot_completes_on_the_async_machine()
+    {
+        // The mirror direction: nodes execute under the sync runtime, the async runtime
+        // finishes the run via StepAsync.
+        List<int> executed = [];
+        Graph graph = CountingChain(executed);
+
+        StateMachine first = graph.ToStateMachine();
+        Result tick = first.Execute();
+        Assert.That(tick, Is.EqualTo(Result.InProgress));
+
+        StateMachineSnapshot snapshot = first.Suspend();
+
+        Fsm.Async.AsyncStateMachine second = graph.ToAsyncStateMachine();
+        second.Resume(snapshot);
+
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
+        {
+            result = await second.StepAsync();
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(executed, Is.EqualTo(new[] { 0, 1, 2 }),
+                "Node 0 ran under the sync machine; the async machine continued at node 1.");
         });
     }
 }

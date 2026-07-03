@@ -39,4 +39,28 @@ public class ChoiceStateTests
         Result result = await fsm.ExecuteAsync();
         Assert.That(result, Is.EqualTo(Result.Success));
     }
+
+    [Test]
+    [Timeout(5000)]
+    public void start_if_graph_is_executable_by_the_sync_runtime()
+    {
+        // Regression: Start().If(predicate) used to wrap the sync predicate in an
+        // AsyncChoiceState, making the start node unexecutable by the sync StateMachine
+        // while every sibling If overload produced a sync ChoiceState.
+        const bool flag = true;
+
+        StateMachine fsm = GraphBuilder.Start()
+            .If(() => flag)
+            .Then(new RelayState(() => Result.Success))
+            .Else(new RelayState(() => Result.Failure))
+            .ToStateMachine();
+
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
+        {
+            result = fsm.Execute();
+        }
+
+        Assert.That(result, Is.EqualTo(Result.Success));
+    }
 }

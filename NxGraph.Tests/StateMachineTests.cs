@@ -650,7 +650,10 @@ public class StateMachineTests
     private sealed class FailRecordingObserver : IStateMachineObserver
     {
         public readonly List<Exception> FailedExceptions = [];
-        public void OnStateFailed(NodeId id, Exception ex) => FailedExceptions.Add(ex);
+        public void OnStateFailed(NodeId id, Exception? ex)
+        {
+            if (ex is not null) FailedExceptions.Add(ex);
+        }
     }
 
     private sealed class ExplosiveSyncObserver : IStateMachineObserver

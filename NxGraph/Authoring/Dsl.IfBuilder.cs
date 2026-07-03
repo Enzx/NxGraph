@@ -30,7 +30,10 @@ public static partial class Dsl
             _builder = root.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            _builder.AddNode(new AsyncChoiceState(() => new ValueTask<bool>(predicate()), _truePad, _falsePad), true);
+            // Sync ChoiceState, matching every sibling overload: it runs on both runtimes
+            // (the async loop routes sync directors), whereas an AsyncChoiceState start node
+            // would make the graph unexecutable by the sync StateMachine.
+            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
         }
 
         internal IfBuilder(StateToken prev, Func<BlackboardContext, bool> predicate)

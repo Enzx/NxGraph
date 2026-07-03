@@ -21,8 +21,8 @@ public sealed class DiagnosticObserver : IStateMachineObserver
     public void OnStateExited(NodeId id)  => Console.WriteLine($"  << {id.Name}");
     public void OnTransition(NodeId from, NodeId to) =>
         Console.WriteLine($"     {from.Name} -> {to.Name}");
-    public void OnStateFailed(NodeId id, Exception ex) =>
-        Console.WriteLine($"  FAIL {id.Name}: {ex.Message}");
+    public void OnStateFailed(NodeId id, Exception? ex) =>
+        Console.WriteLine($"  FAIL {id.Name}: {ex?.Message ?? "node returned Failure"}");
     public void OnStateMachineCompleted(NodeId graphId, Result result) =>
         Console.WriteLine($"  FSM done: {result}");
     public void OnLogReport(NodeId nodeId, string message) =>

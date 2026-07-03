@@ -73,14 +73,16 @@ public sealed class Graph : INode, IGraph
         Guard.NotNull(nodes, nameof(nodes));
         Guard.NotNull(edges, nameof(edges));
 
-        if (nodes[0].Id != NodeId.Start)
-        {
-            throw new ArgumentException("Start node (nodes[0]) Id must be NodeId.Start (index 0).", nameof(nodes));
-        }
-
+        // Length checks first: an empty nodes array must produce the documented
+        // ArgumentException, not an IndexOutOfRangeException from nodes[0] below.
         if (nodes.Length == 0 || edges.Length == 0 || nodes.Length != edges.Length)
         {
             throw new ArgumentException("Nodes/edges arrays must be non-empty and have equal length.");
+        }
+
+        if (nodes[0] is null || nodes[0].Id != NodeId.Start)
+        {
+            throw new ArgumentException("Start node (nodes[0]) Id must be NodeId.Start (index 0).", nameof(nodes));
         }
 
         if (retryPolicies is not null && retryPolicies.Length != nodes.Length)
@@ -214,8 +216,25 @@ public sealed class Graph : INode, IGraph
         }
     }
 
-    private bool SetAgentRecursive<TAgent>(TAgent agent)
+    /// <summary>
+    /// Cap on composite nesting for the agent/blackboard stamping walks. Indirect graph
+    /// cycles (A nests a machine over B, B nests one over A) are constructible with public
+    /// APIs; without a cap the walk would recurse to a process-killing StackOverflowException.
+    /// Depth-capping instead of a visited set keeps run-start stamping allocation-free.
+    /// </summary>
+    private const int MaxStampingDepth = 64;
+
+    private bool SetAgentRecursive<TAgent>(TAgent agent) => SetAgentRecursive(agent, 0);
+
+    private bool SetAgentRecursive<TAgent>(TAgent agent, int depth)
     {
+        if (depth > MaxStampingDepth)
+        {
+            throw new InvalidOperationException(
+                $"Composite nesting exceeds {MaxStampingDepth} levels while stamping the agent — " +
+                "check for a cycle between graphs nested as composites.");
+        }
+
         bool found = false;
         for (int i = 0; i < _nodes.Length; i++)
         {
@@ -248,7 +267,7 @@ public sealed class Graph : INode, IGraph
 
             foreach (Graph nested in provider.SubGraphs)
             {
-                if (!ReferenceEquals(nested, this) && nested.SetAgentRecursive(agent))
+                if (!ReferenceEquals(nested, this) && nested.SetAgentRecursive(agent, depth + 1))
                 {
                     found = true;
                 }
@@ -270,8 +289,17 @@ public sealed class Graph : INode, IGraph
         SetBlackboardsRecursive(in context);
     }
 
-    private void SetBlackboardsRecursive(in BlackboardContext context)
+    private void SetBlackboardsRecursive(in BlackboardContext context) => SetBlackboardsRecursive(in context, 0);
+
+    private void SetBlackboardsRecursive(in BlackboardContext context, int depth)
     {
+        if (depth > MaxStampingDepth)
+        {
+            throw new InvalidOperationException(
+                $"Composite nesting exceeds {MaxStampingDepth} levels while stamping blackboards — " +
+                "check for a cycle between graphs nested as composites.");
+        }
+
         for (int i = 0; i < _nodes.Length; i++)
         {
             if (_nodes[i] is not LogicNode logicNode) continue;
@@ -301,7 +329,7 @@ public sealed class Graph : INode, IGraph
             {
                 if (!ReferenceEquals(nested, this))
                 {
-                    nested.SetBlackboardsRecursive(in context);
+                    nested.SetBlackboardsRecursive(in context, depth + 1);
                 }
             }
         }

@@ -191,9 +191,9 @@ public class AsyncObserverTests
             return default;
         }
 
-        public ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+        public ValueTask OnStateFailed(NodeId id, Exception? ex, CancellationToken ct = default)
         {
-            FailedExceptions.Add(ex);
+            if (ex is not null) FailedExceptions.Add(ex);
             return default;
         }
 

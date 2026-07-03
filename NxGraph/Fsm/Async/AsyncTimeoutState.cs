@@ -71,7 +71,7 @@ public class AsyncTimeoutState : IAsyncLogic
         }
         finally
         {
-            await reg.DisposeAsync();
+            await reg.DisposeAsync().ConfigureAwait(false);
             CtsPool.Return(cts);
         }
     }
@@ -124,17 +124,29 @@ public class AsyncTimeoutState : IAsyncLogic
         {
 #if NET6_0_OR_GREATER
             if (cts.TryReset())
-#else
-            if (!cts.IsCancellationRequested)
-#endif
             {
                 Bag.Add(cts);
             }
+#else
+            if (!cts.IsCancellationRequested)
+            {
+                // Disarm the previous CancelAfter timer before pooling. Without this, the
+                // stale timer can fire right after the CTS is re-rented (before the next
+                // CancelAfter re-arms it) and register as a spurious instant timeout.
+                cts.CancelAfter(global::System.Threading.Timeout.InfiniteTimeSpan);
+                if (!cts.IsCancellationRequested)
+                {
+                    Bag.Add(cts);
+                    return;
+                }
+
+                cts.Dispose();
+            }
+#endif
             else
             {
                 cts.Dispose();
             }
-            
         }
     }
 }

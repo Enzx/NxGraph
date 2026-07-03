@@ -15,7 +15,11 @@ public interface IStateMachineObserver
 
     void OnTransition(NodeId from, NodeId to) { }
 
-    void OnStateFailed(NodeId id, Exception ex) { }
+    /// <summary>
+    /// Raised when a node fails. <paramref name="ex"/> is <c>null</c> when the node returned
+    /// <see cref="Result.Failure"/> without throwing (a result-based failure).
+    /// </summary>
+    void OnStateFailed(NodeId id, Exception? ex) { }
 
     //--- State Machine Lifecycle Events ---
 

@@ -44,7 +44,7 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter, IBlackboardSettabl
     {
         if (LogReport != null)
         {
-            await LogReport(message, ct);
+            await LogReport(message, ct).ConfigureAwait(false);
         }
     }
 

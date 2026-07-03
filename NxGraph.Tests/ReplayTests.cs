@@ -386,6 +386,49 @@ public class ReplayTests
     }
 
     [Test]
+    public async Task Recorder_survives_a_failure_edge_and_records_the_result_failure()
+    {
+        // Regression: the failure-edge path passes a null Exception to OnStateFailed;
+        // ReplayRecorder used to call ex.ToString() unconditionally and crash the run with
+        // a NullReferenceException — on exactly the path it exists to diagnose.
+        ReplayRecorder recorder = new();
+        Graph graph = GraphBuilder
+            .StartWithAsync(_ => ResultHelpers.Failure)
+            .OnErrorAsync(_ => ResultHelpers.Success)
+            .Build();
+
+        Result result = await graph.ToAsyncStateMachine(recorder).ExecuteAsync();
+
+        ReplayEvent failed = recorder.GetEvents().ToArray().Single(e => e.Type == EventType.StateFailed);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(failed.Message, Is.EqualTo("node returned Failure"));
+        });
+    }
+
+    [Test]
+    public void Sync_recorder_survives_a_failure_edge_and_records_the_result_failure()
+    {
+        ReplayRecorder recorder = new();
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Failure)
+            .OnError(() => Result.Success)
+            .Build();
+
+        StateMachine fsm = graph.ToStateMachine(recorder);
+        Result result;
+        do { result = fsm.Execute(); } while (result == Result.InProgress);
+
+        ReplayEvent failed = recorder.GetEvents().ToArray().Single(e => e.Type == EventType.StateFailed);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(failed.Message, Is.EqualTo("node returned Failure"));
+        });
+    }
+
+    [Test]
     public void Deserialize_rejects_payload_with_unknown_event_type_byte()
     {
         using MemoryStream ms = new();

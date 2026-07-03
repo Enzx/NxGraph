@@ -47,7 +47,13 @@ public class LogicNode : INode
     public Action? ExitAction { get; }
 
     public static readonly LogicNode Empty = new(NodeId.Default, new EmptyAsyncLogic());
-    public static readonly LogicNode StateMachineMarker = new(NodeId.Default, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for nested-state-machine owner nodes during (de)serialization. Uses the
+    /// dedicated <see cref="NodeId.StateMachineMarker"/> id so the wire marker string is
+    /// "StateMachine" rather than colliding with <see cref="NodeId.Default"/>'s "Default".
+    /// </summary>
+    public static readonly LogicNode StateMachineMarker = new(NodeId.StateMachineMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>

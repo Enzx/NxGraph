@@ -360,17 +360,24 @@ public class BlackboardFsmIntegrationTests
             "Graph.SetBlackboards must reach nodes inside nested machines.");
     }
 
-    private sealed class CustomComposite(Graph child) : IAsyncLogic, ISubGraphProvider
+    // Contract for user containers that wrap their own machines: implement ISubGraphProvider
+    // (agent stamping) AND IBlackboardSettable forwarding (blackboard stamping) — machines
+    // re-stamp their own context at every run start, so a container that doesn't forward
+    // would have its inner machine erase the parent's stamp with an empty context.
+    private sealed class CustomComposite(Graph child) : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
     {
         private readonly AsyncStateMachine _machine = new(child);
 
         public IEnumerable<Graph> SubGraphs => [_machine.Graph];
 
+        void IBlackboardSettable.SetBlackboards(in BlackboardContext context) =>
+            ((IBlackboardSettable)_machine).SetBlackboards(in context);
+
         public ValueTask<Result> ExecuteAsync(CancellationToken ct = default) => _machine.ExecuteAsync(ct);
     }
 
     [Test]
-    public async Task user_defined_composite_receives_the_context_via_subgraph_provider()
+    public async Task user_defined_composite_receives_the_context_via_blackboard_forwarding()
     {
         BlackboardSchema enemySchema = NewEnemySchema(out BlackboardKey<int> target, out _);
 
@@ -390,6 +397,33 @@ public class BlackboardFsmIntegrationTests
         await outer.ToAsyncStateMachine().WithBlackboard(board).ExecuteAsync();
 
         Assert.That(board.Get(target), Is.EqualTo(11));
+    }
+
+    [Test]
+    public async Task board_less_machine_sharing_a_graph_gets_the_unbound_scope_throw_not_stale_boards()
+    {
+        // Regression: run-start re-stamping used to skip empty contexts, so a machine with
+        // no boards bound silently executed against whatever boards the previous machine
+        // stamped onto the shared graph — reading and corrupting another entity's state.
+        BlackboardSchema enemySchema = NewEnemySchema(out BlackboardKey<int> target, out _);
+
+        Graph shared = GraphBuilder
+            .StartWithAsync((bb, _) =>
+            {
+                bb.Set(target, bb.Get(target) + 1);
+                return ResultHelpers.Success;
+            })
+            .Build();
+
+        Blackboard boardA = new(enemySchema);
+        await shared.ToAsyncStateMachine().WithBlackboard(boardA).ExecuteAsync();
+        Assert.That(boardA.Get(target), Is.EqualTo(0), "target defaults to -1; one increment lands on 0");
+
+        AsyncStateMachine boardless = shared.ToAsyncStateMachine();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await boardless.ExecuteAsync(),
+            "A board-less machine must hit the unbound-scope error, not alias the previous machine's board.");
+        Assert.That(boardA.Get(target), Is.EqualTo(0),
+            "The board-less machine must not have written through the stale stamp.");
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Graphs;
 
@@ -27,11 +28,22 @@ namespace NxGraph.Fsm;
 /// (<see cref="ILogic"/>) node logic, as with any sync-run graph.
 /// </para>
 /// </summary>
-public sealed class ParallelState : ILogic, ISubGraphProvider
+public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettable
 {
     private readonly StateMachine[] _regions;
     private readonly bool[] _done;
     private readonly ParallelStepMode _mode;
+
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        // The recursive stamping walk stops at IBlackboardSettable nodes — forward to the
+        // region machines ourselves (each validates against its own graph's declarations),
+        // matching DynamicParallelState.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            ((IBlackboardSettable)_regions[i]).SetBlackboards(in context);
+        }
+    }
 
     // Join bookkeeping for RoundPerTick, which spans many Execute() calls. The first call of
     // a visit resets it; reaching the join (or an escaping region exception) clears it.

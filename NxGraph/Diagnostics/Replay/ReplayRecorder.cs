@@ -112,9 +112,10 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
         return ResultHelpers.CompletedTask;
     }
 
-    public ValueTask OnStateFailed(NodeId id, Exception ex, CancellationToken ct = default)
+    public ValueTask OnStateFailed(NodeId id, Exception? ex, CancellationToken ct = default)
     {
-        Record(new ReplayEvent(EventType.StateFailed, id, null, ex.ToString(), CurrentTimestamp));
+        Record(new ReplayEvent(EventType.StateFailed, id, null, ex?.ToString() ?? "node returned Failure",
+            CurrentTimestamp));
         return ResultHelpers.CompletedTask;
     }
 
@@ -168,8 +169,9 @@ public sealed class ReplayRecorder(int capacity = 256) : IAsyncStateMachineObser
     void IStateMachineObserver.OnTransition(NodeId from, NodeId to)
         => Record(new ReplayEvent(EventType.Transition, from, to, timestamp: CurrentTimestamp));
 
-    void IStateMachineObserver.OnStateFailed(NodeId id, Exception ex)
-        => Record(new ReplayEvent(EventType.StateFailed, id, null, ex.ToString(), CurrentTimestamp));
+    void IStateMachineObserver.OnStateFailed(NodeId id, Exception? ex)
+        => Record(new ReplayEvent(EventType.StateFailed, id, null, ex?.ToString() ?? "node returned Failure",
+            CurrentTimestamp));
 
     void IStateMachineObserver.OnStateMachineReset(NodeId graphId)
         => Record(new ReplayEvent(EventType.StateMachineReset, graphId, timestamp: CurrentTimestamp));
