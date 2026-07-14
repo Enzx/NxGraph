@@ -12,8 +12,9 @@ public static partial class Dsl
     /// <summary>
     /// Declares a blackboard schema on the graph being built, routed by the schema's scope:
     /// Graph-scoped schemas become the graph's own declaration, Global-scoped schemas record
-    /// the global board the graph requires. Machines validate bound boards against these
-    /// declarations at <c>WithBlackboard(...)</c> time.
+    /// the global board the graph requires, and Node-scoped schemas declare transient
+    /// per-visit scratch that each machine auto-creates its own board for. Machines validate
+    /// bound boards against these declarations at <c>WithBlackboard(...)</c> time.
     /// </summary>
     public static StartToken WithSchema(this StartToken token, BlackboardSchema schema)
     {

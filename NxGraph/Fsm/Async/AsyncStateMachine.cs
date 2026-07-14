@@ -46,6 +46,10 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     public readonly Graph Graph;
     private BlackboardContext _blackboards;
 
+    // Machine-owned transient scratch created from the graph's declared Node schema; null when
+    // none is declared, so board-less graphs pay nothing beyond a null check per transition.
+    private readonly Blackboard? _nodeBoard;
+
     IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Graph];
     private readonly IAsyncStateMachineObserver? _observer;
 
@@ -92,6 +96,11 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         _reporters = BuildReporterTable(graph);
         _retryPolicies = graph.RetryPolicies;
         _outcomeCodes = graph.OutcomeCodes;
+        if (graph.NodeSchema is { } nodeSchema)
+        {
+            _nodeBoard = new Blackboard(nodeSchema);
+            _blackboards = new BlackboardContext(null, null, _nodeBoard);
+        }
         // _statusInt already initialized to Created at field declaration; no transition needed.
     }
 
@@ -119,6 +128,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     public void SetBlackboard(Blackboard blackboard)
     {
         Guard.NotNull(blackboard, nameof(blackboard));
+        ThrowIfNodeScoped(blackboard);
         ValidateBoardAgainstDeclarations(blackboard);
         _blackboards = _blackboards.With(blackboard);
         Graph.SetBlackboards(in _blackboards);
@@ -127,7 +137,8 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     /// <summary>
     /// Receives the whole context from a parent machine's stamping walk (nested composite
     /// path). Validates against this machine's own graph declarations, so a conflicting
-    /// child schema fails loudly at stamp time.
+    /// child schema fails loudly at stamp time. The parent's Node slot is dropped — Node
+    /// boards are per-machine scratch; this machine composes its own from its own graph.
     /// </summary>
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
     {
@@ -141,8 +152,24 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             ValidateBoardAgainstDeclarations(globalBoard);
         }
 
-        _blackboards = context;
-        Graph.SetBlackboards(in context);
+        BlackboardContext own = context.WithoutNode();
+        if (_nodeBoard is not null)
+        {
+            own = own.With(_nodeBoard);
+        }
+
+        _blackboards = own;
+        Graph.SetBlackboards(in own);
+    }
+
+    private static void ThrowIfNodeScoped(Blackboard blackboard)
+    {
+        if (blackboard.Schema.Scope == BlackboardScope.Node)
+        {
+            throw new InvalidOperationException(
+                "Node-scoped boards are machine-owned transient scratch and cannot be bound — " +
+                "declare the schema on the graph via WithSchema(...) and each machine creates its own board.");
+        }
     }
 
     private void ValidateBoardAgainstDeclarations(Blackboard blackboard)
@@ -258,6 +285,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         _current = _initial;
         _attempts = 0;
         _nodeEntered = false;
+        _nodeBoard?.ResetToDefaults();
 
         await TransitionTo(ExecutionStatus.Ready).ConfigureAwait(false);
         return Result.Success;
@@ -313,6 +341,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             _current = _initial;
             _attempts = 0;
             _nodeEntered = false;
+            _nodeBoard?.ResetToDefaults();
             LastOutcome = 0;
             if (_observer is not null)
             {
@@ -503,6 +532,13 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             _nodeEntered = snapshot.NodeEntered;
             _stepping = snapshot.MidRun;
             LastOutcome = snapshot.LastOutcome;
+            // Snapshots are primitives-only: Node-scoped scratch is transient by definition
+            // and comes back as defaults after a resume.
+            _nodeBoard?.ResetToDefaults();
+            // A mid-run resume continues via StepAsync, which skips the run-start init where
+            // the context is normally stamped — stamp here so a fresh machine's own boards
+            // (including the machine-owned Node board) reach the graph's nodes.
+            ApplyExecutionContext();
             // Reconstruct the cached terminal result so RestartPolicy.Ignore reports the
             // restored run's true outcome instead of the field initializer's Success.
             _terminalResult = snapshot.Status is ExecutionStatus.Failed or ExecutionStatus.Cancelled
@@ -561,6 +597,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                     _current = _initial;
                     _attempts = 0;
                     _nodeEntered = false;
+                    _nodeBoard?.ResetToDefaults();
                     LastOutcome = 0;
                     if (_observer is not null)
                     {
@@ -757,6 +794,9 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
                     _current = next;
                     _attempts = 0;
+                    // New visit begins: transient Node-scoped scratch resets with the
+                    // attempt counter (in-place retries above keep both).
+                    _nodeBoard?.ResetToDefaults();
 
                     if (_observer is not null)
                     {
@@ -810,6 +850,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
                     _current = handler;
                     _attempts = 0;
+                    _nodeBoard?.ResetToDefaults();
 
                     if (_observer is not null)
                     {

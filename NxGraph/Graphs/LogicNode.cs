@@ -54,6 +54,13 @@ public class LogicNode : INode
     /// "StateMachine" rather than colliding with <see cref="NodeId.Default"/>'s "Default".
     /// </summary>
     public static readonly LogicNode StateMachineMarker = new(NodeId.StateMachineMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for nested <b>sync</b> state-machine owner nodes during (de)serialization —
+    /// the composite-kind discriminator that lets a payload round-trip a sync-nested graph
+    /// back into a sync-runnable one (wire marker string "SyncStateMachine").
+    /// </summary>
+    public static readonly LogicNode SyncStateMachineMarker = new(NodeId.SyncStateMachineMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>

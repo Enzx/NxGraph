@@ -120,21 +120,27 @@ var graph = GraphBuilder
 
 ### Delays & timeouts
 
+Both runtimes have wait and timeout constructs; all timeout overloads take the timeout first.
+
 ```csharp
+// Sync (frame-stepped): WaitFor returns InProgress across ticks; ToWithTimeout checks the
+// deadline between ticks and feeds the unified fault model on overrun.
 var graph = GraphBuilder
     .StartWith(Start)
     .WaitFor(250.Milliseconds())
+    .ToWithTimeout(500.Milliseconds(), () => Result.Success)
     .To(End)
     .Build();
 
-// Timeout wrapper for a long-running state
-var timeoutGraph = GraphBuilder
-    .StartWith(Start).ToWithTimeout(500.Milliseconds(), _=> ResultHelpers.Failure)
-    .To(Release)
+// Async: WaitForAsync awaits a delay; ToWithTimeoutAsync cancels the wrapped logic on overrun.
+var asyncGraph = GraphBuilder
+    .StartWithAsync(StartAsync)
+    .WaitForAsync(250.Milliseconds())
+    .ToWithTimeoutAsync(500.Milliseconds(), async ct => await WorkAsync(ct))
     .Build();
 ```
 
-> `Timeout` cancels the wrapped logic if it exceeds the specified duration and routes to the next node. Prefer passing a linked `CancellationToken` inside your logic for graceful stops.
+> The async timeout cancels the wrapped logic via `CancellationToken` — honor the token inside your logic for graceful stops. The sync timeout cannot interrupt a node mid-execution (no cancellation in the sync runtime); it detects the deadline between ticks. Under `TimeoutBehavior.Fail` (default) a timeout is an ordinary node failure routed through failure edges and retries.
 
 ### Agents (dependency injection)
 
@@ -161,7 +167,9 @@ sm.SetAgent(new AppAgent { Log = logger });
 
 ### Blackboards (scoped shared memory)
 
-Orthogonal to the agent: typed-key working memory with **Global** (one board shared across machines) and **Graph** (one board per machine) scopes. Keys live on a `BlackboardSchema`; nodes access everything through the routed `Bb` context on the state bases — zero-boxing, zero-allocation reads/writes. Avoid `Dictionary<string, object>` contexts (string hashing + boxing per access).
+Orthogonal to the agent: typed-key working memory with **Global** (one board shared across machines), **Graph** (one board per machine), and **Node** (transient per-visit scratch) scopes. Keys live on a `BlackboardSchema`; nodes access everything through the routed `Bb` context on the state bases — zero-boxing, zero-allocation reads/writes. Avoid `Dictionary<string, object>` contexts (string hashing + boxing per access).
+
+Node-scoped boards are machine-owned: declare the schema on the graph via `.WithSchema(...)` and every machine auto-creates its own board — they can never be bound with `WithBlackboard`. Values reset to their registered defaults at every transition boundary (new visit, failure reroute, run start, reset, resume); in-place retries of the same visit keep the scratch. They are not durable: resuming a snapshot restores Node keys to defaults.
 
 ```csharp
 static class Keys

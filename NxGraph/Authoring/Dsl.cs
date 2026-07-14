@@ -45,6 +45,46 @@ public static partial class Dsl
     }
 
     /// <summary>
+    /// Adds a <b>sync</b> child-graph composite and wires a transition to it — the
+    /// runtime-parity twin of <see cref="SubGraph(StateToken, Graph, bool)"/>. Without
+    /// history the child runs as a nested sync <see cref="StateMachine"/>; with
+    /// <paramref name="history"/> a failed child resumes at its last-active node on re-entry
+    /// (see <see cref="HistoryState"/>). <paramref name="mode"/> decides whether the child
+    /// completes within one tick (<see cref="ParallelStepMode.RunToJoin"/>, usable from both
+    /// runtimes) or advances one node per tick (<see cref="ParallelStepMode.RoundPerTick"/>,
+    /// sync runtime only).
+    /// </summary>
+    public static StateToken SubGraph(this StateToken prev, ParallelStepMode mode, Graph child,
+        bool history = false)
+    {
+        Guard.NotNull(child, nameof(child));
+        return prev.To(CreateSyncComposite(mode, child, history));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync child-graph composite as its first state
+    /// (see <see cref="SubGraph(StateToken, ParallelStepMode, Graph, bool)"/>).
+    /// </summary>
+    public static StateToken SubGraph(this StartToken root, ParallelStepMode mode, Graph child,
+        bool history = false)
+    {
+        Guard.NotNull(child, nameof(child));
+        return root.To(CreateSyncComposite(mode, child, history));
+    }
+
+    private static ILogic CreateSyncComposite(ParallelStepMode mode, Graph child, bool history)
+    {
+        if (history)
+        {
+            return new HistoryState(child, mode);
+        }
+
+        StateMachine machine = new(child);
+        machine.SetStepMode(mode);
+        return machine;
+    }
+
+    /// <summary>
     /// Adds an orthogonal-regions composite and wires a transition to it: every region graph
     /// progresses one node per round (cooperative interleaving) until all reach a terminal
     /// result. Succeeds only when every region succeeded (see <see cref="AsyncParallelState"/>).

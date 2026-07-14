@@ -13,8 +13,8 @@ public class RetryPolicySerializationTests
     private static Graph BuildGraphWithRetry()
     {
         GraphBuilder builder = new();
-        NodeId start = builder.AddNode(new DummyState { Data = "flaky" }, isStart: true);
-        NodeId next = builder.AddNode(new DummyState { Data = "done" });
+        NodeId start = builder.AddNode((IAsyncLogic)new DummyState { Data = "flaky" }, isStart: true);
+        NodeId next = builder.AddNode((IAsyncLogic)new DummyState { Data = "done" });
         builder.AddTransition(start, next);
         builder.SetRetryPolicy(start,
             new RetryPolicy(3, TimeSpan.FromMilliseconds(250), BackoffKind.Exponential));
@@ -66,8 +66,8 @@ public class RetryPolicySerializationTests
     public async Task json_roundtrip_preserves_outcome_codes_and_names()
     {
         GraphBuilder builder = new();
-        NodeId start = builder.AddNode(new DummyState { Data = "start" }, isStart: true);
-        NodeId done = builder.AddNode(new DummyState { Data = "done" });
+        NodeId start = builder.AddNode((IAsyncLogic)new DummyState { Data = "start" }, isStart: true);
+        NodeId done = builder.AddNode((IAsyncLogic)new DummyState { Data = "done" });
         builder.AddTransition(start, done);
         builder.SetOutcome(done, 7, "Approved");
         Graph graph = builder.Build(throwOnError: false);
@@ -90,7 +90,7 @@ public class RetryPolicySerializationTests
     public async Task graph_without_retry_policies_roundtrips_with_none()
     {
         GraphBuilder builder = new();
-        builder.AddNode(new DummyState { Data = "only" }, isStart: true);
+        builder.AddNode((IAsyncLogic)new DummyState { Data = "only" }, isStart: true);
         Graph graph = builder.Build(throwOnError: false);
 
         await using MemoryStream stream = new();

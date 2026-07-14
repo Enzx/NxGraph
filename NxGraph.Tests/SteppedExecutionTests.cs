@@ -16,7 +16,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Result result = fsm.Execute();
 
@@ -33,7 +33,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Result result = fsm.Execute();
 
@@ -66,7 +66,7 @@ public class SteppedExecutionTests
             .StartWith(() => Result.Success)
             .To(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Result second = fsm.Execute();
@@ -83,7 +83,7 @@ public class SteppedExecutionTests
             .To(() => { counter++; return Result.Success; })
             .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Assert.That(fsm.Execute(), Is.EqualTo(Result.InProgress));
         Assert.That(counter, Is.EqualTo(1));
@@ -104,7 +104,7 @@ public class SteppedExecutionTests
             .To(() => { counter++; return Result.Failure; })
             .To(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute(); // node 1 → Continue
         Result second = fsm.Execute(); // node 2 → Failure (node 3 never runs)
@@ -147,7 +147,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
 
@@ -160,7 +160,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Auto);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         fsm.Execute();
 
@@ -175,7 +175,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
@@ -199,7 +199,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
         fsm.Execute();
 
         Assert.Throws<InvalidOperationException>(() => fsm.Execute());
@@ -212,7 +212,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Ignore);
+        fsm.SetRestartPolicy(RestartPolicy.Ignore);
 
         Result first = fsm.Execute();
         Result second = fsm.Execute();
@@ -232,7 +232,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Assert.That(counter, Is.EqualTo(1));
@@ -249,7 +249,7 @@ public class SteppedExecutionTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Auto);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         for (int i = 0; i < 5; i++)
             fsm.Execute();
@@ -269,7 +269,7 @@ public class SteppedExecutionTests
                 onEnter: () => enterCount++,
                 onExit: () => exitCount++))
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         fsm.Execute();
@@ -294,7 +294,7 @@ public class SteppedExecutionTests
                 return callCount < 3 ? Result.InProgress : Result.Success;
             })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Result r1 = fsm.Execute(); // node called (count=1), returns Continue
         Result r2 = fsm.Execute(); // node called again (count=2), returns Continue
@@ -321,7 +321,7 @@ public class SteppedExecutionTests
             })
             .To(() => { nodeBCount++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute(); // nodeA (count=1), Continue
         fsm.Execute(); // nodeA (count=2), Success → transitions to nodeB, returns Continue
@@ -402,7 +402,7 @@ public class SteppedExecutionTests
             .StartWith(() => Result.Success)
             .To(() => Result.Success)
             .ToStateMachine(observer);
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         // Tick 1: Created → Starting → Running (transition) → Running
         fsm.Execute();

@@ -20,17 +20,11 @@ public sealed class BlackboardSchema
 
     /// <summary>
     /// Creates a schema. <paramref name="scope"/> decides which <see cref="BlackboardContext"/>
-    /// slot the schema's keys route to; <see cref="BlackboardScope.Node"/> is reserved and rejected.
+    /// slot the schema's keys route to.
     /// </summary>
     public BlackboardSchema(string? name = null, BlackboardScope scope = BlackboardScope.Graph)
     {
-        if (scope == BlackboardScope.Node)
-        {
-            throw new ArgumentOutOfRangeException(nameof(scope), scope,
-                "BlackboardScope.Node is reserved for transient per-node keys and is not yet implemented.");
-        }
-
-        if (scope is not (BlackboardScope.Global or BlackboardScope.Graph))
+        if (scope is not (BlackboardScope.Global or BlackboardScope.Graph or BlackboardScope.Node))
         {
             throw new ArgumentOutOfRangeException(nameof(scope), scope, "Undefined blackboard scope.");
         }

@@ -103,7 +103,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Auto);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         fsm.Execute();
 
@@ -116,7 +116,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
 
@@ -129,7 +129,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
 
@@ -144,7 +144,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
         fsm.Execute();
 
         Result resetResult = fsm.Reset();
@@ -173,7 +173,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => { counter++; return Result.Success; })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Assert.That(counter, Is.EqualTo(1));
@@ -190,7 +190,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Success)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Completed));
@@ -204,7 +204,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => Result.Failure)
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         fsm.Execute();
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
@@ -223,7 +223,7 @@ public class StateMachineTests
                 return Result.Success;
             })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Ignore);
+        fsm.SetRestartPolicy(RestartPolicy.Ignore);
 
         Result first = fsm.Execute();
         Assert.That(first, Is.EqualTo(Result.Success));
@@ -247,7 +247,7 @@ public class StateMachineTests
                 return Result.Success;
             })
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Ignore);
+        fsm.SetRestartPolicy(RestartPolicy.Ignore);
 
         fsm.Execute();
         Assert.That(counter, Is.EqualTo(1));
@@ -380,7 +380,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Failed));
@@ -392,7 +392,7 @@ public class StateMachineTests
         StateMachine fsm = GraphBuilder
             .StartWith(() => throw new ApplicationException("boom"))
             .ToStateMachine();
-        fsm.SetResetPolicy(RestartPolicy.Auto);
+        fsm.SetRestartPolicy(RestartPolicy.Auto);
 
         Assert.Throws<ApplicationException>(() => fsm.Execute());
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Ready));
@@ -553,14 +553,18 @@ public class StateMachineTests
     // ── Mixed sync + ILogic nodes ───────────────────────────────────────
 
     [Test]
-    public void should_throw_when_node_does_not_implement_ISyncLogic()
+    public void should_throw_at_construction_when_node_does_not_implement_ISyncLogic()
     {
-        // AsyncRelayState (async only) does not implement ILogic.
-        StateMachine fsm = GraphBuilder
-            .StartWithAsync(new AsyncRelayState(_ => ResultHelpers.Success))
-            .ToStateMachine();
+        // AsyncRelayState (async only) does not implement ILogic. The constructor fails fast
+        // naming the offending node instead of throwing mid-run after earlier nodes already
+        // produced side effects.
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .ToAsync(new AsyncRelayState(_ => ResultHelpers.Success)).SetName("AsyncOnly")
+            .Build();
 
-        Assert.Throws<InvalidOperationException>(() => fsm.Execute());
+        ArgumentException? ex = Assert.Throws<ArgumentException>(() => graph.ToStateMachine());
+        Assert.That(ex!.Message, Does.Contain("AsyncOnly").And.Contain("ILogic"));
     }
 
     // ── Multiple runs ───────────────────────────────────────────────────
