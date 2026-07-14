@@ -18,8 +18,11 @@ public enum BlackboardScope
     Graph = 1,
 
     /// <summary>
-    /// Reserved for transient per-node keys reset at transition boundaries.
-    /// Not yet implemented: <see cref="BlackboardSchema"/> rejects it at construction.
+    /// Transient per-node scratch: values live for one node <i>visit</i> and reset to their
+    /// registered defaults at transition boundaries (success transition, failure-edge reroute,
+    /// run start, reset, resume). In-place retries keep the scratch — same visit, same values.
+    /// The board is machine-owned (auto-created from the graph's declared Node schema) and can
+    /// never be user-bound or shared; it is also not durable — resuming a snapshot resets it.
     /// </summary>
     Node = 2,
 }

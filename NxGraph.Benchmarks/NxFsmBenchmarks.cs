@@ -75,7 +75,7 @@ public class NxFsmBenchmarks
 
         _withTimeoutWrapper = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(_ => ValueTask.FromResult(Result.Success), 1.Seconds(), TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(1.Seconds(), _ => ValueTask.FromResult(Result.Success), TimeoutBehavior.Fail)
             .ToAsyncStateMachine();
 
         // Director that sequences through 10 nodes

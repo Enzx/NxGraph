@@ -27,6 +27,7 @@ public sealed partial class GraphBuilder
     private readonly Dictionary<int, string> _outcomeNames = new(); // code -> display name
     private BlackboardSchema? _graphSchema; // Graph-scoped declaration, baked into the Graph at Build()
     private BlackboardSchema? _globalSchema; // required Global-scoped schema, baked into the Graph at Build()
+    private BlackboardSchema? _nodeSchema; // transient Node-scoped schema, baked into the Graph at Build()
 
     /// <summary>
     /// Declares a blackboard schema on the graph, routed by the schema's scope: a
@@ -38,23 +39,35 @@ public sealed partial class GraphBuilder
     {
         Guard.NotNull(schema, nameof(schema));
 
-        if (schema.Scope == BlackboardScope.Global)
+        switch (schema.Scope)
         {
-            if (_globalSchema is not null)
-            {
-                throw new InvalidOperationException("A Global-scoped schema has already been declared on this graph.");
-            }
+            case BlackboardScope.Global:
+                if (_globalSchema is not null)
+                {
+                    throw new InvalidOperationException(
+                        "A Global-scoped schema has already been declared on this graph.");
+                }
 
-            _globalSchema = schema;
-        }
-        else
-        {
-            if (_graphSchema is not null)
-            {
-                throw new InvalidOperationException("A Graph-scoped schema has already been declared on this graph.");
-            }
+                _globalSchema = schema;
+                break;
+            case BlackboardScope.Node:
+                if (_nodeSchema is not null)
+                {
+                    throw new InvalidOperationException(
+                        "A Node-scoped schema has already been declared on this graph.");
+                }
 
-            _graphSchema = schema;
+                _nodeSchema = schema;
+                break;
+            default:
+                if (_graphSchema is not null)
+                {
+                    throw new InvalidOperationException(
+                        "A Graph-scoped schema has already been declared on this graph.");
+                }
+
+                _graphSchema = schema;
+                break;
         }
 
         return this;
@@ -350,7 +363,7 @@ public sealed partial class GraphBuilder
 
         NodeId graphId = _next.Next();
         return new Graph(graphId, nodes, edges, logic: null, retries, outcomes, outcomeNames,
-            _graphSchema, _globalSchema);
+            _graphSchema, _globalSchema, _nodeSchema);
     }
 
 

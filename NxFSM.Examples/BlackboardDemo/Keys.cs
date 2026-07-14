@@ -9,6 +9,7 @@ public enum GuardMode
     Investigate = 1,
     Chase = 2,
     Rest = 3,
+    Tackle = 4,
 }
 
 /// <summary>
@@ -39,4 +40,21 @@ public static class GuardKeys
     public static readonly BlackboardKey<int> Room = Schema.Register<int>("Room");
     public static readonly BlackboardKey<int> Suspicion = Schema.Register<int>("Suspicion");
     public static readonly BlackboardKey<int> Stamina = Schema.Register<int>("Stamina", 100);
+}
+
+/// <summary>
+/// Transient per-visit scratch: a <see cref="BlackboardScope.Node"/> schema. Unlike the other
+/// two scopes there is nothing to bind — declaring the schema on the graph is enough, and
+/// every machine auto-creates its own private board (binding one via <c>WithBlackboard</c>
+/// throws). Values reset to their registered defaults whenever the machine moves to another
+/// node (or a run starts/resets/resumes), while <b>in-place retries keep them</b> — which is
+/// exactly what <see cref="TackleState"/> needs: grip builds across retry attempts of one
+/// tackle, and evaporates the moment the visit ends. Node boards are deliberately not
+/// durable; they are also invisible to <c>BlackboardSerializer</c> saves below.
+/// </summary>
+public static class TackleKeys
+{
+    public static readonly BlackboardSchema Schema = new("tackle-scratch", BlackboardScope.Node);
+
+    public static readonly BlackboardKey<int> Grip = Schema.Register<int>("Grip");
 }

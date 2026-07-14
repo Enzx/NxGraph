@@ -339,7 +339,7 @@ public class ReplayTests
             .ToStateMachine(recorder);
         // Auto-restart is on by default, which would loop forever. Keep deterministic by
         // disabling auto-reset and only running once.
-        fsm.SetResetPolicy(RestartPolicy.Manual);
+        fsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Result r;
         do { r = fsm.Execute(); } while (r == Result.InProgress);

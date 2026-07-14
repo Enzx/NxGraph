@@ -177,6 +177,18 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
+                    // Sync twin: a plain nested sync StateMachine round-trips with its own
+                    // marker so the deserialized graph stays sync-runnable. Machine-level
+                    // config (step mode, restart policy) is not structure and does not ride.
+                    if (logicNode.Logic is StateMachine syncStateMachine)
+                    {
+                        GraphDto childDto = ToDto(syncStateMachine.Graph, depth + 1);
+                        subGraphs.Add(new SubGraphDto(index, childDto));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.SyncStateMachineMarker.Id.Name);
+                        break;
+                    }
+
                     // Other composites (history states, parallel states, custom containers)
                     // carry child graphs a user codec structurally cannot serialize — only
                     // GraphSerializer can recurse into them, and it doesn't yet. Fail with a
@@ -184,10 +196,15 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     // would either throw an opaque cast error or silently drop the children.
                     if (logicNode.AsyncLogic is ISubGraphProvider || logicNode.Logic is ISubGraphProvider)
                     {
+                        // Name the actual composite: sync composites sit behind a
+                        // SyncLogicAdapter, whose type name would only obscure the error.
+                        string compositeName = logicNode.Logic is ISubGraphProvider
+                            ? logicNode.Logic.GetType().Name
+                            : logicNode.AsyncLogic.GetType().Name;
                         throw new NotSupportedException(
-                            $"Node '{node.Id}' holds composite logic '{logicNode.AsyncLogic.GetType().Name}' " +
+                            $"Node '{node.Id}' holds composite logic '{compositeName}' " +
                             "which is not serializable. Only plain nested state machines " +
-                            "(.SubGraph(child) without history) are supported by GraphSerializer.");
+                            "(.SubGraph(...) without history, async or sync) are supported by GraphSerializer.");
                     }
 
                     // Unwrap SyncLogicAdapter so the codec receives the actual IAsyncLogic/ILogic,
@@ -316,7 +333,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 case NodeTextDto textDto:
                     // Marker check runs before the codec guard: the marker needs no codec, so a
                     // binary-codec serializer can read back the subgraph payloads it wrote.
-                    // "Default" is the legacy marker string (pre-fix payloads); both are only
+                    // "Default" is the legacy marker string (pre-fix payloads); markers are only
                     // honored when a subgraph payload actually claims this node index.
                     if ((textDto.Logic == LogicNode.StateMachineMarker.Id.Name ||
                          textDto.Logic == LegacyStateMachineMarkerName) &&
@@ -324,6 +341,13 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     {
                         // Keep a marker; we'll replace it after we rebuild subgraphs.
                         nodes[nodeDto.Index] = LogicNode.StateMachineMarker;
+                        break;
+                    }
+
+                    if (textDto.Logic == LogicNode.SyncStateMachineMarker.Id.Name &&
+                        subGraphOwners is not null && subGraphOwners.Contains(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.SyncStateMachineMarker;
                         break;
                     }
 
@@ -377,7 +401,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             // child Graph as the node itself — with the child graph's own (negative) NodeId —
             // silently corrupting transition routing; a crafted payload could also use it to
             // swap decoded logic for a nested machine.
-            if (nodes[subDto.OwnerIndex] != LogicNode.StateMachineMarker)
+            if (nodes[subDto.OwnerIndex] != LogicNode.StateMachineMarker &&
+                nodes[subDto.OwnerIndex] != LogicNode.SyncStateMachineMarker)
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} does not reference a state-machine marker node.");
 
@@ -388,7 +413,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         for (int i = 0; i < nodesLength; i++)
         {
             if (nodes[i] is not LogicNode marker) continue;
-            if (marker != LogicNode.StateMachineMarker) continue;
+            bool isSyncMarker = marker == LogicNode.SyncStateMachineMarker;
+            if (marker != LogicNode.StateMachineMarker && !isSyncMarker) continue;
 
             if (!ownerToSubGraph.TryGetValue(i, out Graph? childGraph))
                 throw new InvalidOperationException(
@@ -401,7 +427,13 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 _ => $"Node_{i}"
             };
 
-            IAsyncLogic stateMachineAsyncLogic = new AsyncStateMachine(childGraph);
+            // The marker kind discriminates the composite runtime: sync-nested machines come
+            // back as sync StateMachines (behind the sync-logic adapter), async ones as an
+            // AsyncStateMachine. Machine-level config (step mode, restart policy) is runtime
+            // configuration, not structure — deserialized machines carry the defaults.
+            IAsyncLogic stateMachineAsyncLogic = isSyncMarker
+                ? new SyncLogicAdapter(new StateMachine(childGraph))
+                : new AsyncStateMachine(childGraph);
             nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineAsyncLogic);
         }
 

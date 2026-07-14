@@ -25,7 +25,7 @@ public class TimeoutFaultModelTests
         bool cleanupRan = false;
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(HangForever, TimeSpan.FromMilliseconds(30), TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangForever, TimeoutBehavior.Fail)
             .OnErrorAsync(_ =>
             {
                 cleanupRan = true;
@@ -48,7 +48,7 @@ public class TimeoutFaultModelTests
         int executions = 0;
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(async ct =>
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), async ct =>
             {
                 executions++;
                 if (executions < 2)
@@ -57,7 +57,7 @@ public class TimeoutFaultModelTests
                 }
 
                 return Result.Success;
-            }, TimeSpan.FromMilliseconds(30), TimeoutBehavior.Fail)
+            }, TimeoutBehavior.Fail)
             .Retry(maxAttempts: 2)
             .Build();
 
@@ -75,7 +75,7 @@ public class TimeoutFaultModelTests
     {
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(HangForever, TimeSpan.FromMilliseconds(30), TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangForever, TimeoutBehavior.Fail)
             .Build();
 
         Result result = await graph.ToAsyncStateMachine().ExecuteAsync();

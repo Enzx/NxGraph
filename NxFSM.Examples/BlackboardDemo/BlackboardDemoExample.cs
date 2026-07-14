@@ -17,6 +17,9 @@ namespace NxFSM.Examples.BlackboardDemo;
 ///   <item>Agent vs blackboard as orthogonal channels — <c>WithBlackboard(...).WithBlackboard(...).WithAgent(...)</c></item>
 ///   <item><see cref="BlackboardScope.Global"/> world board shared by every machine (one guard raises the alarm, all react)</item>
 ///   <item><see cref="BlackboardScope.Graph"/> boards: one graph template, N guards, each with private working memory</item>
+///   <item><see cref="BlackboardScope.Node"/> scratch: the tackle's grip builds across in-place
+///   retries of one visit, resets to defaults when the visit ends, and needs zero binding —
+///   the machine owns the board (see <c>TackleState</c>)</item>
 ///   <item>Schema declarations on the graph (<c>.WithSchema</c>) with bind-time validation</item>
 ///   <item>Blackboard-driven branching: <c>.Switch(bb =&gt; bb.Get(GuardKeys.Mode))</c></item>
 ///   <item>Combined agent + context relay lambdas: <c>.ToAsync&lt;Guard&gt;((guard, bb, ct) =&gt; ...)</c></item>
@@ -44,14 +47,18 @@ public static class BlackboardDemoExample
 
         // ── 1. One graph template for every guard ───────────────────────
         // Sense → Decide (combined agent+context relay) → Switch on the guard's mode.
-        // The schemas are declared on the graph, so binding a board over the wrong
-        // schema fails fast at WithBlackboard time.
-        Graph guardBrain = GraphBuilder
+        // The Global/Graph schemas are declared on the graph, so binding a board over the
+        // wrong schema fails fast at WithBlackboard time. The Node-scoped schema is also a
+        // declaration — but it is the whole setup: every machine auto-creates its own
+        // transient board from it (see TackleState / TackleKeys).
+        TackleState tackle = new();
+        StateToken brain = GraphBuilder
             .StartWithAsync(new SenseState()).SetName("Sense")
             .ToAsync<Guard>((guard, bb, _) =>
             {
                 GuardMode mode =
                     bb.Get(WorldKeys.IntruderCaught) ? GuardMode.Rest :
+                    bb.Get(GuardKeys.Room) == bb.Get(WorldKeys.IntruderRoom) ? GuardMode.Tackle :
                     bb.Get(GuardKeys.Stamina) < 20 ? GuardMode.Rest :
                     bb.Get(GuardKeys.Suspicion) >= 50 ? GuardMode.Chase :
                     bb.Get(WorldKeys.AlarmLevel) > 0 ? GuardMode.Investigate :
@@ -63,11 +70,19 @@ public static class BlackboardDemoExample
             .CaseAsync(GuardMode.Patrol, new PatrolState())
             .CaseAsync(GuardMode.Investigate, new InvestigateState())
             .CaseAsync(GuardMode.Chase, new ChaseState())
+            .CaseAsync(GuardMode.Tackle, tackle)
             .CaseAsync(GuardMode.Rest, new RestState())
             .End().SetName("ModeSwitch")
             .WithSchema(GuardKeys.Schema)
             .WithSchema(WorldKeys.Schema)
-            .Build();
+            .WithSchema(TackleKeys.Schema);
+
+        // Attach the retry policy to the Tackle case: AddNode dedupes by instance, so
+        // TokenFor lands on the node the switch already added. The retries drive the
+        // Node-scoped grip accumulation inside one visit.
+        brain.Builder.TokenFor(brain.Builder.AddNode(tackle)).SetName("Tackle").Retry(maxAttempts: 3);
+
+        Graph guardBrain = brain.Build();
 
         // ── 2. One world board, one machine + board + agent per guard ───
         Blackboard world = new(WorldKeys.Schema);
@@ -88,6 +103,9 @@ public static class BlackboardDemoExample
         // ── 4. Save the world + every guard's board, then "restart" ─────
         // Boards are independent durability artifacts; between runs the machines are idle,
         // so no machine snapshot is needed here — the boards ARE the simulation state.
+        // Note what is absent: the Node-scoped tackle scratch. Transient scratch is not part
+        // of the durable flow — the fresh machines below recreate their own boards at
+        // defaults, which is the meaning of "transient".
         BlackboardSerializer serializer = new();
 
         MemoryStream worldSave = new();

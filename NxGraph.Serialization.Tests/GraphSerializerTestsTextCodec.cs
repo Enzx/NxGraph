@@ -197,6 +197,64 @@ public class GraphSerializerTestsTextCodec
         Assert.DoesNotThrow(() => s1.WriteByte(0x21)); // still open
     }
 
+    [Test]
+    public async Task Sync_nested_state_machine_roundtrips_and_stays_sync_runnable()
+    {
+        // The wire marker "SyncStateMachine" discriminates sync-nested machines from async
+        // ones, so a sync-authored graph deserializes back into a sync-runnable graph.
+        Graph child = GraphBuilder
+            .StartWith(new DummyState { Data = "c0" })
+            .To(new DummyState { Data = "c1" })
+            .Build();
+
+        Graph parent = GraphBuilder
+            .StartWith(new DummyState { Data = "p0" })
+            .SubGraph(NxGraph.Fsm.ParallelStepMode.RunToJoin, child)
+            .Build();
+
+        await using MemoryStream stream = new();
+        await _serializer.ToJsonAsync(parent, stream);
+        string json = Encoding.UTF8.GetString(stream.ToArray());
+        stream.Position = 0;
+
+        Graph roundTripped = await _serializer.FromJsonAsync(stream);
+        LogicNode composite = (LogicNode)roundTripped.GetNodeByIndex(1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Contain("SyncStateMachine"));
+            Assert.That(composite.Logic, Is.InstanceOf<NxGraph.Fsm.StateMachine>(),
+                "The sync marker must rebuild a sync StateMachine node, not an async one.");
+        });
+
+        // And the round-tripped graph runs on the sync runtime end to end.
+        NxGraph.Fsm.StateMachine machine = new(roundTripped);
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
+        {
+            result = machine.Execute();
+        }
+
+        Assert.That(result, Is.EqualTo(Result.Success));
+    }
+
+    [Test]
+    public void Sync_history_and_parallel_composites_still_throw_a_targeted_error()
+    {
+        Graph child = GraphBuilder
+            .StartWith(new DummyState { Data = "c0" })
+            .Build();
+
+        Graph withHistory = GraphBuilder
+            .StartWith(new DummyState { Data = "p0" })
+            .SubGraph(NxGraph.Fsm.ParallelStepMode.RunToJoin, child, history: true)
+            .Build();
+
+        NotSupportedException? ex = Assert.ThrowsAsync<NotSupportedException>(
+            async () => await _serializer.ToJsonAsync(withHistory, new MemoryStream()));
+        Assert.That(ex!.Message, Does.Contain("HistoryState"));
+    }
+
     private sealed class RawStringCodec : ILogicTextCodec
     {
         public IAsyncLogic Deserialize(string s) => new DummyState { Data = s };

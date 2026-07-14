@@ -70,6 +70,10 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     public readonly Graph Graph;
     private BlackboardContext _blackboards;
 
+    // Machine-owned transient scratch created from the graph's declared Node schema; null when
+    // none is declared, so board-less graphs pay nothing beyond a null check per transition.
+    private readonly Blackboard? _nodeBoard;
+
     IEnumerable<Graph> ISubGraphProvider.SubGraphs => [Graph];
     private readonly IStateMachineObserver? _observer;
 
@@ -115,6 +119,21 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
     public StateMachine(Graph graph, IStateMachineObserver? observer = null)
     {
+        Guard.NotNull(graph, nameof(graph));
+        // Fail fast on graphs the sync runtime cannot execute, instead of throwing mid-run
+        // after earlier nodes already produced side effects. The validator's StrictSyncOnly
+        // option offers the same check as a lint.
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (graph.TryGetNodeByIndex(i, out INode? node) && node!.Logic is null)
+            {
+                throw new ArgumentException(
+                    $"Node '{node.Id}' logic ({node.AsyncLogic.GetType().Name}) does not implement ILogic " +
+                    "and cannot be executed by the sync StateMachine. Use the async runtime for this graph, " +
+                    "or author the node with sync logic.", nameof(graph));
+            }
+        }
+
         Graph = graph;
         _observer = observer;
         _initial = graph.StartNode.Id;
@@ -123,6 +142,11 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _logReportStates = BuildLogReportTable(graph);
         _retryPolicies = graph.RetryPolicies;
         _outcomeCodes = graph.OutcomeCodes;
+        if (graph.NodeSchema is { } nodeSchema)
+        {
+            _nodeBoard = new Blackboard(nodeSchema);
+            _blackboards = new BlackboardContext(null, null, _nodeBoard);
+        }
     }
 
     private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
@@ -151,6 +175,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     public void SetBlackboard(Blackboard blackboard)
     {
         Guard.NotNull(blackboard, nameof(blackboard));
+        ThrowIfNodeScoped(blackboard);
         ValidateBoardAgainstDeclarations(blackboard);
         _blackboards = _blackboards.With(blackboard);
         Graph.SetBlackboards(in _blackboards);
@@ -159,7 +184,8 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     /// <summary>
     /// Receives the whole context from a parent machine's stamping walk (nested composite
     /// path). Validates against this machine's own graph declarations, so a conflicting
-    /// child schema fails loudly at stamp time.
+    /// child schema fails loudly at stamp time. The parent's Node slot is dropped — Node
+    /// boards are per-machine scratch; this machine composes its own from its own graph.
     /// </summary>
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
     {
@@ -173,8 +199,24 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             ValidateBoardAgainstDeclarations(globalBoard);
         }
 
-        _blackboards = context;
-        Graph.SetBlackboards(in context);
+        BlackboardContext own = context.WithoutNode();
+        if (_nodeBoard is not null)
+        {
+            own = own.With(_nodeBoard);
+        }
+
+        _blackboards = own;
+        Graph.SetBlackboards(in own);
+    }
+
+    private static void ThrowIfNodeScoped(Blackboard blackboard)
+    {
+        if (blackboard.Schema.Scope == BlackboardScope.Node)
+        {
+            throw new InvalidOperationException(
+                "Node-scoped boards are machine-owned transient scratch and cannot be bound — " +
+                "declare the schema on the graph via WithSchema(...) and each machine creates its own board.");
+        }
     }
 
     private void ValidateBoardAgainstDeclarations(Blackboard blackboard)
@@ -214,7 +256,30 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     /// </list>
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetResetPolicy(RestartPolicy policy) => _restartPolicy = policy;
+    public void SetRestartPolicy(RestartPolicy policy) => _restartPolicy = policy;
+
+    /// <summary>
+    /// Renamed alias of <see cref="SetRestartPolicy"/>. The sync and async machines shipped
+    /// with two names for the same feature; both now converge on <c>SetRestartPolicy</c>,
+    /// matching the <see cref="RestartPolicy"/> enum.
+    /// </summary>
+    [Obsolete("Renamed to SetRestartPolicy — the same feature carried two names across the sync/async machines. " +
+              "This alias forwards and will not change behavior.")]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetResetPolicy(RestartPolicy policy) => SetRestartPolicy(policy);
+
+    /// <summary>
+    /// How <see cref="State.Execute"/> maps child work onto ticks when this machine is used
+    /// directly or nested as a node: <see cref="ParallelStepMode.RoundPerTick"/> (default)
+    /// advances exactly one node per call; <see cref="ParallelStepMode.RunToJoin"/> loops to
+    /// the terminal result inside one call, which also makes the machine executable as a
+    /// node under the async runtime via the sync-logic adapter.
+    /// </summary>
+    public ParallelStepMode StepMode { get; private set; } = ParallelStepMode.RoundPerTick;
+
+    /// <summary>Sets <see cref="StepMode"/>. Machine-level runtime configuration — like the
+    /// restart policy, it is not part of the graph structure and does not serialize.</summary>
+    public void SetStepMode(ParallelStepMode mode) => StepMode = mode;
 
     /// <summary>
     /// Backwards-compatible switch for the legacy auto-reset behaviour.
@@ -252,6 +317,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _current = _initial;
         _attempts = 0;
         _nodeEntered = false;
+        _nodeBoard?.ResetToDefaults();
         TransitionTo(ExecutionStatus.Ready);
         return Result.Success;
     }
@@ -317,6 +383,13 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _attempts = snapshot.Attempts;
         _nodeEntered = snapshot.NodeEntered;
         LastOutcome = snapshot.LastOutcome;
+        // Snapshots are primitives-only: Node-scoped scratch is transient by definition
+        // and comes back as defaults after a resume.
+        _nodeBoard?.ResetToDefaults();
+        // A mid-run resume continues via Execute(), which skips the run-start init where
+        // the context is normally stamped — stamp here so a fresh machine's own boards
+        // (including the machine-owned Node board) reach the graph's nodes.
+        ApplyExecutionContext();
         // Reconstruct the cached terminal result so RestartPolicy.Ignore reports the
         // restored run's true outcome instead of the field initializer's Success.
         _terminalResult = snapshot.Status is ExecutionStatus.Failed or ExecutionStatus.Cancelled
@@ -362,6 +435,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _current = _initial;
         _attempts = 0;
         _nodeEntered = false;
+        _nodeBoard?.ResetToDefaults();
         LastOutcome = 0;
         _observer?.OnStateEntered(_current);
         TransitionTo(ExecutionStatus.Running);
@@ -384,6 +458,17 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         try
         {
             Result result = TickInternal();
+            if (StepMode == ParallelStepMode.RunToJoin)
+            {
+                // One-tick mode: complete the whole run inside this Execute() call. A node
+                // that keeps returning InProgress (multi-tick state) busy-spins here — the
+                // caller opted into the cost, mirroring ParallelState.RunToJoin.
+                while (result == Result.InProgress)
+                {
+                    result = TickInternal();
+                }
+            }
+
             if (result == Result.InProgress)
                 return Result.InProgress; // not finished; caller will Execute() again next frame
 
@@ -531,6 +616,9 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
                 _current = next;
                 _attempts = 0;
+                // New visit begins: transient Node-scoped scratch resets with the
+                // attempt counter (in-place retries keep both).
+                _nodeBoard?.ResetToDefaults();
 
                 _observer?.OnStateEntered(_current);
 
@@ -571,6 +659,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
                 _current = handler;
                 _attempts = 0;
+                _nodeBoard?.ResetToDefaults();
 
                 _observer?.OnStateEntered(_current);
 

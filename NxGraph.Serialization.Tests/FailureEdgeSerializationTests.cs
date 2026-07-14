@@ -13,9 +13,9 @@ public class FailureEdgeSerializationTests
     private static Graph BuildGraphWithFailureEdge()
     {
         GraphBuilder builder = new();
-        NodeId start = builder.AddNode(new DummyState { Data = "work" }, isStart: true);
-        NodeId next = builder.AddNode(new DummyState { Data = "done" });
-        NodeId handler = builder.AddNode(new DummyState { Data = "cleanup" });
+        NodeId start = builder.AddNode((IAsyncLogic)new DummyState { Data = "work" }, isStart: true);
+        NodeId next = builder.AddNode((IAsyncLogic)new DummyState { Data = "done" });
+        NodeId handler = builder.AddNode((IAsyncLogic)new DummyState { Data = "cleanup" });
         builder.AddTransition(start, next);
         builder.AddFailureTransition(start, handler);
         return builder.Build(throwOnError: false);
