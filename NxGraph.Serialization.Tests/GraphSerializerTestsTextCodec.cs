@@ -239,20 +239,28 @@ public class GraphSerializerTestsTextCodec
     }
 
     [Test]
-    public void Sync_history_and_parallel_composites_still_throw_a_targeted_error()
+    public void Dynamic_parallel_composites_still_throw_a_targeted_error()
     {
-        Graph child = GraphBuilder
-            .StartWith(new DummyState { Data = "c0" })
+        // Since v4 the history/parallel composites ride the payload; the dynamic variants
+        // cannot (their region selector is a delegate) and must keep the targeted error,
+        // which now names the supported set.
+        Graph region = GraphBuilder
+            .StartWith(new DummyState { Data = "r0" })
             .Build();
 
-        Graph withHistory = GraphBuilder
+        Graph withDynamicParallel = GraphBuilder
             .StartWith(new DummyState { Data = "p0" })
-            .SubGraph(NxGraph.Fsm.ParallelStepMode.RunToJoin, child, history: true)
+            .Parallel(NxGraph.Fsm.ParallelStepMode.RunToJoin, _ => NxGraph.Fsm.RegionMask.Bit(0), region)
             .Build();
 
         NotSupportedException? ex = Assert.ThrowsAsync<NotSupportedException>(
-            async () => await _serializer.ToJsonAsync(withHistory, new MemoryStream()));
-        Assert.That(ex!.Message, Does.Contain("HistoryState"));
+            async () => await _serializer.ToJsonAsync(withDynamicParallel, new MemoryStream()));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("DynamicParallelState"));
+            Assert.That(ex.Message, Does.Contain("history composites"),
+                "The targeted error names what is supported post-v4.");
+        });
     }
 
     private sealed class RawStringCodec : ILogicTextCodec

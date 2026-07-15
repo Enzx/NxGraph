@@ -9,12 +9,13 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
 
     private const int VersionOneHeaderCount = 6;
     private const int VersionTwoHeaderCount = 9;
+    private const int VersionFourHeaderCount = 10;
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {
         // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[],
-        //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[]]
-        writer.WriteArrayHeader(VersionTwoHeaderCount);
+        //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[], 9.Composites[]]
+        writer.WriteArrayHeader(VersionFourHeaderCount);
         writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
@@ -27,6 +28,8 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             .Serialize(ref writer, value.OutcomeCodes, options);
         options.Resolver.GetFormatterWithVerify<OutcomeNameDto[]>()
             .Serialize(ref writer, value.OutcomeNames, options);
+        options.Resolver.GetFormatterWithVerify<CompositeDto[]>()
+            .Serialize(ref writer, value.Composites, options);
     }
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -47,9 +50,12 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 1 when count < VersionOneHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionOneHeaderCount} elements, got {count}");
-            case 2 when count < VersionTwoHeaderCount:
+            case 2 or 3 when count < VersionTwoHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionTwoHeaderCount} elements, got {count}");
+            case 4 when count < VersionFourHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionFourHeaderCount} elements, got {count}");
         }
 
         int index = reader.ReadInt32();
@@ -74,9 +80,17 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
                 .Deserialize(ref reader, options);
         }
 
+        // Pre-v4 payloads end after OutcomeNames; the composite section arrived with version 4.
+        CompositeDto[] composites = [];
+        if (count >= VersionFourHeaderCount)
+        {
+            composites = options.Resolver.GetFormatterWithVerify<CompositeDto[]>()
+                .Deserialize(ref reader, options);
+        }
+
         reader.Depth--;
 
-        return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames)
-            { Version = version };
+        return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames,
+            composites) { Version = version };
     }
 }

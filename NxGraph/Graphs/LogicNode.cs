@@ -61,6 +61,30 @@ public class LogicNode : INode
     /// back into a sync-runnable one (wire marker string "SyncStateMachine").
     /// </summary>
     public static readonly LogicNode SyncStateMachineMarker = new(NodeId.SyncStateMachineMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for async history-composite owner nodes during (de)serialization
+    /// (wire marker string "HistoryState", payload version 4).
+    /// </summary>
+    public static readonly LogicNode HistoryStateMarker = new(NodeId.HistoryStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for <b>sync</b> history-composite owner nodes during (de)serialization
+    /// (wire marker string "SyncHistoryState", payload version 4).
+    /// </summary>
+    public static readonly LogicNode SyncHistoryStateMarker = new(NodeId.SyncHistoryStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for async parallel-composite owner nodes during (de)serialization
+    /// (wire marker string "ParallelState", payload version 4).
+    /// </summary>
+    public static readonly LogicNode ParallelStateMarker = new(NodeId.ParallelStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for <b>sync</b> parallel-composite owner nodes during (de)serialization
+    /// (wire marker string "SyncParallelState", payload version 4).
+    /// </summary>
+    public static readonly LogicNode SyncParallelStateMarker = new(NodeId.SyncParallelStateMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>
