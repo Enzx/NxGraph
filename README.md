@@ -75,7 +75,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
 - **Predictable branching**: fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`.
-- **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`, and `.ToWithTimeoutAsync(...)`.
+- **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`/`.WaitFor(...)`, and `.ToWithTimeoutAsync(...)`/`.ToWithTimeout(...)` — every construct has twins in both runtimes.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
 - **Diagnostics built in**: validate graphs, inspect Mermaid output, attach observers, capture replay logs, or emit `Activity` traces.
 - **Both async and sync**: use `AsyncStateMachine` for async logic and `StateMachine` for sync-only flows.
@@ -235,6 +235,16 @@ var timed = GraphBuilder
 
 With `TimeoutBehavior.Fail` an expired timeout is an ordinary node failure — it consumes the node's retry budget and follows its failure edge like any other `Result.Failure` (see the next section). `TimeoutBehavior.Throw` raises a `TimeoutException` instead.
 
+The sync runtime has frame-stepped twins. `.WaitFor(TimeSpan)` returns `Result.InProgress` across ticks until the duration elapses (a `Stopwatch` timestamp comparison — no timers, no allocation); `.ToWithTimeout(timeout, ...)` runs the wrapped logic once per tick and produces the timeout outcome when it overstays the deadline. Because the sync runtime has no cancellation, the deadline is detected *between* ticks — a node cannot be interrupted mid-execution. Both are sync-only (`WaitFor`'s node-level `InProgress` is rejected by the async loop); all timeout overloads, sync and async, take the timeout first.
+
+```csharp
+var syncFlow = GraphBuilder
+    .StartWith(() => Result.Success)
+    .WaitFor(250.Milliseconds())
+    .ToWithTimeout(2.Seconds(), () => Result.Success)
+    .Build();
+```
+
 ### Error handling: retries and failure edges
 
 A node returning `Result.Failure` flows through one unified fault model: first its per-node `RetryPolicy` re-runs it in place, then its **failure edge** (if any) routes to a handler, and only when neither applies does the machine terminate with `Failure`.
@@ -332,7 +342,7 @@ await fsm.ExecuteAsync();
 
 ### Blackboards (scoped shared memory)
 
-The agent is *who* is acting (an `Enemy`, a workflow context); a **blackboard** is the graph's *working memory*. They are orthogonal channels — both reach nodes simultaneously. Blackboards are typed-key slot stores with two scopes: **Global** (one user-owned board shared by every machine — world state) and **Graph** (one board per machine/entity). Reads and writes are zero-boxing, zero-allocation array accesses.
+The agent is *who* is acting (an `Enemy`, a workflow context); a **blackboard** is the graph's *working memory*. They are orthogonal channels — both reach nodes simultaneously. Blackboards are typed-key slot stores with three scopes: **Global** (one user-owned board shared by every machine — world state), **Graph** (one board per machine/entity), and **Node** (transient per-visit scratch). Reads and writes are zero-boxing, zero-allocation array accesses.
 
 ```csharp
 using NxGraph.Blackboards;
@@ -379,7 +389,23 @@ AsyncStateMachine<Enemy> fsm = graph.ToAsyncStateMachine<Enemy>()
     .WithAgent(enemy);
 ```
 
-> **Anti-pattern:** don't use `Dictionary<string, object>` as a context — every access pays string hashing plus boxing. A `BlackboardKey<T>` slot is a schema-checked array read: type-safe, allocation-free, and serializable (see `BlackboardSerializer` in `NxGraph.Serialization` — each board is its own durability artifact alongside the graph payload and machine snapshot).
+**Node scope (transient per-visit scratch).** A `BlackboardSchema` with `BlackboardScope.Node` declares keys whose values live for one node *visit*: they reset to their registered defaults at every transition boundary (success transition, failure-edge reroute, run start, reset, resume), while in-place retries of the same visit keep the scratch — partial progress across attempts is the point. Node boards are **machine-owned**: declare the schema on the graph with `.WithSchema(...)` and every machine auto-creates its own board (two machines over one shared `Graph` never see each other's scratch); binding one with `WithBlackboard` throws. They are deliberately **not durable** — resuming a `StateMachineSnapshot` restores Node keys to defaults.
+
+```csharp
+static class ScratchKeys
+{
+    public static readonly BlackboardSchema Schema = new("scratch", BlackboardScope.Node);
+    public static readonly BlackboardKey<int> BytesSent = Schema.Register<int>("BytesSent");
+}
+
+// bb.GetRef(ScratchKeys.BytesSent) accumulates across retries of one visit,
+// and is back to 0 when the machine moves to the next node.
+Graph graph = GraphBuilder.StartWith(new UploadState()).Retry(3)
+    .WithSchema(ScratchKeys.Schema)
+    .Build();
+```
+
+> **Anti-pattern:** don't use `Dictionary<string, object>` as a context — every access pays string hashing plus boxing. A `BlackboardKey<T>` slot is a schema-checked array read: type-safe, allocation-free, and serializable (see `BlackboardSerializer` in `NxGraph.Serialization` — each board is its own durability artifact alongside the graph payload and machine snapshot; Node boards are transient and never serialize).
 
 Like the state machines, a blackboard is owned by a single runner at a time (not thread-safe).
 
@@ -431,7 +457,7 @@ public class FsmRunner : MonoBehaviour
             .To(new AlertState()).SetName("Alert")
             .To(new AttackState()).SetName("Attack")
             .ToStateMachine();
-        _fsm.SetResetPolicy(RestartPolicy.Ignore);
+        _fsm.SetRestartPolicy(RestartPolicy.Ignore);
     }
 
     void Update()
@@ -507,6 +533,16 @@ Graph flow = GraphBuilder
     .Build();
 ```
 
+The sync twin takes a `ParallelStepMode` (the same enum the parallel composites use): `.SubGraph(mode, child)` nests the child as a sync `StateMachine` node, `.SubGraph(mode, child, history: true)` builds a sync `HistoryState`. `RunToJoin` completes the child within one tick (and is therefore also runnable under the async machine via the sync-logic adapter); `RoundPerTick` advances one child node per parent tick, sync runtime only:
+
+```csharp
+Graph flow = GraphBuilder
+    .StartWith(() => Result.Success)
+    .SubGraph(ParallelStepMode.RoundPerTick, child, history: true)
+    .To(() => Result.Success)
+    .Build();
+```
+
 **Parallel regions (AND-states).** `.Parallel(regions...)` runs N region graphs via **cooperative interleaving**: each round advances every still-running region by one node, and the composite joins when all regions reach a terminal result — `Success` only if every region succeeded, otherwise `Failure` through the parent's fault model (failure edges, retries). This is deliberately not thread-concurrent, which keeps the hot path allocation-free:
 
 ```csharp
@@ -577,6 +613,7 @@ while (result == Result.InProgress)
 - `Suspend()` is legal between `StepAsync()`/`Execute()` calls of a stepped run, or on an idle/terminal machine; it captures the current node, status, retry attempts, and `LastOutcome`.
 - `Resume(snapshot)` requires a graph that is structurally equivalent (same node indices); re-attach agents/blackboards before continuing.
 - A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), the snapshot, and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
+- Node-scoped blackboards are transient by definition and are **not** part of the durable flow: `Resume(snapshot)` restores Node keys to their registered defaults — a node suspended mid-visit loses its scratch.
 - Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a resumed composite starts its visit fresh.
 
 ### Restart policy
@@ -590,7 +627,7 @@ Control what happens after the machine reaches a terminal status (`Completed`, `
 | `RestartPolicy.Ignore` | Stays terminal; further `Execute()` calls are no-ops that return the cached result |
 
 ```csharp
-fsm.SetResetPolicy(RestartPolicy.Auto);
+fsm.SetRestartPolicy(RestartPolicy.Auto);
 
 // Backwards-compatible alias:
 fsm.SetAutoReset(true);  // maps to RestartPolicy.Auto

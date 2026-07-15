@@ -178,6 +178,36 @@ public static class GraphValidator
             }
         }
 
+        // 4b) Strict async-compatibility validation: RoundPerTick composites return node-level
+        // InProgress, which the async run loop rejects mid-run.
+        if (options.StrictAsyncCompatible)
+        {
+            foreach (int index in visited)
+            {
+                if (!graph.TryGetNodeByIndex(index, out INode? node) || node is not LogicNode logicNode)
+                {
+                    continue;
+                }
+
+                bool roundPerTick = logicNode.Logic switch
+                {
+                    ParallelState p => p.Mode == ParallelStepMode.RoundPerTick,
+                    DynamicParallelState d => d.Mode == ParallelStepMode.RoundPerTick,
+                    HistoryState h => h.Mode == ParallelStepMode.RoundPerTick,
+                    StateMachine m => m.StepMode == ParallelStepMode.RoundPerTick,
+                    _ => false,
+                };
+
+                if (roundPerTick)
+                {
+                    result.Add(Severity.Error,
+                        "Node holds a RoundPerTick sync composite, which returns node-level InProgress — " +
+                        "the async runtime rejects it mid-run. Use RunToJoin for graphs destined for the " +
+                        "AsyncStateMachine.", node.Id);
+                }
+            }
+        }
+
         // 5) If AllNodes are supplied, check for unreachable nodes and duplicate names
         if (options.AllNodes is { Count: > 0 } all)
         {
@@ -231,6 +261,13 @@ public static class GraphValidator
             result.Add(Severity.Info,
                 "A blackboard schema is declared but no node implements IBlackboardSettable — " +
                 "bound boards will never reach any logic.", graph.Id);
+        }
+
+        if (graph.NodeSchema is not null && !AnyBlackboardSettable(graph))
+        {
+            result.Add(Severity.Info,
+                "A Node-scoped blackboard schema is declared but no node implements IBlackboardSettable — " +
+                "the machine-owned transient board will never reach any logic.", graph.Id);
         }
 
         WarnOnConflictingChildSchemas(graph, graph, result);

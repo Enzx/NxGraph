@@ -7,9 +7,10 @@ using NxGraph.Graphs;
 namespace NxFSM.Examples.ReadmeExamples;
 
 /// <summary>
-/// Scoped blackboards: one Global "world" board shared by every machine, plus one
-/// Graph-scoped board per enemy. Keys are declared once in static schemas; the graph is a
-/// shared template and each enemy binds its own board + agent.
+/// Scoped blackboards: one Global "world" board shared by every machine, one Graph-scoped
+/// board per enemy, and Node-scoped transient scratch that the machine owns. Keys are
+/// declared once in static schemas; the graph is a shared template and each enemy binds its
+/// own board + agent.
 /// </summary>
 public static class BlackboardExample
 {
@@ -96,5 +97,43 @@ public static class BlackboardExample
                           $"sightings: {world.Get(WorldKeys.Sightings)}");
         Console.WriteLine($"  Goblin distance: {goblinBoard.Get(EnemyKeys.TargetDistance)}, " +
                           $"archer speed after alarm: {archerBoard.Get(EnemyKeys.Speed)}");
+
+        await RunNodeScopeAsync();
+    }
+
+    // ── Node scope: transient per-visit scratch ──────────────────────────
+
+    private static class ScratchKeys
+    {
+        public static readonly BlackboardSchema Schema = new("scratch", BlackboardScope.Node);
+        public static readonly BlackboardKey<int> BytesSent = Schema.Register<int>("BytesSent");
+    }
+
+    private static async ValueTask RunNodeScopeAsync()
+    {
+        Console.WriteLine("=== Scoped Blackboards (Node: transient per-visit scratch) ===");
+
+        // Declaring the Node schema on the graph is the whole setup: the machine auto-creates
+        // its own board (WithBlackboard would throw for a Node-scoped board). The scratch
+        // survives in-place retries of one visit and resets when the machine moves on.
+        Graph graph = GraphBuilder
+            .StartWithAsync((bb, _) =>
+            {
+                ref int sent = ref bb.GetRef(ScratchKeys.BytesSent);
+                sent += 400; // partial progress kept across the retries of this visit
+                Console.WriteLine($"  Upload attempt: {sent}/1000 bytes sent.");
+                return sent >= 1000 ? ResultHelpers.Success : ResultHelpers.Failure;
+            }).SetName("Upload").Retry(maxAttempts: 5)
+            .ToAsync((bb, _) =>
+            {
+                Console.WriteLine($"  Next node sees BytesSent = {bb.Get(ScratchKeys.BytesSent)} " +
+                                  "(scratch reset on transition).");
+                return ResultHelpers.Success;
+            }).SetName("Verify")
+            .WithSchema(ScratchKeys.Schema)
+            .Build();
+
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync();
+        Console.WriteLine($"  Upload flow: {result}");
     }
 }

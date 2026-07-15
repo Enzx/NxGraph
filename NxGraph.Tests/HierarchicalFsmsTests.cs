@@ -92,7 +92,7 @@ public class HierarchicalFsmTests
                 onExit: () => log.Add("parent-exit")))
             .SetName("Cleanup")
             .ToStateMachine();
-        parentFsm.SetResetPolicy(RestartPolicy.Manual);
+        parentFsm.SetRestartPolicy(RestartPolicy.Manual);
 
         Result r1 = parentFsm.Execute(); // child node 1 runs
         Result r2 = parentFsm.Execute(); // child node 2 runs → child done, parent transitions to Cleanup
@@ -124,7 +124,7 @@ public class HierarchicalFsmTests
             .StartWith(childFsm)
             .To(() => Result.Success)
             .ToStateMachine();
-        parentFsm.SetResetPolicy(RestartPolicy.Manual);
+        parentFsm.SetRestartPolicy(RestartPolicy.Manual);
 
         // Tick 1: grandchild's only node
         // Tick 2: child's second node  (grandchild finished → child transitions)

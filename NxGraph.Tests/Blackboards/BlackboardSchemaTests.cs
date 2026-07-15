@@ -101,11 +101,10 @@ public class BlackboardSchemaTests
     }
 
     [Test]
-    public void node_scope_is_reserved_and_rejected()
+    public void node_scope_is_accepted()
     {
-        ArgumentOutOfRangeException? ex = Assert.Throws<ArgumentOutOfRangeException>(
-            () => _ = new BlackboardSchema("local", BlackboardScope.Node));
-        Assert.That(ex!.Message, Does.Contain("reserved"));
+        Assert.That(new BlackboardSchema("local", BlackboardScope.Node).Scope,
+            Is.EqualTo(BlackboardScope.Node));
     }
 
     [Test]

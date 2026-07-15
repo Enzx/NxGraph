@@ -13,12 +13,12 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(new AsyncRelayState(
+            .ToWithTimeoutAsync(100.Milliseconds(), new AsyncRelayState(
                     async ct =>
                     {
                         await Task.Delay(1000, ct);
                         return Result.Success;
-                    }), 100.Milliseconds(), TimeoutBehavior.Fail
+                    }), TimeoutBehavior.Fail
             )
             .ToAsyncStateMachine();
 
@@ -32,12 +32,12 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine throwing = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(new AsyncRelayState(async ct =>
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(100), new AsyncRelayState(async ct =>
                 {
                     await Task.Delay(1000, ct);
                     return Result.Success;
                 }),
-                TimeSpan.FromMilliseconds(100), TimeoutBehavior.Throw)
+                TimeoutBehavior.Throw)
             .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<TimeoutException>(async () => await throwing.ExecuteAsync());
@@ -51,11 +51,11 @@ public class TimeoutWrapperTests
 
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(async ct =>
+            .ToWithTimeoutAsync(2000.Milliseconds(), async ct =>
             {
                 await Task.Delay(5000, ct);
                 return Result.Success;
-            }, 2000.Milliseconds(), TimeoutBehavior.Fail) // timeout later than external cancel
+            }, TimeoutBehavior.Fail) // timeout later than external cancel
             .ToAsyncStateMachine();
 
         Assert.ThrowsAsync<TaskCanceledException>(async () =>
@@ -72,12 +72,12 @@ public class TimeoutWrapperTests
         // Using StartWithTimeout should throw when timeout <= 0
         Assert.Throws<ArgumentOutOfRangeException>(() =>
         {
-            StateToken _ = Dsl.StartWithTimeoutAsync(_ => ResultHelpers.Success, TimeSpan.Zero);
+            StateToken _ = Dsl.StartWithTimeoutAsync(TimeSpan.Zero, _ => ResultHelpers.Success);
         });
         Assert.Throws<ArgumentOutOfRangeException>(() =>
         {
             StateToken _ =
-                Dsl.StartWithTimeoutAsync(_ => ResultHelpers.Success, TimeSpan.FromMilliseconds(-1));
+                Dsl.StartWithTimeoutAsync(TimeSpan.FromMilliseconds(-1), _ => ResultHelpers.Success);
         });
     }
 
@@ -87,11 +87,11 @@ public class TimeoutWrapperTests
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(async ct =>
+            .ToWithTimeoutAsync(1.Seconds(), async ct =>
             {
                 await Task.Delay(50, ct); // finishes well before timeout
                 return Result.Success;
-            }, 1.Seconds(), TimeoutBehavior.Fail)
+            }, TimeoutBehavior.Fail)
             .ToAsyncStateMachine();
 
         Result result = await fsm.ExecuteAsync();

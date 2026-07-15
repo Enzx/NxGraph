@@ -24,4 +24,13 @@ public sealed class GraphValidationOptions(IReadOnlyList<NodeId>? allNodes = nul
     /// Use this to validate that a graph can be executed by the synchronous <c>StateMachine</c> runtime.
     /// </summary>
     public bool StrictSyncOnly { get; set; }
+
+    /// <summary>
+    /// If true, emit an Error when a reachable node holds a sync composite configured with
+    /// <c>ParallelStepMode.RoundPerTick</c> (including a nested sync <c>StateMachine</c> in its
+    /// default RoundPerTick step mode). Such nodes return node-level <c>Result.InProgress</c>,
+    /// which the async runtime rejects mid-run — use this to validate a graph destined for
+    /// the <c>AsyncStateMachine</c>.
+    /// </summary>
+    public bool StrictAsyncCompatible { get; set; }
 }

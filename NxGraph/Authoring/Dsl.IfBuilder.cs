@@ -108,6 +108,12 @@ public static partial class Dsl
             return ToAsync(AsyncWait.For(delay));
         }
 
+        /// <summary>Chains a sync multi-tick wait state onto the "then" branch (see <see cref="WaitState"/>).</summary>
+        public BranchBuilder WaitFor(TimeSpan delay)
+        {
+            return To(new WaitState(delay));
+        }
+
         /// <summary>Adds an async "else" branch.</summary>
         public BranchEnd ElseAsync(IAsyncLogic asyncLogic)
         {
@@ -158,6 +164,12 @@ public static partial class Dsl
         public StateToken WaitForAsync(TimeSpan delay)
         {
             return ToAsync(AsyncWait.For(delay));
+        }
+
+        /// <summary>Adds a sync multi-tick wait state after the "else" branch (see <see cref="WaitState"/>).</summary>
+        public StateToken WaitFor(TimeSpan delay)
+        {
+            return To(new WaitState(delay));
         }
 
         public Graph Build(bool throwOnError = false)

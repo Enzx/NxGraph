@@ -471,6 +471,162 @@ public class AllocationGateTests
             .WithBlackboard(local));
     }
 
+    // ── Blackboards: Node scope (per-transition reset included) ─────────
+
+    private static Graph NodeScopeChain(bool sync)
+    {
+        BlackboardSchema schema = new("scratch", BlackboardScope.Node);
+        BlackboardKey<int> value = schema.Register<int>("value");
+
+        if (sync)
+        {
+            return GraphBuilder
+                .StartWith(bb =>
+                {
+                    bb.Set(value, bb.Get(value) + 3); // always starts from the default
+                    return Result.Success;
+                })
+                .To(bb => bb.Get(value) == 0 ? Result.Success : Result.Success) // reset consumed
+                .WithSchema(schema)
+                .Build();
+        }
+
+        return GraphBuilder
+            .StartWithAsync((bb, _) =>
+            {
+                bb.Set(value, bb.Get(value) + 3);
+                return ResultHelpers.Success;
+            })
+            .ToAsync((bb, _) => bb.Get(value) == 0 ? ResultHelpers.Success : ResultHelpers.Success)
+            .WithSchema(schema)
+            .Build();
+    }
+
+    [Test]
+    public async Task async_node_scope_produce_consume_is_allocation_free()
+    {
+        await AssertZeroAllocAsync(NodeScopeChain(sync: false).ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_node_scope_produce_consume_is_allocation_free()
+    {
+        AssertZeroAlloc(NodeScopeChain(sync: true).ToStateMachine());
+    }
+
+    // ── Sync twins of the async gate cases ──────────────────────────────
+
+    [Test]
+    public void sync_failure_routing_is_allocation_free()
+    {
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Failure)
+            .OnError(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_no_backoff_retry_is_allocation_free()
+    {
+        int calls = 0;
+        Graph graph = GraphBuilder
+            .StartWith(() => ++calls % 3 == 0 ? Result.Success : Result.Failure)
+            .Retry(maxAttempts: 3)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_goto_loop_is_allocation_free()
+    {
+        int laps = 0;
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success).SetName("Top")
+            .To(() => ++laps % 3 != 0 ? Result.Success : Result.Failure)
+            .Goto("Top")
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_entry_exit_actions_are_allocation_free()
+    {
+        int counter = 0;
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .OnEnter(() => counter++)
+            .OnExit(() => counter++)
+            .To(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_subgraph_run_to_join_is_allocation_free()
+    {
+        Graph parent = GraphBuilder
+            .StartWith(() => Result.Success)
+            .SubGraph(ParallelStepMode.RunToJoin, SyncChain(3).Build())
+            .To(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_subgraph_round_per_tick_is_allocation_free()
+    {
+        Graph parent = GraphBuilder
+            .StartWith(() => Result.Success)
+            .SubGraph(ParallelStepMode.RoundPerTick, SyncChain(3).Build())
+            .To(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_history_composite_happy_path_is_allocation_free()
+    {
+        Graph parent = GraphBuilder
+            .StartWith(() => Result.Success)
+            .SubGraph(ParallelStepMode.RunToJoin, SyncChain(3).Build(), history: true)
+            .Build();
+
+        AssertZeroAlloc(parent.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_wait_for_ticking_is_allocation_free()
+    {
+        // Deterministic fake clock: every read advances one second, so a 1.5 s wait costs
+        // exactly two ticks per run — the gate covers the record/check path both ways.
+        long now = 0;
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(new WaitState(TimeSpan.FromSeconds(1.5),
+                () => now += System.Diagnostics.Stopwatch.Frequency))
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_to_with_timeout_happy_path_is_allocation_free()
+    {
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .ToWithTimeout(TimeSpan.FromSeconds(5), () => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
     [Test]
     public void sync_chain_of_10_is_allocation_free()
     {

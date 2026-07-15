@@ -58,7 +58,8 @@ public sealed class Graph : INode, IGraph
     public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null,
         RetryPolicy[]? retryPolicies = null, int[]? outcomeCodes = null,
         IReadOnlyDictionary<int, string>? outcomeNames = null,
-        BlackboardSchema? schema = null, BlackboardSchema? globalSchema = null)
+        BlackboardSchema? schema = null, BlackboardSchema? globalSchema = null,
+        BlackboardSchema? nodeSchema = null)
     {
         if (schema is not null && schema.Scope != BlackboardScope.Graph)
         {
@@ -68,6 +69,11 @@ public sealed class Graph : INode, IGraph
         if (globalSchema is not null && globalSchema.Scope != BlackboardScope.Global)
         {
             throw new ArgumentException("The required global schema must be Global-scoped.", nameof(globalSchema));
+        }
+
+        if (nodeSchema is not null && nodeSchema.Scope != BlackboardScope.Node)
+        {
+            throw new ArgumentException("The transient node schema must be Node-scoped.", nameof(nodeSchema));
         }
 
         Guard.NotNull(nodes, nameof(nodes));
@@ -106,6 +112,7 @@ public sealed class Graph : INode, IGraph
         OutcomeNames = outcomeNames;
         Schema = schema;
         GlobalSchema = globalSchema;
+        NodeSchema = nodeSchema;
         AsyncLogic = logic ?? new EmptyAsyncLogic();
     }
 
@@ -121,6 +128,13 @@ public sealed class Graph : INode, IGraph
     /// The Global-scoped schema this graph requires, or <c>null</c> when it declares none.
     /// </summary>
     public BlackboardSchema? GlobalSchema { get; }
+
+    /// <summary>
+    /// The Node-scoped (transient per-visit) schema declared via <c>WithSchema(...)</c>, or
+    /// <c>null</c> when the graph declares none. Machines auto-create their own board from
+    /// this schema — Node boards are never user-bound, shared, or serialized.
+    /// </summary>
+    public BlackboardSchema? NodeSchema { get; }
 
     /// <summary>
     /// The per-node retry policies indexed by <see cref="NodeId.Index"/>, or <c>null</c>

@@ -14,16 +14,16 @@ namespace NxGraph.Blackboards;
 /// </summary>
 public readonly struct BlackboardContext
 {
-    // Node scope (reserved) will add a third slot here; the layout is private and
-    // invisible to the public API baseline.
     private readonly Blackboard? _global;
     private readonly Blackboard? _graph;
+    private readonly Blackboard? _node;
 
     /// <summary>
     /// Creates a context from explicit per-scope boards. Each board's schema scope must
-    /// match the slot it is passed for.
+    /// match the slot it is passed for. The <paramref name="node"/> slot is machine-owned
+    /// transient scratch — user code composes contexts through the machines, never directly.
     /// </summary>
-    public BlackboardContext(Blackboard? global, Blackboard? graph)
+    public BlackboardContext(Blackboard? global, Blackboard? graph, Blackboard? node = null)
     {
         if (global is not null && global.Schema.Scope != BlackboardScope.Global)
         {
@@ -39,12 +39,20 @@ public readonly struct BlackboardContext
                 "and cannot occupy the Graph slot.", nameof(graph));
         }
 
+        if (node is not null && node.Schema.Scope != BlackboardScope.Node)
+        {
+            throw new ArgumentException(
+                $"Board over schema '{node.Schema.Name ?? "<unnamed>"}' is {node.Schema.Scope}-scoped " +
+                "and cannot occupy the Node slot.", nameof(node));
+        }
+
         _global = global;
         _graph = graph;
+        _node = node;
     }
 
     /// <summary><see langword="true"/> when no board is bound for any scope.</summary>
-    public bool IsEmpty => _global is null && _graph is null;
+    public bool IsEmpty => _global is null && _graph is null && _node is null;
 
     /// <summary>The Global-scoped board, or <see langword="null"/> when unbound. Escape hatch for bulk ops and serialization.</summary>
     public Blackboard? Global => _global;
@@ -52,11 +60,18 @@ public readonly struct BlackboardContext
     /// <summary>The Graph-scoped board, or <see langword="null"/> when unbound. Escape hatch for bulk ops and serialization.</summary>
     public Blackboard? Graph => _graph;
 
+    /// <summary>
+    /// The machine-owned Node-scoped board, or <see langword="null"/> when the graph declares
+    /// no Node schema. Transient per-visit scratch — not durable, never user-bound.
+    /// </summary>
+    public Blackboard? Node => _node;
+
     /// <summary>The board bound for <paramref name="scope"/>, or <see langword="null"/> when unbound.</summary>
     public Blackboard? Board(BlackboardScope scope) => scope switch
     {
         BlackboardScope.Global => _global,
         BlackboardScope.Graph => _graph,
+        BlackboardScope.Node => _node,
         _ => null,
     };
 
@@ -70,10 +85,19 @@ public readonly struct BlackboardContext
     public BlackboardContext With(Blackboard board)
     {
         Guard.NotNull(board, nameof(board));
-        return board.Schema.Scope == BlackboardScope.Global
-            ? new BlackboardContext(board, _graph)
-            : new BlackboardContext(_global, board);
+        return board.Schema.Scope switch
+        {
+            BlackboardScope.Global => new BlackboardContext(board, _graph, _node),
+            BlackboardScope.Graph => new BlackboardContext(_global, board, _node),
+            _ => new BlackboardContext(_global, _graph, board),
+        };
     }
+
+    /// <summary>
+    /// Returns a copy with the machine-owned Node slot cleared. Machines drop a parent's Node
+    /// board when receiving a context through the stamping walk — each machine composes its own.
+    /// </summary>
+    public BlackboardContext WithoutNode() => _node is null ? this : new BlackboardContext(_global, _graph);
 
     /// <summary>Reads <paramref name="key"/> from the board its schema scope routes to.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -112,10 +136,16 @@ public readonly struct BlackboardContext
             ThrowUninitializedKey();
         }
 
-        Blackboard? board = key.Schema!.Scope == BlackboardScope.Global ? _global : _graph;
+        BlackboardScope scope = key.Schema!.Scope;
+        Blackboard? board = scope switch
+        {
+            BlackboardScope.Global => _global,
+            BlackboardScope.Graph => _graph,
+            _ => _node,
+        };
         if (board is null)
         {
-            ThrowUnboundScope(key.Schema.Scope, key.Name);
+            ThrowUnboundScope(scope, key.Name);
         }
 
         return board!;
@@ -129,6 +159,13 @@ public readonly struct BlackboardContext
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowUnboundScope(BlackboardScope scope, string keyName)
     {
+        if (scope == BlackboardScope.Node)
+        {
+            throw new InvalidOperationException(
+                $"node key '{keyName}' used but no node blackboard — declare a Node-scoped schema " +
+                "via WithSchema(...) on the graph; the machine creates its own board from it.");
+        }
+
         string scopeWord = scope == BlackboardScope.Global ? "global" : "graph";
         throw new InvalidOperationException(
             $"{scopeWord} key '{keyName}' used but no {scopeWord} blackboard bound — " +
