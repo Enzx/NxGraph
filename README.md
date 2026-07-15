@@ -38,6 +38,8 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Linear flows](#linear-flows)
   - [Branching with `If`](#branching-with-if)
   - [Branching with `Switch`](#branching-with-switch)
+  - [Custom directors](#custom-directors)
+  - [Fan-out at a glance](#fan-out-at-a-glance)
   - [Waits and timeouts](#waits-and-timeouts)
   - [Error handling: retries and failure edges](#error-handling-retries-and-failure-edges)
   - [Loops with `Goto`](#loops-with-goto)
@@ -47,7 +49,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
 - [Execution](#execution)
   - [Async execution](#async-execution)
-  - [Sync execution, stepped model](#sync-execution--stepped-model)
+  - [Sync execution, stepped model](#sync-execution-stepped-model)
   - [Unity integration](#unity-integration)
   - [Nested machines](#nested-machines)
   - [Composites: subgraphs, history, and parallel regions](#composites-subgraphs-history-and-parallel-regions)
@@ -74,7 +76,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 ## Why NxGraph
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
-- **Predictable branching**: fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`.
+- **Predictable branching**: run-one fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
 - **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`/`.WaitFor(...)`, and `.ToWithTimeoutAsync(...)`/`.ToWithTimeout(...)` — every construct has twins in both runtimes.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
 - **Diagnostics built in**: validate graphs, inspect Mermaid output, attach observers, capture replay logs, or emit `Activity` traces.
@@ -172,7 +174,7 @@ while (result == Result.InProgress)
     result = fsm.Execute();
 ```
 
-For a single-node graph `Execute()` returns `Result.Success` (or `Result.Failure`) immediately. For multi-node graphs it returns `Result.InProgress` after each intermediate node, signalling that more nodes remain. See [Sync execution, stepped model](#sync-execution--stepped-model) for the Unity pattern.
+For a single-node graph `Execute()` returns `Result.Success` (or `Result.Failure`) immediately. For multi-node graphs it returns `Result.InProgress` after each intermediate node, signalling that more nodes remain. See [Sync execution, stepped model](#sync-execution-stepped-model) for the Unity pattern.
 
 ---
 
@@ -215,6 +217,21 @@ var graph = GraphBuilder
     .End().SetName("Router")
     .Build();
 ```
+
+### Custom directors
+
+`.If(...)` and `.Switch(...)` compile down to the built-in director nodes `ChoiceState` and `SwitchState<TKey>`. A **director** is a node implementing `IDirector` (`IAsyncDirector` for the async runtime) whose `SelectNext()` picks the next node at runtime — implement it yourself when the routing decision doesn't fit a predicate or a key/case map. Override `EnumerateStaticTargets()` to surface the nodes you can route to: the validator and the Mermaid exporter walk it, and the validator warns when a custom director exposes none (its branches would be invisible to reachability analysis and diagrams).
+
+### Fan-out at a glance
+
+Every fan-out construct answers two questions: **how many successors run**, and **when the set is chosen**. The four quadrants:
+
+| How many run | Chosen statically (declared in the graph) | Chosen dynamically (at runtime) |
+|---|---|---|
+| **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule | Director — [`IDirector`](#custom-directors) selects any node in code; `ChoiceState`/`SwitchState<TKey>` are the built-ins |
+| **Many at once** | Parallel — [`.Parallel(regions...)`](#parallel-regions-and-states) runs **all** region graphs | Dynamic parallel — [`.Parallel(selector, ...)`](#dynamic-some-of-many-regions) runs the **subset** a blackboard selector picks |
+
+There is deliberately no free-form fan-out inside one flat graph (several nodes of the same graph active at once): the runtimes keep exactly one active node, and many-at-once execution lives inside the parallel composites, which join back into the single-active flow at the composite boundary. A token-based (Petri-net-style) runner that would lift this — mid-graph rejoin, the same node active k times — is a recorded, deliberately deferred design; if it ever lands it will be a third runtime beside the sync/async machines, not a change to them.
 
 ### Waits and timeouts
 
@@ -518,7 +535,9 @@ Nesting can be arbitrarily deep. Each level is stepped independently; the parent
 
 ### Composites: subgraphs, history, and parallel regions
 
-**Subgraphs.** `.SubGraph(child)` nests a whole child graph as a single node of the parent — the DSL shorthand for the nested-machine pattern above. With `history: true`, a child that *failed* resumes at its last-active node when the parent re-enters the composite (e.g. after a failure edge and a `Goto` back), instead of restarting from its start node; a child that *completed* restarts from the top:
+#### Subgraphs
+
+`.SubGraph(child)` nests a whole child graph as a single node of the parent — the DSL shorthand for the nested-machine pattern above. With `history: true`, a child that *failed* resumes at its last-active node when the parent re-enters the composite (e.g. after a failure edge and a `Goto` back), instead of restarting from its start node; a child that *completed* restarts from the top:
 
 ```csharp
 Graph child = GraphBuilder
@@ -543,7 +562,9 @@ Graph flow = GraphBuilder
     .Build();
 ```
 
-**Parallel regions (AND-states).** `.Parallel(regions...)` runs N region graphs via **cooperative interleaving**: each round advances every still-running region by one node, and the composite joins when all regions reach a terminal result — `Success` only if every region succeeded, otherwise `Failure` through the parent's fault model (failure edges, retries). This is deliberately not thread-concurrent, which keeps the hot path allocation-free:
+#### Parallel regions (AND-states)
+
+`.Parallel(regions...)` runs N region graphs via **cooperative interleaving**: each round advances every still-running region by one node, and the composite joins when all regions reach a terminal result — `Success` only if every region succeeded, otherwise `Failure` through the parent's unified fault model (failure edges, retries). This is deliberately not thread-concurrent, which keeps the hot path allocation-free:
 
 ```csharp
 AsyncStateMachine fsm = GraphBuilder
@@ -566,9 +587,11 @@ StateMachine fsm = GraphBuilder
 Result r = fsm.Execute();
 ```
 
-`RoundPerTick` is sync-only (the async loop rejects node-level `InProgress`); `RunToJoin` composites also run under the async machine via the sync-logic adapter.
+`RoundPerTick` is sync-only (the async loop rejects node-level `InProgress`); `RunToJoin` composites also run under the async machine via the sync-logic adapter. Validating a graph destined for the async runtime with `new GraphValidationOptions { StrictAsyncCompatible = true }` flags reachable `RoundPerTick` composites (including nested sync machines left in their default per-tick mode) as errors instead of a mid-run surprise.
 
-**Dynamic (some-of-many) regions.** The selector overloads pick which regions run at every composite entry, from the machine-bound [blackboard](#blackboards-scoped-shared-memory):
+#### Dynamic (some-of-many) regions
+
+The selector overloads pick which regions run at every composite entry, from the machine-bound [blackboard](#blackboards-scoped-shared-memory):
 
 ```csharp
 RegionMask SelectDefenses(BlackboardContext bb)
@@ -586,7 +609,7 @@ StateMachine fsm = GraphBuilder
     .WithBlackboard(board);
 ```
 
-The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
+The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Selectors execute on the measured zero-allocation path, so compose masks with `RegionMask.Bit(i) | ...` as above — allocation-free — while `RegionMask.Of(params)` allocates its array and belongs at setup time only. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
 
 ### Durable suspend / resume
 
@@ -976,7 +999,7 @@ The tests cover:
 ## FAQ
 
 **Why is there only one direct success transition per node?**  
-Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path.
+Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path. When several paths must run at once, use the parallel composites instead of extra edges — see [Fan-out at a glance](#fan-out-at-a-glance); a token runner with free-form fan-out in one flat graph is a recorded, deliberately deferred design.
 
 **Can I share a graph across machines?**  
 Yes. `Graph` is immutable after build and can be reused across multiple state machine instances.

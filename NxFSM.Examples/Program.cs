@@ -82,6 +82,8 @@ Console.WriteLine();
 ObserverExample.Run();
 Console.WriteLine();
 await FeatureExamples.RunAsync();
+Console.WriteLine();
+await FanOutExamples.RunAsync();
 
 return 0;
 
