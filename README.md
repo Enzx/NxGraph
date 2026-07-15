@@ -77,6 +77,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
 - **Predictable branching**: run-one fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
+
 - **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`/`.WaitFor(...)`, and `.ToWithTimeoutAsync(...)`/`.ToWithTimeout(...)` — every construct has twins in both runtimes.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
 - **Diagnostics built in**: validate graphs, inspect Mermaid output, attach observers, capture replay logs, or emit `Activity` traces.
@@ -565,6 +566,7 @@ Graph flow = GraphBuilder
 #### Parallel regions (AND-states)
 
 `.Parallel(regions...)` runs N region graphs via **cooperative interleaving**: each round advances every still-running region by one node, and the composite joins when all regions reach a terminal result — `Success` only if every region succeeded, otherwise `Failure` through the parent's unified fault model (failure edges, retries). This is deliberately not thread-concurrent, which keeps the hot path allocation-free:
+
 
 ```csharp
 AsyncStateMachine fsm = GraphBuilder
