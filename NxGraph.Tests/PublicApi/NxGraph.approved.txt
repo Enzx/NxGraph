@@ -689,7 +689,11 @@ interface NxGraph.Graphs.ISubGraphProvider
 class NxGraph.Graphs.LogicNode : NxGraph.Graphs.INode
   ctor Void .ctor(NxGraph.Graphs.NodeId, NxGraph.Graphs.IAsyncLogic, System.Action, System.Action)
   field static readonly NxGraph.Graphs.LogicNode Empty
+  field static readonly NxGraph.Graphs.LogicNode HistoryStateMarker
+  field static readonly NxGraph.Graphs.LogicNode ParallelStateMarker
   field static readonly NxGraph.Graphs.LogicNode StateMachineMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncHistoryStateMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncParallelStateMarker
   field static readonly NxGraph.Graphs.LogicNode SyncStateMachineMarker
   property NxGraph.Graphs.IAsyncLogic AsyncLogic { get; }
   property NxGraph.Graphs.ILogic Logic { get; }
@@ -710,8 +714,12 @@ struct NxGraph.Graphs.NodeId : System.IEquatable`1[[NxGraph.Graphs.NodeId, NxGra
   operator Boolean op_Inequality(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   property Int32 Index { get; }
   property NxGraph.Graphs.NodeId Default { get; }
+  property NxGraph.Graphs.NodeId HistoryStateMarker { get; }
+  property NxGraph.Graphs.NodeId ParallelStateMarker { get; }
   property NxGraph.Graphs.NodeId Start { get; }
   property NxGraph.Graphs.NodeId StateMachineMarker { get; }
+  property NxGraph.Graphs.NodeId SyncHistoryStateMarker { get; }
+  property NxGraph.Graphs.NodeId SyncParallelStateMarker { get; }
   property NxGraph.Graphs.NodeId SyncStateMachineMarker { get; }
   property System.String Name { get; }
 sealed class NxGraph.Graphs.SyncLogicAdapter : NxGraph.Graphs.IAsyncLogic

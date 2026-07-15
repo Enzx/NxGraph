@@ -97,6 +97,18 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(CompositeDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)CompositeDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(CompositeDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)CompositeArrayDtoFormatter.Instance;
+                return;
+            }
+
             Formatter = null;
         }
     }

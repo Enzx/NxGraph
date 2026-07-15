@@ -161,6 +161,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         int nodeCount = graph.NodeCount;
         List<SubGraphDto> subGraphs = [];
+        List<CompositeDto> composites = [];
         INodeDto[] nodes = new INodeDto[nodeCount];
         for (int index = 0; index < nodeCount; index++)
         {
@@ -189,11 +190,57 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
-                    // Other composites (history states, parallel states, custom containers)
-                    // carry child graphs a user codec structurally cannot serialize — only
-                    // GraphSerializer can recurse into them, and it doesn't yet. Fail with a
-                    // targeted error instead of handing the composite to the codec, which
-                    // would either throw an opaque cast error or silently drop the children.
+                    // History/parallel composites ride the payload as CompositeDto entries
+                    // (payload version 4): kind + step mode are structure here — they are
+                    // constructor arguments baked into the node, and dropping them would
+                    // silently change runtime behavior after a round-trip. Sync composites sit
+                    // behind a SyncLogicAdapter, which LogicNode.Logic already unwraps.
+                    if (logicNode.AsyncLogic is AsyncHistoryState asyncHistory)
+                    {
+                        composites.Add(new CompositeDto(index, CompositeKind.AsyncHistory, Mode: 0,
+                            [ToDto(asyncHistory.Child.Graph, depth + 1)]));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.HistoryStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if (logicNode.Logic is HistoryState syncHistory)
+                    {
+                        composites.Add(new CompositeDto(index, CompositeKind.SyncHistory, (byte)syncHistory.Mode,
+                            [ToDto(syncHistory.Child.Graph, depth + 1)]));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.SyncHistoryStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if (logicNode.AsyncLogic is AsyncParallelState asyncParallel)
+                    {
+                        GraphDto[] children = new GraphDto[asyncParallel.Regions.Count];
+                        for (int r = 0; r < children.Length; r++)
+                            children[r] = ToDto(asyncParallel.Regions[r].Graph, depth + 1);
+                        composites.Add(new CompositeDto(index, CompositeKind.AsyncParallel, Mode: 0, children));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.ParallelStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if (logicNode.Logic is ParallelState syncParallel)
+                    {
+                        GraphDto[] children = new GraphDto[syncParallel.Regions.Count];
+                        for (int r = 0; r < children.Length; r++)
+                            children[r] = ToDto(syncParallel.Regions[r].Graph, depth + 1);
+                        composites.Add(new CompositeDto(index, CompositeKind.SyncParallel, (byte)syncParallel.Mode,
+                            children));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.SyncParallelStateMarker.Id.Name);
+                        break;
+                    }
+
+                    // Remaining composites carry child graphs a user codec structurally cannot
+                    // serialize — only GraphSerializer can recurse into them. Dynamic parallel
+                    // composites hold a selector delegate that cannot ride the wire (a named-
+                    // selector registry is a deliberate non-feature until someone needs durable
+                    // dynamic fan-out), and custom ISubGraphProvider containers have no stable
+                    // reconstruction recipe. Fail with a targeted error instead of handing the
+                    // composite to the codec, which would either throw an opaque cast error or
+                    // silently drop the children.
                     if (logicNode.AsyncLogic is ISubGraphProvider || logicNode.Logic is ISubGraphProvider)
                     {
                         // Name the actual composite: sync composites sit behind a
@@ -203,8 +250,10 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                             : logicNode.AsyncLogic.GetType().Name;
                         throw new NotSupportedException(
                             $"Node '{node.Id}' holds composite logic '{compositeName}' " +
-                            "which is not serializable. Only plain nested state machines " +
-                            "(.SubGraph(...) without history, async or sync) are supported by GraphSerializer.");
+                            "which is not serializable. GraphSerializer supports plain nested state machines " +
+                            "(.SubGraph(...), async or sync), history composites (.SubGraph(..., history: true)), " +
+                            "and static parallel composites (.Parallel(...)); dynamic parallel composites " +
+                            "(their region selector is a delegate) and custom ISubGraphProvider containers do not ride the wire.");
                     }
 
                     // Unwrap SyncLogicAdapter so the codec receives the actual IAsyncLogic/ILogic,
@@ -279,7 +328,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         }
 
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
-            outcomeCodes, outcomeNames);
+            outcomeCodes, outcomeNames, composites.ToArray());
     }
 
     private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
@@ -316,6 +365,17 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             (subGraphOwners ??= []).Add(subDto.OwnerIndex);
         }
 
+        // Same claim-first defense for the v4 composite section: composite markers are only
+        // honored when a CompositeDto claims the node index.
+        Dictionary<int, CompositeDto>? compositeOwners = null;
+        foreach (CompositeDto compositeDto in dto.Composites)
+        {
+            compositeOwners ??= new Dictionary<int, CompositeDto>();
+            if (!compositeOwners.TryAdd(compositeDto.OwnerIndex, compositeDto))
+                throw new InvalidOperationException(
+                    $"Composite DTO owner index {compositeDto.OwnerIndex} is duplicated in the payload.");
+        }
+
         INode[] nodes = new INode[nodesLength];
         bool[] slotFilled = new bool[nodesLength];
         for (int index = 0; index < nodesLength; index++)
@@ -348,6 +408,21 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         subGraphOwners is not null && subGraphOwners.Contains(nodeDto.Index))
                     {
                         nodes[nodeDto.Index] = LogicNode.SyncStateMachineMarker;
+                        break;
+                    }
+
+                    // Composite markers (v4): honored only when a CompositeDto claims this node
+                    // index, and only when the claim's kind matches the marker string — a
+                    // mismatched pair is a corrupt or crafted payload, not something to guess at.
+                    if (TryGetCompositeMarker(textDto.Logic) is { } compositeMarker &&
+                        compositeOwners is not null &&
+                        compositeOwners.TryGetValue(nodeDto.Index, out CompositeDto? claim))
+                    {
+                        if (MarkerFor(claim.Kind) != compositeMarker)
+                            throw new InvalidOperationException(
+                                $"Composite DTO for node {nodeDto.Index} has kind '{claim.Kind}' but the node " +
+                                $"is marked '{textDto.Logic}'.");
+                        nodes[nodeDto.Index] = compositeMarker;
                         break;
                     }
 
@@ -437,6 +512,67 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineAsyncLogic);
         }
 
+        // Rebuild composites (v4). Each claimed marker node gets its composite reconstructed
+        // through the normal public constructor, so region-count caps and argument validation
+        // re-run on load; sync kinds are re-wrapped in the sync-logic adapter so the node is
+        // runnable, mirroring how sync nested machines are installed above.
+        foreach (CompositeDto compositeDto in dto.Composites)
+        {
+            if (compositeDto.OwnerIndex < 0 || compositeDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Composite DTO owner index {compositeDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+
+            // A composite may only attach to the marker node of its own kind — anything else
+            // means the payload tried to swap decoded logic for a composite (or is corrupt).
+            if (!ReferenceEquals(nodes[compositeDto.OwnerIndex], MarkerFor(compositeDto.Kind)))
+                throw new InvalidOperationException(
+                    $"Composite DTO owner index {compositeDto.OwnerIndex} does not reference a " +
+                    $"'{compositeDto.Kind}' composite marker node.");
+
+            bool isHistory = compositeDto.Kind is CompositeKind.AsyncHistory or CompositeKind.SyncHistory;
+            if (isHistory && compositeDto.Children.Length != 1)
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} is a history composite and must carry " +
+                    $"exactly one child graph, got {compositeDto.Children.Length}.");
+            if (!isHistory && compositeDto.Children.Length == 0)
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} is a parallel composite and must carry " +
+                    "at least one region graph.");
+
+            bool isSyncKind = compositeDto.Kind is CompositeKind.SyncHistory or CompositeKind.SyncParallel;
+            if (isSyncKind && compositeDto.Mode > (byte)ParallelStepMode.RoundPerTick)
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} has unknown step mode {compositeDto.Mode}.");
+
+            Graph[] childGraphs = new Graph[compositeDto.Children.Length];
+            for (int c = 0; c < childGraphs.Length; c++)
+            {
+                childGraphs[c] = FromDto(compositeDto.Children[c], depth + 1);
+            }
+
+            IAsyncLogic compositeLogic = compositeDto.Kind switch
+            {
+                CompositeKind.AsyncHistory => new AsyncHistoryState(childGraphs[0]),
+                CompositeKind.SyncHistory => new SyncLogicAdapter(
+                    new HistoryState(childGraphs[0], (ParallelStepMode)compositeDto.Mode)),
+                CompositeKind.AsyncParallel => new AsyncParallelState(childGraphs),
+                CompositeKind.SyncParallel => new SyncLogicAdapter(
+                    new ParallelState((ParallelStepMode)compositeDto.Mode, childGraphs)),
+                _ => throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} has unknown kind {(byte)compositeDto.Kind}.")
+            };
+
+            string compositeNodeName = dto.Nodes[compositeDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{compositeDto.OwnerIndex}"
+            };
+
+            nodes[compositeDto.OwnerIndex] =
+                new LogicNode(new NodeId(compositeDto.OwnerIndex, compositeNodeName), compositeLogic);
+        }
+
         int transitionsLength = dto.Transitions.Length;
         Transition[] transitions = new Transition[transitionsLength];
         for (int i = 0; i < transitionsLength; i++)
@@ -505,6 +641,31 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         NodeId graphId = new(dto.Index, dto.Name);
         return new Graph(graphId, nodes, transitions, logic: null, retryPolicies, outcomeCodes, outcomeNames);
     }
+
+    /// <summary>
+    /// Maps a node's serialized logic string to the composite marker sentinel it names, or
+    /// null when the string is not a composite marker. The caller must still verify that a
+    /// <see cref="CompositeDto"/> claims the node index — an unclaimed marker string is
+    /// ordinary codec payload, not a marker.
+    /// </summary>
+    private static LogicNode? TryGetCompositeMarker(string logic)
+    {
+        if (logic == LogicNode.HistoryStateMarker.Id.Name) return LogicNode.HistoryStateMarker;
+        if (logic == LogicNode.SyncHistoryStateMarker.Id.Name) return LogicNode.SyncHistoryStateMarker;
+        if (logic == LogicNode.ParallelStateMarker.Id.Name) return LogicNode.ParallelStateMarker;
+        if (logic == LogicNode.SyncParallelStateMarker.Id.Name) return LogicNode.SyncParallelStateMarker;
+        return null;
+    }
+
+    /// <summary>The marker sentinel a <see cref="CompositeKind"/> must attach to.</summary>
+    private static LogicNode MarkerFor(CompositeKind kind) => kind switch
+    {
+        CompositeKind.AsyncHistory => LogicNode.HistoryStateMarker,
+        CompositeKind.SyncHistory => LogicNode.SyncHistoryStateMarker,
+        CompositeKind.AsyncParallel => LogicNode.ParallelStateMarker,
+        CompositeKind.SyncParallel => LogicNode.SyncParallelStateMarker,
+        _ => throw new InvalidOperationException($"Unknown composite kind {(byte)kind}.")
+    };
 
 
     // ReSharper disable once UnusedMember.Global
