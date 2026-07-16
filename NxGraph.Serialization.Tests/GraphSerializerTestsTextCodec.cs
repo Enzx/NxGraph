@@ -239,11 +239,11 @@ public class GraphSerializerTestsTextCodec
     }
 
     [Test]
-    public void Dynamic_parallel_composites_still_throw_a_targeted_error()
+    public void Dynamic_parallel_composites_without_a_selector_registry_throw_a_targeted_error()
     {
-        // Since v4 the history/parallel composites ride the payload; the dynamic variants
-        // cannot (their region selector is a delegate) and must keep the targeted error,
-        // which now names the supported set.
+        // Since v6 the dynamic parallel composites ride the payload, but only with a selector
+        // registry configured — a plain GraphSerializer(codec) keeps a targeted error that
+        // points at the option unlocking the feature.
         Graph region = GraphBuilder
             .StartWith(new DummyState { Data = "r0" })
             .Build();
@@ -257,9 +257,9 @@ public class GraphSerializerTestsTextCodec
             async () => await _serializer.ToJsonAsync(withDynamicParallel, new MemoryStream()));
         Assert.Multiple(() =>
         {
-            Assert.That(ex!.Message, Does.Contain("DynamicParallelState"));
-            Assert.That(ex.Message, Does.Contain("history composites"),
-                "The targeted error names what is supported post-v4.");
+            Assert.That(ex!.Message, Does.Contain("dynamic parallel composite"));
+            Assert.That(ex.Message, Does.Contain("GraphSerializerOptions.SelectorRegistry"),
+                "The targeted error names the option that unlocks the feature.");
         });
     }
 

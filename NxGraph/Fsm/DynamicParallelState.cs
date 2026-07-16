@@ -41,6 +41,13 @@ public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboar
     /// <summary>How region rounds map onto <see cref="Execute"/> calls.</summary>
     public ParallelStepMode Mode => _mode;
 
+    /// <summary>
+    /// The region selector this composite was constructed with. Exposed (like
+    /// <see cref="Regions"/> and <see cref="Mode"/>) so serializers can map the delegate
+    /// back to a registered key — delegates themselves cannot ride a wire payload.
+    /// </summary>
+    public Func<BlackboardContext, RegionMask> Selector => _selector;
+
     IEnumerable<Graph> ISubGraphProvider.SubGraphs
     {
         get

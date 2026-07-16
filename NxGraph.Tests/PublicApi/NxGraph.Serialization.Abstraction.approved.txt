@@ -7,6 +7,10 @@ interface NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer
 interface NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
   method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IContainerCodec
+interface NxGraph.Serialization.Abstraction.IContainerCodec`1 : NxGraph.Serialization.Abstraction.IContainerCodec
+  method NxGraph.Graphs.IAsyncLogic Deserialize(TWire, System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.Graph])
+  method TWire Serialize(NxGraph.Graphs.ISubGraphProvider)
 interface NxGraph.Serialization.Abstraction.IGraphBinarySerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
   method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)
@@ -18,3 +22,6 @@ interface NxGraph.Serialization.Abstraction.ILogicCodec
 interface NxGraph.Serialization.Abstraction.ILogicCodec`1 : NxGraph.Serialization.Abstraction.ILogicCodec
   method NxGraph.Graphs.IAsyncLogic Deserialize(TWire)
   method TWire Serialize(NxGraph.Graphs.IAsyncLogic)
+interface NxGraph.Serialization.Abstraction.IRegionSelectorRegistry
+  method Boolean TryGetKey(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], System.String ByRef)
+  method Boolean TryGetSelector(System.String, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] ByRef)

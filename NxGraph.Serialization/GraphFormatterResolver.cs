@@ -109,6 +109,54 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(UidDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)UidDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(UidDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)UidArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(ForkDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ForkDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(ForkDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ForkArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(JoinDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)JoinDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(JoinDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)JoinArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(ContainerDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ContainerDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(ContainerDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ContainerArrayDtoFormatter.Instance;
+                return;
+            }
+
             Formatter = null;
         }
     }

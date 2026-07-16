@@ -53,6 +53,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Unity integration](#unity-integration)
   - [Nested machines](#nested-machines)
   - [Composites: subgraphs, history, and parallel regions](#composites-subgraphs-history-and-parallel-regions)
+  - [Token runtime: fork, join, and mid-graph merge](#token-runtime-fork-join-and-mid-graph-merge)
   - [Durable suspend / resume](#durable-suspend--resume)
   - [Restart policy](#restart-policy)
 - [Validation](#validation)
@@ -231,8 +232,9 @@ Every fan-out construct answers two questions: **how many successors run**, and 
 |---|---|---|
 | **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule | Director — [`IDirector`](#custom-directors) selects any node in code; `ChoiceState`/`SwitchState<TKey>` are the built-ins |
 | **Many at once** | Parallel — [`.Parallel(regions...)`](#parallel-regions-and-states) runs **all** region graphs | Dynamic parallel — [`.Parallel(selector, ...)`](#dynamic-some-of-many-regions) runs the **subset** a blackboard selector picks |
+| **Many in one flat graph** | Token runtime — [`.ForkTo(...)` + `JoinState`](#token-runtime-fork-join-and-mid-graph-merge) fan tokens out and merge them mid-graph (all / any / M-of-N) | The same fork/join graph — which tokens reach a join, and when, is decided by each token's own path at runtime |
 
-There is deliberately no free-form fan-out inside one flat graph (several nodes of the same graph active at once): the runtimes keep exactly one active node, and many-at-once execution lives inside the parallel composites, which join back into the single-active flow at the composite boundary. A token-based (Petri-net-style) runner that would lift this — mid-graph rejoin, the same node active k times — is a recorded, deliberately deferred design; if it ever lands it will be a third runtime beside the sync/async machines, not a change to them.
+The FSM runtimes keep exactly one active node, and many-at-once execution lives inside the parallel composites, which join back into the single-active flow at the composite boundary. When the flow genuinely needs several active nodes in **one flat graph** — a forked path that rejoins the parent flow mid-graph, the same node active k times, M-of-N merges — that is the [token runtime](#token-runtime-fork-join-and-mid-graph-merge): a third runtime beside the sync/async machines (`TokenMachine`/`AsyncTokenMachine`), not a change to them.
 
 ### Waits and timeouts
 
@@ -613,6 +615,60 @@ StateMachine fsm = GraphBuilder
 
 The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Selectors execute on the measured zero-allocation path, so compose masks with `RegionMask.Bit(i) | ...` as above — allocation-free — while `RegionMask.Of(params)` allocates its array and belongs at setup time only. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
 
+### Token runtime: fork, join, and mid-graph merge
+
+Parallel composites join at the composite boundary. When forked paths must **rejoin the parent flow mid-graph** — or the same node must be active for several work items at once — use the token runtime (`NxGraph.Tokens`): N pooled tokens flow through one flat graph, scheduled in cooperative rounds (one node per token per round, deliberately not thread-concurrent).
+
+```csharp
+using NxGraph.Tokens;
+
+JoinState join = new(JoinPolicy.All(2)); // or JoinPolicy.Any (merge), JoinPolicy.Quorum(m)
+
+Graph graph = GraphBuilder
+    .StartWith(() => Result.Success).SetName("Load")
+    .ForkTo(
+        b => b.To(() => Result.Success)   // branch 0 continues the arriving token
+              .To(join)                   // converge by routing chains to the same JoinState
+              .To(() => Result.Success),  // the surviving token carries on past the join
+        b => b.To(() => Result.Success)   // every other branch spawns a new token
+              .To(join))
+    .Build();
+
+TokenMachine machine = graph.ToTokenMachine();      // sync twin; frame-stepped like StateMachine
+machine.SetStepMode(ParallelStepMode.RunToJoin);    // or RoundPerTick (default): one round per Execute()
+Result result = machine.Execute();
+
+AsyncTokenMachine asyncMachine = graph.ToAsyncTokenMachine(); // async twin: ExecuteAsync / StepAsync
+```
+
+- **Fork** (`.ForkTo(branch, branch, ...)`): a token passing through continues into the first branch; each remaining branch spawns a new token. Forks carry no logic and no outgoing edge — the branches replace it.
+- **Join** (`JoinState` + `JoinPolicy`): arriving tokens park until the policy's count is met, then the join **fires** — one token continues along the join's ordinary success edge, the consumed ones retire, and the join re-arms. `Any` fires on every arrival, which makes it a mid-graph merge point; `All(n)` is the classic AND-join; `Quorum(m)` fires at m-of-n, and the late leftovers absorb benignly at run end.
+- **Per-token fault model**: a failing token consumes its node's `.Retry(...)` budget in place (the async machine honors backoff, the sync one retries next round), then follows the failure edge, else *that token* dies. The machine fails if any token died or a join starved (parked tokens at a join that never fired); surviving tokens always run to their natural end first.
+- **Per-token scratch**: Node-scoped blackboard keys are per token — each token carries its own transient board, reset exactly when that token's attempt counter resets.
+- **Durability**: `Suspend()` captures a `TokenMachineSnapshot` (the multiset of live tokens plus join bookkeeping) at a round boundary; `Resume(snapshot)` restores it on either token machine. The FSM `StateMachineSnapshot` contract is untouched.
+- **Boundaries**: fork/join nodes are interpreted only by the token machines — the FSM runtimes throw on them (and the validator flags token graphs with an Info). Graphs *without* fork/join nodes run identically under either family. Fork/join graphs ride `GraphSerializer` payloads like any other graph — branch order and join policies are plain structure — and `TokenMachineSnapshot` serializes independently with any serializer.
+- **Visualization**: `graph.ToMermaid()` renders fork/join first-class — bar shapes (`[[...]]`), solid `fork`-labeled branch edges (an AND-split, not a dashed runtime choice), and the join's policy in its label. The diamond above exports as:
+
+```mermaid
+flowchart LR
+  n0(["Load"])
+  n1["Audio"]
+  n2[["Join : All(2)"]]
+  n3["Ready"]
+  n4["Terrain"]
+  n5[["Fork"]]
+  End(("End"))
+  n0 --> n5
+  n1 --> n2
+  n2 --> n3
+  n3 --> End
+  n4 --> n2
+  n5 -- fork --> n1
+  n5 -- fork --> n4
+```
+
+See `NxFSM.Examples/ReadmeExamples/TokenRunnerExamples.cs` for the runnable version, including an M-of-N quorum flow and the Mermaid export.
+
 ### Durable suspend / resume
 
 Both runtimes can pause a run at a step boundary, persist it, and continue later — on the same machine, a fresh machine, another process, or even the **other runtime** (snapshots are interchangeable):
@@ -905,6 +961,7 @@ Notes:
 - serializer usage is instance-based
 - JSON and MessagePack are both supported through `GraphSerializer`
 - your codec controls how node logic is persisted and restored
+- nested machines, history/parallel composites, and token fork/join nodes serialize out of the box; dynamic parallel composites need a `GraphSerializerOptions.SelectorRegistry` (the selector delegate rides as a named key — author graphs with the delegate instance `RegionSelectorRegistry.Register` returns), and custom `ISubGraphProvider` containers need a `GraphSerializerOptions.ContainerCodec` (you own the reconstruction recipe; the serializer recurses into `SubGraphs` for you, order-preserving)
 
 ---
 

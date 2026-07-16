@@ -3,6 +3,7 @@ using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
+using NxGraph.Tokens;
 namespace NxGraph.Diagnostics.Validations;
 
 public static class GraphValidator
@@ -208,6 +209,15 @@ public static class GraphValidator
             }
         }
 
+        // 4c) Token-runtime structural lints (fork/join nodes — spec 007). Always on: the
+        // nodes are unambiguous, and a graph carrying them can only run under the token
+        // machines, which is worth an Info even when everything else is clean.
+        ValidateTokenNodes(graph, result);
+
+        // 4d) Duplicate node UIDs — an Error, because a UID is a stable identity key for
+        // external tooling and two nodes claiming it makes lookups ambiguous.
+        ValidateUids(graph, result);
+
         // 5) If AllNodes are supplied, check for unreachable nodes and duplicate names
         if (options.AllNodes is { Count: > 0 } all)
         {
@@ -251,6 +261,129 @@ public static class GraphValidator
         ValidateBlackboardDeclarations(graph, result);
 
         return result;
+    }
+
+    private static void ValidateUids(Graph graph, GraphValidationResult result)
+    {
+        if (graph.Uids is not { } uids)
+        {
+            return;
+        }
+
+        Dictionary<Guid, List<int>> byUid = new();
+        for (int i = 0; i < uids.Length; i++)
+        {
+            if (uids[i] == Guid.Empty) continue;
+            if (!byUid.TryGetValue(uids[i], out List<int>? list))
+                byUid[uids[i]] = list = new List<int>(2);
+            list.Add(i);
+        }
+
+        foreach (KeyValuePair<Guid, List<int>> kvp in byUid)
+        {
+            if (kvp.Value.Count <= 1)
+            {
+                continue;
+            }
+
+            foreach (int dup in kvp.Value)
+                result.Add(Severity.Error, $"Duplicate node UID '{kvp.Key:D}'.", graph.GetNodeByIndex(dup).Id);
+        }
+    }
+
+    private static void ValidateTokenNodes(Graph graph, GraphValidationResult result)
+    {
+        bool anyTokenNode = false;
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            ForkState? fork = logicNode.Logic as ForkState ?? logicNode.AsyncLogic as ForkState;
+            if (fork is not null)
+            {
+                anyTokenNode = true;
+                if (graph.TryGetTransition(node.Id, out Transition edge) &&
+                    (!edge.IsEmpty || edge.HasFailureDestination))
+                {
+                    result.Add(Severity.Error,
+                        "Fork node has a wired success/failure edge — a fork's branches replace its success " +
+                        "edge, and forks carry no logic that could fail. Remove the edge.", node.Id);
+                }
+            }
+
+            JoinState? join = logicNode.Logic as JoinState ?? logicNode.AsyncLogic as JoinState;
+            if (join is not null)
+            {
+                anyTokenNode = true;
+                int required = join.Policy.RequiredCount;
+                int inbound = CountStaticInbound(graph, i);
+                if (required > inbound)
+                {
+                    result.Add(Severity.Warning,
+                        $"Join requires {required} arrivals per firing but only {inbound} statically-known " +
+                        "inbound edges reach it — unless tokens arrive via dynamic directors or loops, the " +
+                        "join can never fire and its tokens will starve.", node.Id);
+                }
+            }
+        }
+
+        if (anyTokenNode)
+        {
+            result.Add(Severity.Info,
+                "Graph contains token fork/join nodes — run it with TokenMachine/AsyncTokenMachine " +
+                "(NxGraph.Tokens); the FSM runtimes throw on these nodes.", graph.Id);
+        }
+    }
+
+    /// <summary>
+    /// Counts statically-known edges into <paramref name="target"/>: success and failure
+    /// destinations plus director/fork static targets. Dynamic director selections are
+    /// invisible here, which is why the unsatisfiable-join lint is a Warning, not an Error.
+    /// </summary>
+    private static int CountStaticInbound(Graph graph, int target)
+    {
+        int count = 0;
+        for (int j = 0; j < graph.NodeCount; j++)
+        {
+            Transition edge = graph.GetTransitionByIndex(j);
+            if (!edge.IsEmpty && edge.Destination.Index == target)
+            {
+                count++;
+            }
+
+            if (edge.HasFailureDestination && edge.FailureDestination.Index == target)
+            {
+                count++;
+            }
+
+            if (!graph.TryGetNodeByIndex(j, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            IEnumerable<NodeId>? targets =
+                (logicNode.AsyncLogic as IDirector)?.EnumerateStaticTargets()
+                ?? (logicNode.Logic as IDirector)?.EnumerateStaticTargets()
+                ?? (logicNode.AsyncLogic as IAsyncDirector)?.EnumerateStaticTargets()
+                ?? (logicNode.Logic as IAsyncDirector)?.EnumerateStaticTargets();
+            if (targets is null)
+            {
+                continue;
+            }
+
+            foreach (NodeId t in targets)
+            {
+                if (t.Index == target)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     private static void ValidateBlackboardDeclarations(Graph graph, GraphValidationResult result)

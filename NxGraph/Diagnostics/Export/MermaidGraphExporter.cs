@@ -2,12 +2,17 @@
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
+using NxGraph.Tokens;
 
 namespace NxGraph.Diagnostics.Export;
 
 /// <summary>
 /// Exports a <see cref="Graph"/> (single static transition per node) to Mermaid flowchart syntax.
-/// Dynamic branches chosen at runtime by <c>IDirector</c> are not emitted (no static edges).
+/// Dynamic branches chosen at runtime by <c>IDirector</c> are not emitted (no static edges),
+/// but statically-known director targets appear as dashed edges. Token fork/join nodes render
+/// first-class: subroutine-bar shapes, solid <c>fork</c>-labeled branch edges (every branch
+/// runs — an AND-split, not a choice), the join's <see cref="JoinPolicy"/> in its label, and
+/// no terminal edge from forks (a fork never ends a token).
 /// </summary>
 public sealed class MermaidGraphExporter : IGraphExporter
 {
@@ -46,24 +51,46 @@ public sealed class MermaidGraphExporter : IGraphExporter
             // async IAsyncDirector — get a rhombus, others are rectangles. Previously only
             // the sync IDirector path was checked, so async If/Switch nodes silently
             // rendered as plain rectangles.
-            if (node is LogicNode ln && (ln.AsyncLogic is IDirector || ln.Logic is IDirector
-                                         || ln.AsyncLogic is IAsyncDirector || ln.Logic is IAsyncDirector))
+            if (node is LogicNode ln)
             {
-                label = $"{{\"{EscapeLabel( label)}\"}}";
-                sb.Append("  ").Append(nodeId).Append(label).AppendLine();
-                continue;
+                // Token fork/join first: ForkState implements IDirector purely so its branches
+                // reach reachability/exports — rendering it as a decision rhombus would read
+                // as "choose one" when every branch runs. Both get the subroutine-bar shape;
+                // the join carries its firing policy so All/Any/Quorum are distinguishable.
+                if (ForkOf(ln) is not null)
+                {
+                    sb.Append("  ").Append(nodeId).Append("[[\"").Append(label).AppendLine("\"]]");
+                    continue;
+                }
+
+                if (JoinOf(ln) is { } join)
+                {
+                    sb.Append("  ").Append(nodeId).Append("[[\"").Append(label)
+                        .Append(" : ").Append(join.Policy).AppendLine("\"]]");
+                    continue;
+                }
+
+                if (ln.AsyncLogic is IDirector || ln.Logic is IDirector
+                    || ln.AsyncLogic is IAsyncDirector || ln.Logic is IAsyncDirector)
+                {
+                    label = $"{{\"{EscapeLabel(label)}\"}}";
+                    sb.Append("  ").Append(nodeId).Append(label).AppendLine();
+                    continue;
+                }
             }
 
             string shape = (i == NodeId.Start.Index) ? $"([\"{label}\"])" : $"[\"{label}\"]";
             sb.Append("  ").Append(nodeId).Append(shape).AppendLine();
         }
 
-        // Optional global terminal node (only emitted if needed)
+        // Optional global terminal node (only emitted if needed). A fork's transition slot is
+        // always empty by design (branches replace the success edge), but a fork never ends a
+        // token — it must not count as terminal.
         bool needsTerminal = false;
         for (int i = 0; i < graph.TransitionCount; i++)
         {
             Transition edge = graph.GetTransitionByIndex(i);
-            if (!edge.IsEmpty)
+            if (!edge.IsEmpty || IsFork(graph, i))
             {
                 continue;
             }
@@ -86,12 +113,13 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
             if (edge.IsEmpty)
             {
-                if (opts.AddTerminalNode)
+                if (opts.AddTerminalNode && !IsFork(graph, i))
                 {
                     sb.Append("  ").Append(from).Append(" --> ").Append(TerminalVar).AppendLine();
                 }
 
-                // else: omit terminal arrow; the node appears unconnected (terminal)
+                // else: omit terminal arrow; the node appears unconnected (terminal).
+                // Forks are skipped either way — their fan-out renders below.
                 continue;
             }
 
@@ -132,10 +160,26 @@ public sealed class MermaidGraphExporter : IGraphExporter
         // Director edges: directors don't carry a static transition (the runtime calls
         // SelectNext at execution time), so they're missed by the static-edge loop above.
         // Emit dashed edges to every statically-known target so the rendered diagram
-        // reflects the actual reachability.
+        // reflects the actual reachability. Fork branches are the exception: they are
+        // static AND-splits (every branch runs), so they render as solid labeled edges
+        // instead of the dashed "chosen at runtime" style.
         for (int i = 0; i < graph.NodeCount; i++)
         {
             if (graph.GetNodeByIndex(i) is not LogicNode dn) continue;
+
+            if (ForkOf(dn) is { } fork)
+            {
+                string forkVar = NodeVar(i);
+                foreach (NodeId branch in fork.Branches)
+                {
+                    int branchIdx = branch.Index;
+                    if ((uint)branchIdx >= (uint)graph.NodeCount) continue;
+                    sb.Append("  ").Append(forkVar).Append(" -- fork --> ").Append(NodeVar(branchIdx))
+                        .AppendLine();
+                }
+
+                continue;
+            }
 
             IEnumerable<NodeId>? targets =
                 (dn.AsyncLogic as IDirector)?.EnumerateStaticTargets()
@@ -161,6 +205,15 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
     private static string NodeVar(int index) => $"n{index}";
     private const string TerminalVar = "End";
+
+    private static ForkState? ForkOf(LogicNode node) =>
+        node.Logic as ForkState ?? node.AsyncLogic as ForkState;
+
+    private static JoinState? JoinOf(LogicNode node) =>
+        node.Logic as JoinState ?? node.AsyncLogic as JoinState;
+
+    private static bool IsFork(Graph graph, int index) =>
+        graph.GetNodeByIndex(index) is LogicNode ln && ForkOf(ln) is not null;
 
     private static string BuildNodeLabel(NodeId id, int index, MermaidExportOptions opts)
     {

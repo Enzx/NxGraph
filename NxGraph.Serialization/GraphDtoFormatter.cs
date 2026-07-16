@@ -10,12 +10,15 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
     private const int VersionOneHeaderCount = 6;
     private const int VersionTwoHeaderCount = 9;
     private const int VersionFourHeaderCount = 10;
+    private const int VersionFiveHeaderCount = 11;
+    private const int VersionSixHeaderCount = 14;
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {
         // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[],
-        //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[], 9.Composites[]]
-        writer.WriteArrayHeader(VersionFourHeaderCount);
+        //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[], 9.Composites[], 10.Uids[],
+        //  11.Forks[], 12.Joins[], 13.Containers[]]
+        writer.WriteArrayHeader(VersionSixHeaderCount);
         writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
@@ -30,6 +33,14 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             .Serialize(ref writer, value.OutcomeNames, options);
         options.Resolver.GetFormatterWithVerify<CompositeDto[]>()
             .Serialize(ref writer, value.Composites, options);
+        options.Resolver.GetFormatterWithVerify<UidDto[]>()
+            .Serialize(ref writer, value.Uids, options);
+        options.Resolver.GetFormatterWithVerify<ForkDto[]>()
+            .Serialize(ref writer, value.Forks, options);
+        options.Resolver.GetFormatterWithVerify<JoinDto[]>()
+            .Serialize(ref writer, value.Joins, options);
+        options.Resolver.GetFormatterWithVerify<ContainerDto[]>()
+            .Serialize(ref writer, value.Containers, options);
     }
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -56,6 +67,12 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 4 when count < VersionFourHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionFourHeaderCount} elements, got {count}");
+            case 5 when count < VersionFiveHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionFiveHeaderCount} elements, got {count}");
+            case 6 when count < VersionSixHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionSixHeaderCount} elements, got {count}");
         }
 
         int index = reader.ReadInt32();
@@ -88,9 +105,31 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
                 .Deserialize(ref reader, options);
         }
 
+        // Pre-v5 payloads end after Composites; the uid section arrived with version 5.
+        UidDto[] uids = [];
+        if (count >= VersionFiveHeaderCount)
+        {
+            uids = options.Resolver.GetFormatterWithVerify<UidDto[]>()
+                .Deserialize(ref reader, options);
+        }
+
+        // Pre-v6 payloads end after Uids; forks, joins, and containers arrived with version 6.
+        ForkDto[] forks = [];
+        JoinDto[] joins = [];
+        ContainerDto[] containers = [];
+        if (count >= VersionSixHeaderCount)
+        {
+            forks = options.Resolver.GetFormatterWithVerify<ForkDto[]>()
+                .Deserialize(ref reader, options);
+            joins = options.Resolver.GetFormatterWithVerify<JoinDto[]>()
+                .Deserialize(ref reader, options);
+            containers = options.Resolver.GetFormatterWithVerify<ContainerDto[]>()
+                .Deserialize(ref reader, options);
+        }
+
         reader.Depth--;
 
         return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames,
-            composites) { Version = version };
+            composites, uids, forks, joins, containers) { Version = version };
     }
 }

@@ -14,6 +14,13 @@ public class AsyncCompositeState(IAsyncLogic child) : AsyncState, ISubGraphProvi
     IEnumerable<Graph> ISubGraphProvider.SubGraphs =>
         child is ISubGraphProvider provider ? provider.SubGraphs : [];
 
+    /// <summary>
+    /// The wrapped child logic. Exposed to subclasses so a user container codec can read
+    /// back what the primary constructor captured (e.g. to serialize a wrapped machine's
+    /// graph or a logic-codec key for a non-graph child).
+    /// </summary>
+    protected IAsyncLogic Child => child;
+
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
     {
         if (child is IBlackboardSettable settable)
