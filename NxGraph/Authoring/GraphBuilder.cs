@@ -25,6 +25,7 @@ public sealed partial class GraphBuilder
     private readonly Dictionary<int, Action> _exitActions = new(); // sparse; attached to LogicNodes at Build()
     private readonly Dictionary<int, int> _outcomeCodes = new(); // sparse; materialized at Build()
     private readonly Dictionary<int, string> _outcomeNames = new(); // code -> display name
+    private readonly Dictionary<int, Guid> _uids = new(); // sparse; materialized at Build()
     private BlackboardSchema? _graphSchema; // Graph-scoped declaration, baked into the Graph at Build()
     private BlackboardSchema? _globalSchema; // required Global-scoped schema, baked into the Graph at Build()
     private BlackboardSchema? _nodeSchema; // transient Node-scoped schema, baked into the Graph at Build()
@@ -358,12 +359,27 @@ public sealed partial class GraphBuilder
             }
         }
 
+        Guid[]? uids = null;
+        if (_uids.Count > 0)
+        {
+            uids = new Guid[length];
+            foreach ((int idx, Guid uid) in _uids)
+            {
+                if ((uint)idx >= (uint)uids.Length)
+                {
+                    throw new InvalidOperationException($"Uid node index {idx} is out of bounds.");
+                }
+
+                uids[idx] = uid;
+            }
+        }
+
         IReadOnlyDictionary<int, string>? outcomeNames =
             _outcomeNames.Count > 0 ? new Dictionary<int, string>(_outcomeNames) : null;
 
         NodeId graphId = _next.Next();
         return new Graph(graphId, nodes, edges, logic: null, retries, outcomes, outcomeNames,
-            _graphSchema, _globalSchema, _nodeSchema);
+            _graphSchema, _globalSchema, _nodeSchema, uids);
     }
 
 
@@ -507,6 +523,25 @@ public sealed partial class GraphBuilder
             _outcomeNames[code] = name;
         }
 
+        return this;
+    }
+
+    /// <summary>
+    /// Assigns a stable UID to a node. UIDs are identity metadata for external tooling
+    /// (editors persisting layouts, breakpoints, references across rebuilds) — runtime
+    /// identity stays the index. <see cref="Guid.Empty"/> is reserved for "no uid";
+    /// duplicate UIDs across nodes are a validator Error. Uniqueness scope is per-graph;
+    /// nested subgraphs may reuse uids. Repeat calls for the same node overwrite.
+    /// </summary>
+    public GraphBuilder SetUid(NodeId id, Guid uid)
+    {
+        if (uid == Guid.Empty)
+        {
+            throw new ArgumentException("Node UID cannot be Guid.Empty (reserved for 'no uid').", nameof(uid));
+        }
+
+        RequireExistingNode(id);
+        _uids[id.Index] = uid;
         return this;
     }
 

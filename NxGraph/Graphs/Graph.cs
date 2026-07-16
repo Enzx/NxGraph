@@ -15,6 +15,8 @@ public sealed class Graph : INode, IGraph
     private readonly Transition[] _edges; // index = from.Index
     private readonly RetryPolicy[]? _retryPolicies; // index = NodeId.Index; null when no node has a policy
     private readonly int[]? _outcomeCodes; // index = NodeId.Index; null when no node declares an outcome
+    private readonly Guid[]? _uids; // index = NodeId.Index; Guid.Empty = no uid; null when no node has one
+    private readonly Dictionary<Guid, int>? _uidIndex; // built once at construction; never touched by run loops
 
     /// <summary>
     /// The unique identifier for this graph. 
@@ -54,12 +56,13 @@ public sealed class Graph : INode, IGraph
     /// <param name="nodes">The array of nodes in the graph. Must be non-empty and start with the start node at index 0.</param>
     /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
     /// <param name="logic">The logic associated with the graph. If null, an empty logic is used.</param>
+    /// <param name="uids">Optional per-node stable UIDs indexed by <see cref="NodeId.Index"/> (<see cref="Guid.Empty"/> = unassigned). Must match the nodes array length when provided.</param>
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
     public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null,
         RetryPolicy[]? retryPolicies = null, int[]? outcomeCodes = null,
         IReadOnlyDictionary<int, string>? outcomeNames = null,
         BlackboardSchema? schema = null, BlackboardSchema? globalSchema = null,
-        BlackboardSchema? nodeSchema = null)
+        BlackboardSchema? nodeSchema = null, Guid[]? uids = null)
     {
         if (schema is not null && schema.Scope != BlackboardScope.Graph)
         {
@@ -103,12 +106,34 @@ public sealed class Graph : INode, IGraph
                 nameof(outcomeCodes));
         }
 
+        if (uids is not null && uids.Length != nodes.Length)
+        {
+            throw new ArgumentException("Uid array must match the nodes array length.", nameof(uids));
+        }
+
         Id = id;
         StartNode = nodes[0];
         _nodes = nodes;
         _edges = edges;
         _retryPolicies = retryPolicies;
         _outcomeCodes = outcomeCodes;
+        _uids = uids;
+        if (uids is not null)
+        {
+            // First occurrence wins on duplicates: the graph must stay constructible so
+            // Validate() can report every duplicate as an Error instead of throwing here.
+            Dictionary<Guid, int> uidIndex = new();
+            for (int i = 0; i < uids.Length; i++)
+            {
+                if (uids[i] != Guid.Empty)
+                {
+                    uidIndex.TryAdd(uids[i], i);
+                }
+            }
+
+            _uidIndex = uidIndex;
+        }
+
         OutcomeNames = outcomeNames;
         Schema = schema;
         GlobalSchema = globalSchema;
@@ -148,6 +173,15 @@ public sealed class Graph : INode, IGraph
     /// node's code (default 0) as <c>LastOutcome</c>.
     /// </summary>
     public int[]? OutcomeCodes => _outcomeCodes;
+
+    /// <summary>
+    /// Per-node stable UIDs indexed by <see cref="NodeId.Index"/>, or <c>null</c> when no
+    /// node has one; <see cref="Guid.Empty"/> marks an unassigned slot. UIDs are identity
+    /// metadata for external tooling (editors persisting layouts, breakpoints, references
+    /// across rebuilds) — runtime identity stays the index and no run loop reads them.
+    /// Uniqueness scope is this graph only; nested subgraphs may reuse uids.
+    /// </summary>
+    public Guid[]? Uids => _uids;
 
     /// <summary>
     /// Optional display names for outcome codes, resolved lazily for reporting —
@@ -192,6 +226,26 @@ public sealed class Graph : INode, IGraph
 
         node = _nodes[id.Index];
         return true;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve a node by its stable UID (assigned at authoring time via
+    /// <c>WithUid</c>/<c>SetUid</c>). O(1) via a lookup built once at construction —
+    /// intended for editor tooling; the run loops never touch UIDs.
+    /// </summary>
+    /// <param name="uid">The stable UID to look up. <see cref="Guid.Empty"/> never matches.</param>
+    /// <param name="node">The node carrying the UID, if found; otherwise <see cref="LogicNode.Empty"/>.</param>
+    /// <returns><c>true</c> if a node carries the UID; otherwise, <c>false</c>.</returns>
+    public bool TryGetNodeByUid(Guid uid, out INode node)
+    {
+        if (_uidIndex is not null && _uidIndex.TryGetValue(uid, out int index))
+        {
+            node = _nodes[index];
+            return true;
+        }
+
+        node = LogicNode.Empty;
+        return false;
     }
 
     /// <summary>

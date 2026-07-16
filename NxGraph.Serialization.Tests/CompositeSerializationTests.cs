@@ -546,7 +546,7 @@ public class CompositeSerializationTests
     // ── Versioning and back-compat ───────────────────────────────────────
 
     [Test]
-    public async Task Composite_payload_carries_version_4_and_the_kind_marker()
+    public async Task Composite_payload_carries_the_current_version_and_the_kind_marker()
     {
         RegistryCodec codec = new();
         Graph region = GraphBuilder
@@ -560,7 +560,7 @@ public class CompositeSerializationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(json, Does.Contain("\"version\": 4"));
+            Assert.That(json, Does.Contain($"\"version\": {SerializationVersion.Version}"));
             Assert.That(json, Does.Contain("ParallelState"));
         });
     }
@@ -654,10 +654,10 @@ public class CompositeSerializationTests
         });
     }
 
-    // ── What still throws ────────────────────────────────────────────────
+    // ── What still throws (unconfigured options) ─────────────────────────
 
     [Test]
-    public void Async_dynamic_parallel_still_throws_the_targeted_error()
+    public void Async_dynamic_parallel_without_a_selector_registry_throws_the_targeted_error()
     {
         RegistryCodec codec = new();
         Graph region = GraphBuilder
@@ -673,14 +673,14 @@ public class CompositeSerializationTests
             async () => await serializer.ToJsonAsync(graph, new MemoryStream()));
         Assert.Multiple(() =>
         {
-            Assert.That(ex!.Message, Does.Contain("AsyncDynamicParallelState"));
-            Assert.That(ex.Message, Does.Contain("history composites"),
-                "The targeted error names the supported set post-v4.");
+            Assert.That(ex!.Message, Does.Contain("dynamic parallel composite"));
+            Assert.That(ex.Message, Does.Contain("GraphSerializerOptions.SelectorRegistry"),
+                "The targeted error names the option that unlocks the feature.");
         });
     }
 
     [Test]
-    public void Custom_subgraph_provider_containers_still_throw_the_targeted_error()
+    public void Custom_subgraph_provider_containers_without_a_container_codec_throw_the_targeted_error()
     {
         RegistryCodec codec = new();
         Graph child = GraphBuilder
@@ -693,7 +693,12 @@ public class CompositeSerializationTests
         GraphSerializer serializer = new(codec);
         NotSupportedException? ex = Assert.ThrowsAsync<NotSupportedException>(
             async () => await serializer.ToJsonAsync(graph, new MemoryStream()));
-        Assert.That(ex!.Message, Does.Contain("AsyncCompositeState"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("AsyncCompositeState"));
+            Assert.That(ex.Message, Does.Contain("GraphSerializerOptions.ContainerCodec"),
+                "The targeted error names the option that unlocks the feature.");
+        });
     }
 
     // ── Agent and blackboard walks on deserialized composites ───────────

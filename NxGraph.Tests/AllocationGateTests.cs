@@ -166,6 +166,28 @@ public class AllocationGateTests
     }
 
     [Test]
+    public async Task async_run_over_uid_bearing_graph_is_allocation_free()
+    {
+        Graph graph = GraphBuilder
+            .StartWithAsync(_ => ResultHelpers.Success).WithUid(Guid.NewGuid())
+            .ToAsync(_ => ResultHelpers.Success).WithUid(Guid.NewGuid())
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_run_over_uid_bearing_graph_is_allocation_free()
+    {
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success).WithUid(Guid.NewGuid())
+            .To(() => Result.Success).WithUid(Guid.NewGuid())
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
     public async Task async_stepped_execution_is_allocation_free()
     {
         AsyncStateMachine machine = AsyncChain(10).ToAsyncStateMachine();
@@ -649,5 +671,147 @@ public class AllocationGateTests
         }
 
         AssertZeroAlloc(token.ToStateMachine(new NoopSyncObserver()));
+    }
+
+    // ── Token runtime (spec 007): pooled tokens, fork/join, per-token scratch ──
+
+    private static void AssertZeroAllocTokens(NxGraph.Tokens.TokenMachine machine)
+    {
+        machine.SetStepMode(ParallelStepMode.RunToJoin);
+        for (int i = 0; i < 50; i++)
+        {
+            machine.Execute();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            machine.Execute();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Sync token hot path allocated {allocated} B over {Iterations} runs.");
+    }
+
+    private static async Task AssertZeroAllocTokensAsync(NxGraph.Tokens.AsyncTokenMachine machine)
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            await machine.ExecuteAsync();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            await machine.ExecuteAsync();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Async token hot path allocated {allocated} B over {Iterations} runs.");
+    }
+
+    /// <summary>load → fork(a, b) → join(All 2) → finish, sync logic throughout.</summary>
+    private static Graph TokenDiamond()
+    {
+        NxGraph.Tokens.JoinState join = new(NxGraph.Tokens.JoinPolicy.All(2));
+        return GraphBuilder.StartWith(() => Result.Success)
+            .ForkTo(
+                b => b.To(() => Result.Success).To(join).To(() => Result.Success),
+                b => b.To(() => Result.Success).To(join))
+            .Build();
+    }
+
+    [Test]
+    public void sync_token_fork_join_diamond_is_allocation_free()
+    {
+        AssertZeroAllocTokens(TokenDiamond().ToTokenMachine());
+    }
+
+    [Test]
+    public async Task async_token_fork_join_diamond_is_allocation_free()
+    {
+        await AssertZeroAllocTokensAsync(TokenDiamond().ToAsyncTokenMachine());
+    }
+
+    [Test]
+    public void sync_token_any_merge_is_allocation_free()
+    {
+        NxGraph.Tokens.JoinState merge = new(NxGraph.Tokens.JoinPolicy.Any);
+        Graph graph = GraphBuilder.StartWith(() => Result.Success)
+            .ForkTo(
+                b => b.To(() => Result.Success).To(merge).To(() => Result.Success),
+                b => b.To(() => Result.Success).To(merge))
+            .Build();
+
+        AssertZeroAllocTokens(graph.ToTokenMachine());
+    }
+
+    [Test]
+    public void sync_token_retry_without_backoff_is_allocation_free()
+    {
+        int calls = 0;
+        NxGraph.Tokens.JoinState join = new(NxGraph.Tokens.JoinPolicy.All(2));
+        Graph graph = GraphBuilder.StartWith(() => Result.Success)
+            .ForkTo(
+                b => b.To(() => ++calls % 2 == 0 ? Result.Success : Result.Failure)
+                    .Retry(2)
+                    .To(join),
+                b => b.To(() => Result.Success).To(join))
+            .Build();
+
+        AssertZeroAllocTokens(graph.ToTokenMachine());
+    }
+
+    [Test]
+    public void sync_token_node_scope_scratch_is_allocation_free()
+    {
+        BlackboardSchema nodeSchema = new("token-scratch", BlackboardScope.Node);
+        BlackboardKey<int> counter = nodeSchema.Register("counter", 0);
+
+        NxGraph.Tokens.JoinState join = new(NxGraph.Tokens.JoinPolicy.All(2));
+        StateToken start = GraphBuilder.StartWith(() => Result.Success);
+        Graph graph = start.ForkTo(
+                b => b.To(bb =>
+                {
+                    bb.Set(counter, bb.Get(counter) + 1);
+                    return Result.Success;
+                }).To(join).To(() => Result.Success),
+                b => b.To(bb =>
+                {
+                    bb.Set(counter, bb.Get(counter) + 1);
+                    return Result.Success;
+                }).To(join))
+            .Builder.WithSchema(nodeSchema).Build();
+
+        AssertZeroAllocTokens(graph.ToTokenMachine());
+    }
+
+    [Test]
+    public async Task async_token_with_observer_is_allocation_free()
+    {
+        await AssertZeroAllocTokensAsync(TokenDiamond().ToAsyncTokenMachine(new NoopAsyncTokenObserver()));
+    }
+
+    private sealed class NoopAsyncTokenObserver : NxGraph.Tokens.IAsyncTokenMachineObserver
+    {
+        public ValueTask OnStateEntered(int tokenId, NodeId id, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask OnStateExited(int tokenId, NodeId id, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask OnTransition(int tokenId, NodeId from, NodeId to, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask OnTokenSpawned(int tokenId, int parentTokenId, NodeId at, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask OnTokenRetired(int tokenId, NodeId at, NxGraph.Tokens.TokenRetireReason reason,
+            CancellationToken ct = default) => ValueTask.CompletedTask;
+
+        public ValueTask OnJoinFired(NodeId joinNode, int survivingTokenId, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
     }
 }

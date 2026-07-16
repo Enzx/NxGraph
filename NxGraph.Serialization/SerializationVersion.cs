@@ -8,6 +8,11 @@ public static class SerializationVersion
     // v4: history/parallel composites (CompositeDto section + "HistoryState"/"SyncHistoryState"/
     //     "ParallelState"/"SyncParallelState" markers) — older readers reject v4 payloads via
     //     the version gate instead of misreading the composite section.
-    public const int Version = 4;
+    // v5: per-node stable UIDs (sparse UidDto section) — editor-tooling identity metadata.
+    // v6: token fork/join sections ("ForkState"/"JoinState" markers), dynamic-parallel
+    //     composite kinds + SelectorKey ("DynamicParallelState"/"SyncDynamicParallelState"
+    //     markers, selector resolved via IRegionSelectorRegistry), container section
+    //     (markerless claims routed to the configured IContainerCodec).
+    public const int Version = 6;
 }
 

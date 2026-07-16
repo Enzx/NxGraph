@@ -85,6 +85,34 @@ public class LogicNode : INode
     /// (wire marker string "SyncParallelState", payload version 4).
     /// </summary>
     public static readonly LogicNode SyncParallelStateMarker = new(NodeId.SyncParallelStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for token fork owner nodes during (de)serialization (wire marker string
+    /// "ForkState", payload version 6). One marker for both runtimes: fork nodes never
+    /// execute and populate both logic slots, so no sync twin is needed.
+    /// </summary>
+    public static readonly LogicNode ForkStateMarker = new(NodeId.ForkStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for token join owner nodes during (de)serialization (wire marker string
+    /// "JoinState", payload version 6). One marker for both runtimes — see
+    /// <see cref="ForkStateMarker"/>.
+    /// </summary>
+    public static readonly LogicNode JoinStateMarker = new(NodeId.JoinStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for async dynamic-parallel composite owner nodes during (de)serialization
+    /// (wire marker string "DynamicParallelState", payload version 6).
+    /// </summary>
+    public static readonly LogicNode DynamicParallelStateMarker =
+        new(NodeId.DynamicParallelStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for <b>sync</b> dynamic-parallel composite owner nodes during
+    /// (de)serialization (wire marker string "SyncDynamicParallelState", payload version 6).
+    /// </summary>
+    public static readonly LogicNode SyncDynamicParallelStateMarker =
+        new(NodeId.SyncDynamicParallelStateMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>

@@ -3,10 +3,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using MessagePack;
 using MessagePack.Resolvers;
+using NxGraph.Blackboards;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 using NxGraph.Serialization.Abstraction;
+using NxGraph.Tokens;
 
 namespace NxGraph.Serialization;
 
@@ -22,13 +24,39 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     private const string LegacyStateMachineMarkerName = "Default";
 
     private readonly ILogicCodec _codec;
+    private readonly IRegionSelectorRegistry? _selectorRegistry;
+    private readonly IContainerCodec? _containerCodec;
     private readonly MessagePackSerializerOptions _options;
 
     private readonly JsonSerializerOptions _jsonOptions;
 
     public GraphSerializer(ILogicCodec codec)
+        : this(codec, options: null)
+    {
+    }
+
+    public GraphSerializer(ILogicCodec codec, GraphSerializerOptions? options)
     {
         ArgumentNullException.ThrowIfNull(codec);
+        _selectorRegistry = options?.SelectorRegistry;
+        _containerCodec = options?.ContainerCodec;
+
+        // Wire-type coherence: the container codec's payload rides in the same node DTO slot
+        // as the logic codec's, so their wire types must match. Fail at setup, not save time.
+        if (_containerCodec is not null)
+        {
+            bool containerText = _containerCodec is IContainerCodec<string>;
+            bool containerBinary = _containerCodec is IContainerCodec<ReadOnlyMemory<byte>>;
+            bool wireTypesMatch = (containerText && codec is ILogicCodec<string>) ||
+                                  (containerBinary && codec is ILogicCodec<ReadOnlyMemory<byte>>);
+            if (!wireTypesMatch)
+            {
+                throw new ArgumentException(
+                    "GraphSerializerOptions.ContainerCodec must use the same wire type as the ILogicCodec " +
+                    "(text with text, binary with binary) — the container payload rides in the same node DTO slot.",
+                    nameof(options));
+            }
+        }
         IFormatterResolver resolver = CompositeResolver.Create(
             formatters: [],
             resolvers:
@@ -162,6 +190,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         int nodeCount = graph.NodeCount;
         List<SubGraphDto> subGraphs = [];
         List<CompositeDto> composites = [];
+        List<ForkDto> forks = [];
+        List<JoinDto> joins = [];
+        List<ContainerDto> containers = [];
         INodeDto[] nodes = new INodeDto[nodeCount];
         for (int index = 0; index < nodeCount; index++)
         {
@@ -169,6 +200,28 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             switch (node)
             {
                 case LogicNode logicNode:
+                    // Token-runtime structural nodes (spec 007/009) ride as sparse sections:
+                    // branch arrays and join policies are plain structure, no configuration
+                    // needed. This check stays first in the dispatch — fork/join implement
+                    // both logic interfaces and must not fall through to any later branch.
+                    // TokenMachineSnapshot is a plain record and serializes independently.
+                    if ((logicNode.Logic as ForkState ?? logicNode.AsyncLogic as ForkState) is { } fork)
+                    {
+                        int[] branchIndexes = new int[fork.Branches.Count];
+                        for (int b = 0; b < branchIndexes.Length; b++)
+                            branchIndexes[b] = fork.Branches[b].Index;
+                        forks.Add(new ForkDto(index, branchIndexes));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.ForkStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if ((logicNode.Logic as JoinState ?? logicNode.AsyncLogic as JoinState) is { } join)
+                    {
+                        joins.Add(new JoinDto(index, (byte)join.Policy.Kind, join.Policy.Count));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.JoinStateMarker.Id.Name);
+                        break;
+                    }
+
                     if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
                         // Serialize state machine as sub-graph
@@ -233,27 +286,75 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
-                    // Remaining composites carry child graphs a user codec structurally cannot
-                    // serialize — only GraphSerializer can recurse into them. Dynamic parallel
-                    // composites hold a selector delegate that cannot ride the wire (a named-
-                    // selector registry is a deliberate non-feature until someone needs durable
-                    // dynamic fan-out), and custom ISubGraphProvider containers have no stable
-                    // reconstruction recipe. Fail with a targeted error instead of handing the
-                    // composite to the codec, which would either throw an opaque cast error or
-                    // silently drop the children.
-                    if (logicNode.AsyncLogic is ISubGraphProvider || logicNode.Logic is ISubGraphProvider)
+                    // Dynamic parallel composites (payload version 6) are first-class: region
+                    // graphs and step mode ride exactly like the static kinds; only the
+                    // selector delegate needs user help, riding as a named key resolved
+                    // through the configured selector registry.
+                    if (logicNode.AsyncLogic is AsyncDynamicParallelState asyncDynamic)
                     {
-                        // Name the actual composite: sync composites sit behind a
-                        // SyncLogicAdapter, whose type name would only obscure the error.
-                        string compositeName = logicNode.Logic is ISubGraphProvider
-                            ? logicNode.Logic.GetType().Name
-                            : logicNode.AsyncLogic.GetType().Name;
-                        throw new NotSupportedException(
-                            $"Node '{node.Id}' holds composite logic '{compositeName}' " +
-                            "which is not serializable. GraphSerializer supports plain nested state machines " +
-                            "(.SubGraph(...), async or sync), history composites (.SubGraph(..., history: true)), " +
-                            "and static parallel composites (.Parallel(...)); dynamic parallel composites " +
-                            "(their region selector is a delegate) and custom ISubGraphProvider containers do not ride the wire.");
+                        GraphDto[] children = new GraphDto[asyncDynamic.Regions.Count];
+                        for (int r = 0; r < children.Length; r++)
+                            children[r] = ToDto(asyncDynamic.Regions[r].Graph, depth + 1);
+                        composites.Add(new CompositeDto(index, CompositeKind.AsyncDynamicParallel, Mode: 0,
+                            children, ResolveSelectorKey(node.Id, asyncDynamic.Selector)));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.DynamicParallelStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if (logicNode.Logic is DynamicParallelState syncDynamic)
+                    {
+                        GraphDto[] children = new GraphDto[syncDynamic.Regions.Count];
+                        for (int r = 0; r < children.Length; r++)
+                            children[r] = ToDto(syncDynamic.Regions[r].Graph, depth + 1);
+                        composites.Add(new CompositeDto(index, CompositeKind.SyncDynamicParallel,
+                            (byte)syncDynamic.Mode, children, ResolveSelectorKey(node.Id, syncDynamic.Selector)));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.SyncDynamicParallelStateMarker.Id.Name);
+                        break;
+                    }
+
+                    // Remaining ISubGraphProvider containers (AsyncCompositeState subclasses,
+                    // custom user containers) carry child graphs a plain logic codec
+                    // structurally cannot serialize — only GraphSerializer can recurse. With a
+                    // container codec configured, the serializer owns the child-graph
+                    // recursion (SubGraphs enumeration order = wire order) and the codec owns
+                    // the reconstruction recipe, riding in the node's ordinary logic slot.
+                    // Without one, fail with a targeted error instead of handing the container
+                    // to the logic codec, which would silently drop the children.
+                    if ((logicNode.Logic as ISubGraphProvider ??
+                         logicNode.AsyncLogic as ISubGraphProvider) is { } container)
+                    {
+                        if (_containerCodec is null)
+                        {
+                            // Name the actual container: sync containers sit behind a
+                            // SyncLogicAdapter, whose type name would only obscure the error.
+                            string containerName = container.GetType().Name;
+                            throw new NotSupportedException(
+                                $"Node '{node.Id}' holds container logic '{containerName}' " +
+                                "which has no built-in wire format. Configure " +
+                                "GraphSerializerOptions.ContainerCodec with an IContainerCodec that owns its " +
+                                "reconstruction recipe; the serializer recurses into its SubGraphs itself.");
+                        }
+
+                        List<GraphDto> childDtos = [];
+                        foreach (Graph childGraph in container.SubGraphs)
+                        {
+                            childDtos.Add(ToDto(childGraph, depth + 1));
+                        }
+
+                        containers.Add(new ContainerDto(index, childDtos.ToArray()));
+                        nodes[index] = _containerCodec switch
+                        {
+                            IContainerCodec<string> t => new NodeTextDto(index, node.Id.Name,
+                                t.Serialize(container)),
+                            IContainerCodec<ReadOnlyMemory<byte>> b => new NodeBinaryDto(index, node.Id.Name,
+                                b.Serialize(container)),
+                            _ => throw new InvalidOperationException(
+                                "ContainerCodec implements neither IContainerCodec<string> nor " +
+                                "IContainerCodec<ReadOnlyMemory<byte>>.")
+                        };
+                        break;
                     }
 
                     // Unwrap SyncLogicAdapter so the codec receives the actual IAsyncLogic/ILogic,
@@ -327,8 +428,48 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             outcomeNames = entries.ToArray();
         }
 
+        UidDto[]? uids = null;
+        if (graph.Uids is { } uidArray)
+        {
+            List<UidDto> entries = [];
+            for (int index = 0; index < uidArray.Length; index++)
+            {
+                if (uidArray[index] != Guid.Empty)
+                {
+                    entries.Add(new UidDto(index, uidArray[index]));
+                }
+            }
+
+            uids = entries.ToArray();
+        }
+
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
-            outcomeCodes, outcomeNames, composites.ToArray());
+            outcomeCodes, outcomeNames, composites.ToArray(), uids, forks.ToArray(), joins.ToArray(),
+            containers.ToArray());
+    }
+
+    /// <summary>
+    /// Maps a dynamic-parallel selector delegate to its registered key. Selector identity is
+    /// reference identity — the graph must be authored with the registered delegate instance
+    /// (the default registry's <c>Register</c> returns it for exactly that reason).
+    /// </summary>
+    private string ResolveSelectorKey(NodeId nodeId, Func<BlackboardContext, RegionMask> selector)
+    {
+        if (_selectorRegistry is null)
+        {
+            throw new NotSupportedException(
+                $"Node '{nodeId}' is a dynamic parallel composite — its region selector rides the wire " +
+                "as a named key. Configure GraphSerializerOptions.SelectorRegistry to serialize it.");
+        }
+
+        if (!_selectorRegistry.TryGetKey(selector, out string key))
+        {
+            throw new InvalidOperationException(
+                $"Node '{nodeId}': the dynamic parallel composite's selector delegate is not registered in " +
+                "the selector registry. Register the same delegate instance the graph was authored with.");
+        }
+
+        return key;
     }
 
     private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
@@ -374,6 +515,49 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             if (!compositeOwners.TryAdd(compositeDto.OwnerIndex, compositeDto))
                 throw new InvalidOperationException(
                     $"Composite DTO owner index {compositeDto.OwnerIndex} is duplicated in the payload.");
+        }
+
+        // Claim-first for the v6 token sections: fork/join markers are only honored when the
+        // matching section claims the node index.
+        Dictionary<int, ForkDto>? forkOwners = null;
+        foreach (ForkDto forkDto in dto.Forks)
+        {
+            forkOwners ??= new Dictionary<int, ForkDto>();
+            if (!forkOwners.TryAdd(forkDto.OwnerIndex, forkDto))
+                throw new InvalidOperationException(
+                    $"Fork DTO owner index {forkDto.OwnerIndex} is duplicated in the payload.");
+        }
+
+        Dictionary<int, JoinDto>? joinOwners = null;
+        foreach (JoinDto joinDto in dto.Joins)
+        {
+            joinOwners ??= new Dictionary<int, JoinDto>();
+            if (!joinOwners.TryAdd(joinDto.OwnerIndex, joinDto))
+                throw new InvalidOperationException(
+                    $"Join DTO owner index {joinDto.OwnerIndex} is duplicated in the payload.");
+        }
+
+        // Container claims (v6) carry no marker string — the claim itself routes the node's
+        // logic payload to the container codec instead of the logic codec.
+        Dictionary<int, ContainerDto>? containerOwners = null;
+        foreach (ContainerDto containerDto in dto.Containers)
+        {
+            containerOwners ??= new Dictionary<int, ContainerDto>();
+            if (!containerOwners.TryAdd(containerDto.OwnerIndex, containerDto))
+                throw new InvalidOperationException(
+                    $"Container DTO owner index {containerDto.OwnerIndex} is duplicated in the payload.");
+        }
+
+        // A node index may be claimed by at most one section. Before markerless container
+        // claims this was implicit via marker matching; now it must be explicit — an
+        // overlapping claim is a corrupt or crafted payload, not something to route by luck.
+        {
+            Dictionary<int, string>? claimedBy = null;
+            AddClaims(ref claimedBy, subGraphOwners, "SubGraphs");
+            AddClaims(ref claimedBy, compositeOwners?.Keys, "Composites");
+            AddClaims(ref claimedBy, forkOwners?.Keys, "Forks");
+            AddClaims(ref claimedBy, joinOwners?.Keys, "Joins");
+            AddClaims(ref claimedBy, containerOwners?.Keys, "Containers");
         }
 
         INode[] nodes = new INode[nodesLength];
@@ -426,6 +610,32 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         break;
                     }
 
+                    // Token fork/join markers (v6): honored only when the matching section
+                    // claims this node index — an unclaimed marker string is ordinary payload
+                    // that falls through to the codec.
+                    if (textDto.Logic == LogicNode.ForkStateMarker.Id.Name &&
+                        forkOwners is not null && forkOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.ForkStateMarker;
+                        break;
+                    }
+
+                    if (textDto.Logic == LogicNode.JoinStateMarker.Id.Name &&
+                        joinOwners is not null && joinOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.JoinStateMarker;
+                        break;
+                    }
+
+                    // Container claims (v6) are markerless — the claim routes this node's
+                    // payload to the container codec. Decode is deferred until the child
+                    // graphs are rebuilt; the placeholder sentinel never rides the wire.
+                    if (containerOwners is not null && containerOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = ContainerPlaceholderMarker;
+                        break;
+                    }
+
                     if (textCodec is null)
                         throw new InvalidOperationException(
                             "GraphSerializer has no ILogicCodec<string> configured, cannot decode text nodes.");
@@ -437,6 +647,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     break;
 
                 case NodeBinaryDto binaryDto:
+                    if (containerOwners is not null && containerOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = ContainerPlaceholderMarker;
+                        break;
+                    }
+
                     if (binaryCodec is null)
                         throw new InvalidOperationException(
                             "GraphSerializer has no ILogicCodec<ReadOnlyMemory<byte>> configured, cannot decode binary nodes.");
@@ -539,10 +755,24 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Composite DTO for node {compositeDto.OwnerIndex} is a parallel composite and must carry " +
                     "at least one region graph.");
 
-            bool isSyncKind = compositeDto.Kind is CompositeKind.SyncHistory or CompositeKind.SyncParallel;
+            bool isSyncKind = compositeDto.Kind is CompositeKind.SyncHistory or CompositeKind.SyncParallel
+                or CompositeKind.SyncDynamicParallel;
             if (isSyncKind && compositeDto.Mode > (byte)ParallelStepMode.RoundPerTick)
                 throw new InvalidOperationException(
                     $"Composite DTO for node {compositeDto.OwnerIndex} has unknown step mode {compositeDto.Mode}.");
+
+            // SelectorKey is exclusive to the dynamic kinds: required there, forbidden
+            // elsewhere (a key smuggled onto a static kind is a crafted or corrupt payload).
+            bool isDynamicKind = compositeDto.Kind is CompositeKind.AsyncDynamicParallel
+                or CompositeKind.SyncDynamicParallel;
+            if (isDynamicKind && string.IsNullOrEmpty(compositeDto.SelectorKey))
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} is a dynamic parallel composite and " +
+                    "must carry a selector key.");
+            if (!isDynamicKind && compositeDto.SelectorKey is not null)
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} has kind '{compositeDto.Kind}' but " +
+                    "carries a selector key — only dynamic parallel kinds may.");
 
             Graph[] childGraphs = new Graph[compositeDto.Children.Length];
             for (int c = 0; c < childGraphs.Length; c++)
@@ -558,6 +788,11 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 CompositeKind.AsyncParallel => new AsyncParallelState(childGraphs),
                 CompositeKind.SyncParallel => new SyncLogicAdapter(
                     new ParallelState((ParallelStepMode)compositeDto.Mode, childGraphs)),
+                CompositeKind.AsyncDynamicParallel => new AsyncDynamicParallelState(
+                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs),
+                CompositeKind.SyncDynamicParallel => new SyncLogicAdapter(new DynamicParallelState(
+                    (ParallelStepMode)compositeDto.Mode,
+                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs)),
                 _ => throw new InvalidOperationException(
                     $"Composite DTO for node {compositeDto.OwnerIndex} has unknown kind {(byte)compositeDto.Kind}.")
             };
@@ -571,6 +806,125 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
             nodes[compositeDto.OwnerIndex] =
                 new LogicNode(new NodeId(compositeDto.OwnerIndex, compositeNodeName), compositeLogic);
+        }
+
+        // Rebuild token fork/join nodes (v6) through the public constructors so their
+        // validation re-runs. Branch ids are rebuilt as bare indexes — exactly what the live
+        // instance held pre-Build (equality is index-only; names resolve through the graph at
+        // runtime). Never read nodes[branch].Id here: a branch pointing at a not-yet-rebuilt
+        // owner would capture a negative sentinel id and silently corrupt routing.
+        foreach (ForkDto forkDto in dto.Forks)
+        {
+            if (forkDto.OwnerIndex < 0 || forkDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Fork DTO owner index {forkDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (!ReferenceEquals(nodes[forkDto.OwnerIndex], LogicNode.ForkStateMarker))
+                throw new InvalidOperationException(
+                    $"Fork DTO owner index {forkDto.OwnerIndex} does not reference a fork marker node.");
+            if (forkDto.Branches.Length == 0)
+                throw new InvalidOperationException(
+                    $"Fork DTO for node {forkDto.OwnerIndex} must carry at least one branch.");
+
+            NodeId[] branchIds = new NodeId[forkDto.Branches.Length];
+            for (int b = 0; b < branchIds.Length; b++)
+            {
+                int branchIndex = forkDto.Branches[b];
+                if (branchIndex < 0 || branchIndex >= nodesLength)
+                    throw new InvalidOperationException(
+                        $"Fork DTO for node {forkDto.OwnerIndex} has branch index {branchIndex} out of range " +
+                        $"(0..{nodesLength - 1}).");
+                branchIds[b] = new NodeId(branchIndex);
+            }
+
+            string forkNodeName = dto.Nodes[forkDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{forkDto.OwnerIndex}"
+            };
+
+            // Installed as IAsyncLogic — ForkState implements both logic interfaces, so both
+            // node slots populate and the rebuilt node runs under either token machine. A
+            // sync-authored fork/join round-trips without its SyncLogicAdapter wrapper: the
+            // trip is semantics-preserving, not wrapper-identical (fork/join never execute).
+            nodes[forkDto.OwnerIndex] = new LogicNode(new NodeId(forkDto.OwnerIndex, forkNodeName),
+                new ForkState(branchIds));
+        }
+
+        foreach (JoinDto joinDto in dto.Joins)
+        {
+            if (joinDto.OwnerIndex < 0 || joinDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Join DTO owner index {joinDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (!ReferenceEquals(nodes[joinDto.OwnerIndex], LogicNode.JoinStateMarker))
+                throw new InvalidOperationException(
+                    $"Join DTO owner index {joinDto.OwnerIndex} does not reference a join marker node.");
+
+            // Reconstruct the policy through its factories, pre-checked so a corrupt or
+            // crafted payload fails with an error naming the node instead of an
+            // ArgumentOutOfRangeException from the factory.
+            JoinPolicy policy = (JoinKind)joinDto.Kind switch
+            {
+                JoinKind.All when joinDto.Count >= 1 => JoinPolicy.All(joinDto.Count),
+                JoinKind.Any when joinDto.Count == 1 => JoinPolicy.Any,
+                JoinKind.Quorum when joinDto.Count >= 1 => JoinPolicy.Quorum(joinDto.Count),
+                _ => throw new InvalidOperationException(
+                    $"Join DTO for node {joinDto.OwnerIndex} has invalid policy " +
+                    $"(kind {joinDto.Kind}, count {joinDto.Count}).")
+            };
+
+            string joinNodeName = dto.Nodes[joinDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{joinDto.OwnerIndex}"
+            };
+
+            nodes[joinDto.OwnerIndex] = new LogicNode(new NodeId(joinDto.OwnerIndex, joinNodeName),
+                new JoinState(policy));
+        }
+
+        // Rebuild container-codec nodes (v6): children first (in wire order = SubGraphs
+        // enumeration order), then the node's ordinary logic payload routes to the container
+        // codec, which owns the reconstruction recipe.
+        foreach (ContainerDto containerDto in dto.Containers)
+        {
+            if (containerDto.OwnerIndex < 0 || containerDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Container DTO owner index {containerDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (_containerCodec is null)
+                throw new InvalidOperationException(
+                    $"Container DTO claims node {containerDto.OwnerIndex} but no " +
+                    "GraphSerializerOptions.ContainerCodec is configured.");
+
+            Graph[] childGraphs = new Graph[containerDto.Children.Length];
+            for (int c = 0; c < childGraphs.Length; c++)
+            {
+                childGraphs[c] = FromDto(containerDto.Children[c], depth + 1);
+            }
+
+            IAsyncLogic? containerLogic = (dto.Nodes[containerDto.OwnerIndex], _containerCodec) switch
+            {
+                (NodeTextDto nt, IContainerCodec<string> t) => t.Deserialize(nt.Logic, childGraphs),
+                (NodeBinaryDto nb, IContainerCodec<ReadOnlyMemory<byte>> b) => b.Deserialize(nb.Logic, childGraphs),
+                _ => throw new InvalidOperationException(
+                    $"Container DTO for node {containerDto.OwnerIndex}: the node payload's wire type does not " +
+                    "match the configured ContainerCodec.")
+            };
+
+            if (containerLogic is null)
+                throw new InvalidOperationException(
+                    $"ContainerCodec.Deserialize returned null for node {containerDto.OwnerIndex}.");
+
+            string containerNodeName = dto.Nodes[containerDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{containerDto.OwnerIndex}"
+            };
+
+            nodes[containerDto.OwnerIndex] =
+                new LogicNode(new NodeId(containerDto.OwnerIndex, containerNodeName), containerLogic);
         }
 
         int transitionsLength = dto.Transitions.Length;
@@ -638,8 +992,75 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             }
         }
 
+        Guid[]? uids = null;
+        if (dto.Uids is { Length: > 0 })
+        {
+            uids = new Guid[nodesLength];
+            foreach (UidDto entry in dto.Uids)
+            {
+                if (entry.Index < 0 || entry.Index >= nodesLength)
+                    throw new InvalidOperationException(
+                        $"Uid DTO index {entry.Index} is out of range (0..{nodesLength - 1}).");
+                if (entry.Uid == Guid.Empty)
+                    throw new InvalidOperationException(
+                        $"Uid DTO for node {entry.Index} cannot be Guid.Empty (absence encodes 'no uid').");
+
+                uids[entry.Index] = entry.Uid;
+            }
+        }
+
         NodeId graphId = new(dto.Index, dto.Name);
-        return new Graph(graphId, nodes, transitions, logic: null, retryPolicies, outcomeCodes, outcomeNames);
+        return new Graph(graphId, nodes, transitions, logic: null, retryPolicies, outcomeCodes, outcomeNames,
+            uids: uids);
+    }
+
+    /// <summary>
+    /// In-memory placeholder for container-claimed nodes between the node loop and the
+    /// container rebuild pass (children rebuild first). Purely internal — unlike the
+    /// composite markers it never rides the wire, because container claims are markerless.
+    /// </summary>
+    private static readonly LogicNode ContainerPlaceholderMarker =
+        new(new NodeId(-12, "ContainerPlaceholder"), new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Maps a payload selector key back to the registered delegate. The registry restores
+    /// <i>a</i> delegate for the key; whether it behaves like the authored one is the user's
+    /// contract — the same trust model the logic codec has for node logic.
+    /// </summary>
+    private Func<BlackboardContext, RegionMask> ResolveSelector(string key, int ownerIndex)
+    {
+        if (_selectorRegistry is null)
+        {
+            throw new InvalidOperationException(
+                $"Composite DTO for node {ownerIndex} is a dynamic parallel composite — configure " +
+                "GraphSerializerOptions.SelectorRegistry to deserialize it.");
+        }
+
+        if (!_selectorRegistry.TryGetSelector(key, out Func<BlackboardContext, RegionMask> selector))
+        {
+            throw new InvalidOperationException(
+                $"Composite DTO for node {ownerIndex} names selector key '{key}', which is not registered " +
+                "in the selector registry.");
+        }
+
+        return selector;
+    }
+
+    /// <summary>
+    /// Folds one section's claimed owner indexes into the shared claim map, throwing on the
+    /// first index already claimed by another section.
+    /// </summary>
+    private static void AddClaims(ref Dictionary<int, string>? claimedBy, IEnumerable<int>? owners, string section)
+    {
+        if (owners is null) return;
+        claimedBy ??= new Dictionary<int, string>();
+        foreach (int owner in owners)
+        {
+            if (!claimedBy.TryAdd(owner, section))
+                throw new InvalidOperationException(
+                    $"Node index {owner} is claimed by both the '{claimedBy[owner]}' and '{section}' payload " +
+                    "sections — a node may be claimed by at most one.");
+        }
     }
 
     /// <summary>
@@ -654,6 +1075,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         if (logic == LogicNode.SyncHistoryStateMarker.Id.Name) return LogicNode.SyncHistoryStateMarker;
         if (logic == LogicNode.ParallelStateMarker.Id.Name) return LogicNode.ParallelStateMarker;
         if (logic == LogicNode.SyncParallelStateMarker.Id.Name) return LogicNode.SyncParallelStateMarker;
+        if (logic == LogicNode.DynamicParallelStateMarker.Id.Name) return LogicNode.DynamicParallelStateMarker;
+        if (logic == LogicNode.SyncDynamicParallelStateMarker.Id.Name)
+            return LogicNode.SyncDynamicParallelStateMarker;
         return null;
     }
 
@@ -664,6 +1088,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         CompositeKind.SyncHistory => LogicNode.SyncHistoryStateMarker,
         CompositeKind.AsyncParallel => LogicNode.ParallelStateMarker,
         CompositeKind.SyncParallel => LogicNode.SyncParallelStateMarker,
+        CompositeKind.AsyncDynamicParallel => LogicNode.DynamicParallelStateMarker,
+        CompositeKind.SyncDynamicParallel => LogicNode.SyncDynamicParallelStateMarker,
         _ => throw new InvalidOperationException($"Unknown composite kind {(byte)kind}.")
     };
 

@@ -173,4 +173,52 @@ public class GraphValidatorTests
             Assert.That(falseBranchFlagged, Is.False, "False branch is reachable via director — should not be flagged.");
         });
     }
+
+    [Test]
+    public void DuplicateUid_ShouldBeError()
+    {
+        Guid shared = Guid.NewGuid();
+
+        GraphBuilder builder = new();
+        NodeId a = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId b = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        builder.AddTransition(a, b);
+        builder.SetUid(a, shared);
+        builder.SetUid(b, shared);
+
+        Graph graph = builder.Build(throwOnError: false);
+        GraphValidationResult res = graph.Validate();
+
+        GraphDiagnostic[] duplicates = res.Diagnostics
+            .Where(d => d.Severity == Severity.Error &&
+                        d.Message.Contains("Duplicate node UID", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(duplicates, Has.Length.EqualTo(2), "Every node claiming the UID gets its own Error.");
+            Assert.That(duplicates.Select(d => d.Node.Index), Is.EquivalentTo(new[] { a.Index, b.Index }));
+        });
+    }
+
+    [Test]
+    public void DistinctUids_ProduceNoUidDiagnostics()
+    {
+        GraphBuilder builder = new();
+        NodeId a = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId b = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        builder.AddTransition(a, b);
+        builder.SetUid(a, Guid.NewGuid());
+        builder.SetUid(b, Guid.NewGuid());
+
+        Graph graph = builder.Build(throwOnError: false);
+        GraphValidationResult res = graph.Validate(new GraphValidationOptions { AllNodes = builder.GetAllNodeIds() });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(res.HasErrors, Is.False);
+            Assert.That(res.Diagnostics.Any(d => d.Message.Contains("UID", StringComparison.Ordinal)), Is.False,
+                "Distinct UIDs must not produce any uid diagnostic.");
+        });
+    }
 }

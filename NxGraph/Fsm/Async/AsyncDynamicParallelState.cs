@@ -37,6 +37,13 @@ public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, 
     /// <summary>The region machines (selected or not).</summary>
     public IReadOnlyList<AsyncStateMachine> Regions => _regions;
 
+    /// <summary>
+    /// The region selector this composite was constructed with. Exposed (like
+    /// <see cref="Regions"/> and the ctor arguments) so serializers can map the delegate
+    /// back to a registered key — delegates themselves cannot ride a wire payload.
+    /// </summary>
+    public Func<BlackboardContext, RegionMask> Selector => _selector;
+
     IEnumerable<Graph> ISubGraphProvider.SubGraphs
     {
         get

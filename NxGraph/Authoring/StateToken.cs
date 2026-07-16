@@ -53,6 +53,17 @@ public readonly struct StateToken
     }
 
     /// <summary>
+    /// Assigns a stable UID to this state for external tooling (editors persisting layouts,
+    /// breakpoints, references across rebuilds). Runtime identity stays the index;
+    /// <see cref="Guid.Empty"/> is rejected and duplicate UIDs are a validator Error.
+    /// </summary>
+    public StateToken WithUid(Guid uid)
+    {
+        Builder.SetUid(Id, uid);
+        return this;
+    }
+
+    /// <summary>
     /// Attaches an action fired when the machine enters this state — once per visit,
     /// before its first execution (retries do not re-fire it).
     /// </summary>
