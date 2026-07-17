@@ -17,6 +17,7 @@ public static class Program
         Path.Combine("Fsm"),
         Path.Combine("Graphs"),
         Path.Combine("Shims"),
+        Path.Combine("Tokens"),
     ];
 
     private static readonly string[] FilesToCopy =
