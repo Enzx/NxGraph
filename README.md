@@ -47,6 +47,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Naming nodes](#naming-nodes)
   - [Agents / context injection](#agents--context-injection)
   - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
+  - [Step I/O (ports)](#step-io-ports)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution-stepped-model)
@@ -428,6 +429,49 @@ Graph graph = GraphBuilder.StartWith(new UploadState()).Retry(3)
 > **Anti-pattern:** don't use `Dictionary<string, object>` as a context — every access pays string hashing plus boxing. A `BlackboardKey<T>` slot is a schema-checked array read: type-safe, allocation-free, and serializable (see `BlackboardSerializer` in `NxGraph.Serialization` — each board is its own durability artifact alongside the graph payload and machine snapshot; Node boards are transient and never serialize).
 
 Like the state machines, a blackboard is owned by a single runner at a time (not thread-safe).
+
+### Step I/O (ports)
+
+Steps communicate through the blackboard — there is deliberately no hidden output→input piping between nodes. The shipped convention for *this step's output feeds that step's input* is a **port**: an ordinary **Graph-scoped** `BlackboardKey<T>`, one per producing step, named for the **datum**, not the step (`io.Register<string>("draft")`, not `"writeDraft.out"` — several steps may legally produce the same port, e.g. a retry-rewrite step). Producers `Set`, consumers `Get`; a consumer that can run before any producer reads the key's registered default — register a meaningful default or guard in the step. Declare the schema on the graph with `.WithSchema(io)` and bind a board per machine with `.WithBlackboard(new Blackboard(io))` — the existing paths, unchanged.
+
+The port DSL overloads read/write ports around the step lambda, so the common produce→transform→consume chain needs no manual `bb.Get`/`bb.Set` and the graph stays a shareable template:
+
+```csharp
+static class FlowIo
+{
+    public static readonly BlackboardSchema Schema = new("flow-io"); // Graph scope (default)
+    public static readonly BlackboardKey<string> Draft = Schema.Register<string>("draft", "");
+    public static readonly BlackboardKey<string> Final = Schema.Register<string>("final", "");
+}
+
+// Async: produce → pipe → consume.
+Graph graph = GraphBuilder
+    .Start()
+    .ToAsync(FlowIo.Draft, (bb, ct) => new ValueTask<string>("a draft"))                  // producer: value → port
+    .ToAsync(FlowIo.Draft, FlowIo.Final, (draft, bb, ct) => new ValueTask<string>($"[polished] {draft}")) // pipe
+    .ToAsync(FlowIo.Final, (text, bb, ct) => PublishAsync(text))                          // consumer: port → Result
+    .WithSchema(FlowIo.Schema)
+    .Build();
+
+Result result = await graph.ToAsyncStateMachine()
+    .WithBlackboard(new Blackboard(FlowIo.Schema))
+    .ExecuteAsync();
+```
+
+```csharp
+// Sync twin — the same shapes without the CancellationToken.
+Graph graph = GraphBuilder
+    .Start()
+    .To(FlowIo.Draft, bb => "a draft")
+    .To(FlowIo.Draft, FlowIo.Final, (draft, bb) => $"[polished] {draft}")
+    .To(FlowIo.Final, (text, bb) => Publish(text))
+    .WithSchema(FlowIo.Schema)
+    .Build();
+```
+
+Producer and pipe steps **cannot fail** — their lambdas return the value, and the relay writes it to the port and returns `Success`. A step that both computes a value and can fail keeps using the plain context relay (`.To(bb => ...)`) with an explicit `bb.Set(...)` on its success path; exceptions thrown by a step propagate exactly as from every relay.
+
+> **Node-scope trap:** a Node-scoped key cannot pipe — Node scratch resets on the success transition, so the producer's write is back at its default before the consumer runs. The port overloads reject Node-scoped keys at wiring time with an `ArgumentException`. Global-scoped keys are accepted (legitimate for world-state ports) but shared across machines — two machines over one template would overwrite each other's values, so the default recommendation stays Graph scope.
 
 ---
 
@@ -975,6 +1019,7 @@ The solution includes a runnable examples project with:
 - a serialization round-trip example
 - a sync Dungeon Crawler example using the DSL, observers, director nodes, loops, and named states
 - a blackboard demo (scoped shared memory, schema declarations, per-entity boards)
+- a step I/O ports demo (typed produce → pipe → consume chains over Graph-scoped port keys)
 - **parallel-region demos**: the sync Stronghold Siege (`ParallelStepMode.RoundPerTick` frame ticking, `RunToJoin` waves, blackboard-selected dynamic regions) and the async Expedition Camp (cooperative round-robin interleaving under `AsyncStateMachine`, dynamic region selection)
 
 Run it with:

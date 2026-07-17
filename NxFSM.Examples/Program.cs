@@ -79,6 +79,8 @@ await AgentExample.RunAsync();
 Console.WriteLine();
 await BlackboardExample.RunAsync();
 Console.WriteLine();
+await PortsExample.RunAsync();
+Console.WriteLine();
 ObserverExample.Run();
 Console.WriteLine();
 await FeatureExamples.RunAsync();

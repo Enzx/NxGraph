@@ -13,6 +13,12 @@ static class NxGraph.Authoring.Dsl
   method BranchBuilder To(BranchBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
   method BranchBuilder ToAsync(BranchBuilder, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
   method BranchBuilder ToAsync(BranchBuilder, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method BranchBuilder ToAsync[TIn,TOut](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method BranchBuilder ToAsync[TIn](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method BranchBuilder ToAsync[TOut](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method BranchBuilder To[TIn,TOut](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method BranchBuilder To[TIn](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method BranchBuilder To[TOut](BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
   method BranchBuilder WithSchema(BranchBuilder, NxGraph.Blackboards.BlackboardSchema)
   method BranchEnd Else(BranchBuilder, System.Func`1[NxGraph.Result])
   method BranchEnd Else(BranchBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
@@ -53,6 +59,15 @@ static class NxGraph.Authoring.Dsl
   method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.StateToken, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
   method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.StateToken, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
   method NxGraph.Authoring.StateToken ToAsync[TAgent](NxGraph.Authoring.StateToken, System.Func`4[TAgent,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
   method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StartToken, System.TimeSpan, NxGraph.Graphs.ILogic, NxGraph.Fsm.TimeoutBehavior)
   method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StartToken, System.TimeSpan, System.Func`1[NxGraph.Result], NxGraph.Fsm.TimeoutBehavior)
   method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StateToken, System.TimeSpan, NxGraph.Graphs.ILogic, NxGraph.Fsm.TimeoutBehavior)
@@ -65,6 +80,15 @@ static class NxGraph.Authoring.Dsl
   method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StateToken, System.TimeSpan, NxGraph.Graphs.IAsyncLogic, NxGraph.Fsm.TimeoutBehavior)
   method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StateToken, System.TimeSpan, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], NxGraph.Fsm.TimeoutBehavior)
   method NxGraph.Authoring.StateToken To[TAgent](NxGraph.Authoring.StateToken, System.Func`3[TAgent,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TOut](BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
   method NxGraph.Authoring.StateToken WaitFor(NxGraph.Authoring.StartToken, System.TimeSpan)
   method NxGraph.Authoring.StateToken WaitFor(NxGraph.Authoring.StateToken, System.TimeSpan)
   method NxGraph.Authoring.StateToken WaitForAsync(NxGraph.Authoring.StartToken, System.TimeSpan)
@@ -406,6 +430,15 @@ sealed class NxGraph.Fsm.Async.AsyncParallelState : NxGraph.Blackboards.IBlackbo
   ctor Void .ctor(NxGraph.Graphs.Graph[])
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
   property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
+sealed class NxGraph.Fsm.Async.AsyncPortConsumerRelayState`1 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncPortPipeRelayState`2 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncPortProducerRelayState`1 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
 sealed class NxGraph.Fsm.Async.AsyncRelayState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
   ctor Void .ctor(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
   ctor Void .ctor(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
@@ -550,6 +583,15 @@ sealed class NxGraph.Fsm.ParallelState : NxGraph.Blackboards.IBlackboardSettable
 enum NxGraph.Fsm.ParallelStepMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   RoundPerTick = 1
   RunToJoin = 0
+sealed class NxGraph.Fsm.PortConsumerRelayState`1 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Result OnRun()
+sealed class NxGraph.Fsm.PortPipeRelayState`2 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Result OnRun()
+sealed class NxGraph.Fsm.PortProducerRelayState`1 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Result OnRun()
 struct NxGraph.Fsm.RegionMask : System.IEquatable`1[[NxGraph.Fsm.RegionMask, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
   method Boolean Contains(Int32)
   method Boolean Equals(NxGraph.Fsm.RegionMask)
