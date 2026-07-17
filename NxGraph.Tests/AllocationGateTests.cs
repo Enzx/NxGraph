@@ -690,6 +690,22 @@ public class AllocationGateTests
     }
 
     [Test]
+    public void sync_to_all_join_is_allocation_free()
+    {
+        // The async AsyncAllState allocates per execution by design (task materialization
+        // dwarfed by the I/O it overlaps) — exemption recorded in spec 012, no async case.
+        Graph graph = GraphBuilder
+            .Start()
+            .ToAll(
+                _ => Result.Success,
+                _ => Result.Success,
+                _ => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
     public void sync_chain_of_10_is_allocation_free()
     {
         StateToken token = GraphBuilder.StartWith(() => Result.Success);

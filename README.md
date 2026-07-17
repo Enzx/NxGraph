@@ -237,6 +237,8 @@ Every fan-out construct answers two questions: **how many successors run**, and 
 
 The FSM runtimes keep exactly one active node, and many-at-once execution lives inside the parallel composites, which join back into the single-active flow at the composite boundary. When the flow genuinely needs several active nodes in **one flat graph** — a forked path that rejoins the parent flow mid-graph, the same node active k times, M-of-N merges — that is the [token runtime](#token-runtime-fork-join-and-mid-graph-merge): a third runtime beside the sync/async machines (`TokenMachine`/`AsyncTokenMachine`), not a change to them.
 
+> **None of these overlap in time.** Every construct in the table interleaves cooperatively — one node per region (or per token) per round, on the caller's thread — so two 20-second API calls placed in parallel regions still take about 40 seconds wall-clock. For genuine wall-clock concurrency, run the calls inside **one node** with [`.ToAllAsync(...)`](#in-node-concurrency-toallasync): the same two calls overlap and finish in about 20 seconds. Regions structure *logic*; nodes structure *time*.
+
 ### Waits and timeouts
 
 ```csharp
@@ -658,6 +660,33 @@ StateMachine fsm = GraphBuilder
 ```
 
 The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Selectors execute on the measured zero-allocation path, so compose masks with `RegionMask.Bit(i) | ...` as above — allocation-free — while `RegionMask.Of(params)` allocates its array and belongs at setup time only. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
+
+#### In-node concurrency: `.ToAllAsync(...)`
+
+Parallel regions are cooperative, not thread-concurrent — and that is a recorded design decision, not an oversight: truly concurrent regions would make every shared Global/Graph board access a data race (forcing a thread-safety mode onto the blackboards), deliver observer callbacks concurrently (breaking the event-ordering contracts the observer tests codify), allocate task machinery in what is today a zero-allocation round loop, and have no meaningful sync twin. The library's position is **regions structure logic, nodes structure time**: when two 20-second I/O calls must overlap in wall-clock time, run them inside a *single node* with `.ToAllAsync(...)` — every work starts with the node's own `CancellationToken`, all are awaited, and the results join afterwards: `Success` iff every work returned `Success`, else one ordinary node `Failure` feeding the unified fault model (`.Retry(...)` re-runs *all* works; `.OnError(...)` sees one node failure). There is no early abort — a failing work never cancels its siblings, so partial effects are never timing-dependent (a consumer wanting first-failure-cancels composes a linked CTS inside its works); a throwing work propagates its exception after all works settle, and cancelling the machine's token cancels all works.
+
+**Disjoint keys are the contract:** the works share one routed `BlackboardContext`, which is not thread-safe — concurrent works must touch **disjoint** keys. Same-key access from two works is a data race; distinct keys write to distinct slots and are genuinely safe. The recommended shape is one [output port](#step-io-ports) per work, combined by the next node:
+
+```csharp
+static class ScoutIo
+{
+    public static readonly BlackboardSchema Schema = new("scout-io"); // Graph scope (default)
+    public static readonly BlackboardKey<string> Weather = Schema.Register<string>("weather", "");
+    public static readonly BlackboardKey<string> Terrain = Schema.Register<string>("terrain", "");
+}
+
+Graph graph = GraphBuilder
+    .Start()
+    .ToAllAsync( // both calls in flight at once — ~max(t1, t2), not t1 + t2
+        async (bb, ct) => { bb.Set(ScoutIo.Weather, await FetchWeatherAsync(ct)); return Result.Success; },
+        async (bb, ct) => { bb.Set(ScoutIo.Terrain, await FetchTerrainAsync(ct)); return Result.Success; })
+    .ToAsync(ScoutIo.Weather, (weather, bb, ct) => // the next node combines the ports
+        PlanRouteAsync(weather, bb.Get(ScoutIo.Terrain)))
+    .WithSchema(ScoutIo.Schema)
+    .Build();
+```
+
+The sync twin `.ToAll(...)` runs its works sequentially, in order, within one tick — wall-clock overlap is an async-only mechanic, exactly like retry backoff — with identical join semantics, including no early abort, so a graph moved between runtimes sees the same board effects; as plain `ILogic` it also runs under the async machine via the adapter, and it stays allocation-free per tick. `.ToAllAsync` allocates per execution by design (task materialization is dwarfed by the I/O it overlaps). The join is deliberately all-or-nothing: for *some-of-many* joining ("succeed when m of n arrive"), use the token runtime's [`JoinPolicy.Quorum`](#token-runtime-fork-join-and-mid-graph-merge) — that is the logical quorum tool, and duplicating it at node level would blur the two models. See `NxFSM.Examples/ReadmeExamples/InNodeConcurrencyExample.cs` for the runnable version.
 
 ### Token runtime: fork, join, and mid-graph merge
 

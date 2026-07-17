@@ -87,6 +87,8 @@ await FeatureExamples.RunAsync();
 Console.WriteLine();
 await FanOutExamples.RunAsync();
 Console.WriteLine();
+await InNodeConcurrencyExample.RunAsync();
+Console.WriteLine();
 await TokenRunnerExamples.RunAsync();
 
 return 0;
