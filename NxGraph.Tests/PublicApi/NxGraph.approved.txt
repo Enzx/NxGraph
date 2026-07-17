@@ -523,7 +523,7 @@ sealed class NxGraph.Fsm.ChoiceState : NxGraph.Blackboards.IBlackboardSettable, 
   method NxGraph.Graphs.NodeId SelectNext()
   method NxGraph.Result Execute()
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
-sealed class NxGraph.Fsm.CompositeSnapshot : System.IEquatable`1[[NxGraph.Fsm.CompositeSnapshot, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+sealed class NxGraph.Fsm.CompositeSnapshot : System.IEquatable`1[[NxGraph.Fsm.CompositeSnapshot]]
   ctor Void .ctor(Int32, Boolean, Boolean[], NxGraph.Fsm.StateMachineDeepSnapshot[])
   method Boolean Equals(NxGraph.Fsm.CompositeSnapshot)
   method Boolean Equals(System.Object)
@@ -625,7 +625,7 @@ sealed class NxGraph.Fsm.PortPipeRelayState`2 : NxGraph.Fsm.State, NxGraph.Black
 sealed class NxGraph.Fsm.PortProducerRelayState`1 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
   ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
   method NxGraph.Result OnRun()
-struct NxGraph.Fsm.RegionMask : System.IEquatable`1[[NxGraph.Fsm.RegionMask, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+struct NxGraph.Fsm.RegionMask : System.IEquatable`1[[NxGraph.Fsm.RegionMask]]
   method Boolean Contains(Int32)
   method Boolean Equals(NxGraph.Fsm.RegionMask)
   method Boolean Equals(System.Object)
@@ -692,7 +692,7 @@ class NxGraph.Fsm.StateMachine : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackbo
   property NxGraph.Fsm.ExecutionStatus Status { get; }
   property NxGraph.Fsm.ParallelStepMode StepMode { get; }
   property System.String LastOutcomeName { get; }
-sealed class NxGraph.Fsm.StateMachineDeepSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineDeepSnapshot, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+sealed class NxGraph.Fsm.StateMachineDeepSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineDeepSnapshot]]
   ctor Void .ctor(NxGraph.Fsm.StateMachineSnapshot, NxGraph.Fsm.CompositeSnapshot[])
   method Boolean Equals(NxGraph.Fsm.StateMachineDeepSnapshot)
   method Boolean Equals(System.Object)
@@ -704,7 +704,7 @@ sealed class NxGraph.Fsm.StateMachineDeepSnapshot : System.IEquatable`1[[NxGraph
   operator Boolean op_Inequality(NxGraph.Fsm.StateMachineDeepSnapshot, NxGraph.Fsm.StateMachineDeepSnapshot)
   property NxGraph.Fsm.CompositeSnapshot[] Composites { get; set; }
   property NxGraph.Fsm.StateMachineSnapshot Self { get; set; }
-sealed class NxGraph.Fsm.StateMachineSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineSnapshot, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+sealed class NxGraph.Fsm.StateMachineSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineSnapshot]]
   ctor Void .ctor(Int32, NxGraph.Fsm.ExecutionStatus, Int32, Boolean, Boolean, Int32)
   method Boolean Equals(NxGraph.Fsm.StateMachineSnapshot)
   method Boolean Equals(System.Object)
@@ -820,7 +820,7 @@ class NxGraph.Graphs.LogicNode : NxGraph.Graphs.INode
   property NxGraph.Graphs.NodeId Id { get; }
   property System.Action EnterAction { get; }
   property System.Action ExitAction { get; }
-struct NxGraph.Graphs.NodeId : System.IEquatable`1[[NxGraph.Graphs.NodeId, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+struct NxGraph.Graphs.NodeId : System.IEquatable`1[[NxGraph.Graphs.NodeId]]
   ctor Void .ctor(Int32)
   ctor Void .ctor(Int32, System.String)
   ctor Void .ctor(NxGraph.Graphs.NodeId)
@@ -858,7 +858,7 @@ struct NxGraph.Graphs.Transition
   property Boolean IsEmpty { get; }
   property NxGraph.Graphs.NodeId Destination { get; }
   property NxGraph.Graphs.NodeId FailureDestination { get; }
-struct NxGraph.Result : System.IEquatable`1[[NxGraph.Result, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+struct NxGraph.Result : System.IEquatable`1[[NxGraph.Result]]
   field static readonly NxGraph.Result Continue
   field static readonly NxGraph.Result Failure
   field static readonly NxGraph.Result InProgress
@@ -884,10 +884,10 @@ enum NxGraph.Result+StatusCode : System.IComparable, System.IConvertible, System
   Success = 0
 static class NxGraph.ResultHelpers
   field static readonly System.Threading.Tasks.ValueTask CompletedTask
-  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]] Continue
-  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]] Failure
-  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]] InProgress
-  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]] Success
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Continue
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Failure
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] InProgress
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Success
 class NxGraph.Tokens.AsyncTokenMachine : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
   ctor Void .ctor(NxGraph.Graphs.Graph, NxGraph.Tokens.IAsyncTokenMachineObserver, Int32)
   field readonly NxGraph.Graphs.Graph Graph
@@ -966,7 +966,7 @@ class NxGraph.Tokens.TokenMachine : NxGraph.Fsm.State, NxGraph.Blackboards.IBlac
   property Int32 LiveTokenCount { get; }
   property NxGraph.Fsm.ExecutionStatus Status { get; }
   property NxGraph.Fsm.ParallelStepMode StepMode { get; }
-sealed class NxGraph.Tokens.TokenMachineSnapshot : System.IEquatable`1[[NxGraph.Tokens.TokenMachineSnapshot, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+sealed class NxGraph.Tokens.TokenMachineSnapshot : System.IEquatable`1[[NxGraph.Tokens.TokenMachineSnapshot]]
   ctor Void .ctor(NxGraph.Fsm.ExecutionStatus, Boolean, Int32, NxGraph.Tokens.TokenRecord[], Int32[])
   method Boolean Equals(NxGraph.Tokens.TokenMachineSnapshot)
   method Boolean Equals(System.Object)
@@ -989,7 +989,7 @@ class NxGraph.Tokens.TokenMachine`1 : NxGraph.Tokens.TokenMachine, IAgentSettabl
 enum NxGraph.Tokens.TokenPhase : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Parked = 1
   Runnable = 0
-sealed class NxGraph.Tokens.TokenRecord : System.IEquatable`1[[NxGraph.Tokens.TokenRecord, NxGraph, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]
+sealed class NxGraph.Tokens.TokenRecord : System.IEquatable`1[[NxGraph.Tokens.TokenRecord]]
   ctor Void .ctor(Int32, Int32, Int32, Boolean, NxGraph.Tokens.TokenPhase)
   method Boolean Equals(NxGraph.Tokens.TokenRecord)
   method Boolean Equals(System.Object)

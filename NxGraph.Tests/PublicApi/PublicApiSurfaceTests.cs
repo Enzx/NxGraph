@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using NxGraph.Graphs;
 using NxGraph.Serialization.Abstraction;
 
@@ -87,6 +88,12 @@ public class PublicApiSurfaceTests
     private static string BaselineDirectory([CallerFilePath] string thisFile = "")
         => Path.GetDirectoryName(thisFile)!;
 
+    // Constructed generic types render their arguments assembly-qualified
+    // ("[[NxGraph.Result, NxGraph, Version=1.0.0.0, ...]]"), which would make the
+    // baseline depend on the build's version stamp (e.g. VERSION set in a release CI run).
+    private static string StripAssemblyQualification(string text) =>
+        Regex.Replace(text, @", [\w.]+, Version=[^,\]]+, Culture=[^,\]]+, PublicKeyToken=[^,\]]+", "");
+
     private static string DescribePublicApi(Assembly assembly)
     {
         StringBuilder sb = new();
@@ -103,7 +110,7 @@ public class PublicApiSurfaceTests
             }
         }
 
-        return sb.ToString();
+        return StripAssemblyQualification(sb.ToString());
     }
 
     private static string TypeKind(Type type)
