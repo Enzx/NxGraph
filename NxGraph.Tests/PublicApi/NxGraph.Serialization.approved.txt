@@ -17,10 +17,10 @@ sealed class NxGraph.Serialization.GraphSerializerOptions
   ctor Void .ctor()
   property NxGraph.Serialization.Abstraction.IContainerCodec ContainerCodec { get; set; }
   property NxGraph.Serialization.Abstraction.IRegionSelectorRegistry SelectorRegistry { get; set; }
-interface NxGraph.Serialization.IContainerBinaryCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.ReadOnlyMemory`1[[System.Byte, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
-interface NxGraph.Serialization.IContainerTextCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
-interface NxGraph.Serialization.ILogicBinaryCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.ReadOnlyMemory`1[[System.Byte, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
-interface NxGraph.Serialization.ILogicTextCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
+interface NxGraph.Serialization.IContainerBinaryCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]
+interface NxGraph.Serialization.IContainerTextCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.String]]
+interface NxGraph.Serialization.ILogicBinaryCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]
+interface NxGraph.Serialization.ILogicTextCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.String]]
 sealed class NxGraph.Serialization.RegionSelectorRegistry : NxGraph.Serialization.Abstraction.IRegionSelectorRegistry
   ctor Void .ctor()
   method Boolean TryGetKey(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], System.String ByRef)
