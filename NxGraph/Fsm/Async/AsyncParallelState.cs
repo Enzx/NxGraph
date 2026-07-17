@@ -18,6 +18,13 @@ namespace NxGraph.Fsm.Async;
 /// gives AND-state semantics at 0 B per step, which covers the game/agent use cases this
 /// library targets; run truly CPU-parallel work inside a single node instead.
 /// </para>
+/// <para>
+/// Deliberately does <b>not</b> implement <see cref="ISuspendableComposite"/>: every
+/// execution runs all regions to terminal inside one <c>ExecuteAsync</c> and resets its
+/// bookkeeping on entry, so the composite holds no durable visit or cross-visit state at a
+/// parent step boundary — there is nothing for a deep snapshot to capture, and its absence
+/// from one is correct, not a gap.
+/// </para>
 /// </summary>
 public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
 {

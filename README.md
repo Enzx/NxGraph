@@ -16,7 +16,7 @@ NxGraph is a lean, high-performance finite state machine / stateflow library for
 - stepped execution for Unity (`Update()`-loop friendly)
 - a unified fault model: per-node retries, failure edges (`.OnError`), and timeouts
 - composites: subgraphs (with history), parallel regions, and blackboard-selected dynamic regions
-- durable suspend/resume via serializable snapshots
+- durable suspend/resume via serializable snapshots (shallow, or deep with composite internals)
 - scoped blackboards (typed, zero-boxing shared memory)
 - graph validation
 - observers, tracing, replay, and Mermaid export
@@ -737,9 +737,35 @@ while (result == Result.InProgress)
 
 - `Suspend()` is legal between `StepAsync()`/`Execute()` calls of a stepped run, or on an idle/terminal machine; it captures the current node, status, retry attempts, and `LastOutcome`.
 - `Resume(snapshot)` requires a graph that is structurally equivalent (same node indices); re-attach agents/blackboards before continuing.
-- A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), the snapshot, and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
+- A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), one machine snapshot (shallow **or** deep, below), and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
 - Node-scoped blackboards are transient by definition and are **not** part of the durable flow: `Resume(snapshot)` restores Node keys to their registered defaults — a node suspended mid-visit loses its scratch.
-- Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a resumed composite starts its visit fresh.
+- Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a shallow-resumed composite starts its visit fresh. Use the deep pair below when suspension points live inside composites.
+
+#### Deep suspend — capturing composite internals
+
+`SuspendDeep()`/`ResumeDeep(...)` are the opt-in deep pair on both machines: same gates and rules as the shallow pair, but the snapshot additionally carries the composite tree — nested machine positions, a history composite's remembered child position, and the sync `RoundPerTick` composites' mid-visit bookkeeping (per-region done bits, dynamic-parallel deselection included):
+
+```csharp
+using System.Text.Json;
+
+AsyncStateMachine first = flow.ToAsyncStateMachine();    // flow nests a history subgraph
+await first.StepAsync();                                 // child failed; parent is at the repair step
+StateMachineDeepSnapshot deep = first.SuspendDeep();     // position + composite internals
+
+string json = JsonSerializer.Serialize(deep);            // still plain records — any serializer works
+
+// Later — fresh machine over an equivalent (rebuilt) graph:
+AsyncStateMachine second = rebuiltFlow.ToAsyncStateMachine();
+second.ResumeDeep(JsonSerializer.Deserialize<StateMachineDeepSnapshot>(json)!);
+// on re-entry the history child resumes at its last-active node — not from its start
+```
+
+- `StateMachineDeepSnapshot` = the shallow snapshot (`Self`) plus one `CompositeSnapshot` per composite that holds durable state; child machines carry their own deep snapshots recursively. Everything stays primitives/arrays — zero-configuration serializable, caller-serialized.
+- Capture is sparse and interface-driven (`ISuspendableComposite`): the sync nested machine, `AsyncHistoryState`/`HistoryState`, and the sync `ParallelState`/`DynamicParallelState` implement it; the async parallel composites run their regions to terminal within one execution, hold no durable state, and correctly contribute nothing. A composite absent from the snapshot re-enters fresh.
+- Custom containers opt in by implementing `ISuspendableComposite` — the third leg of the container contract beside `ISubGraphProvider` and `IBlackboardSettable` forwarding.
+- The shallow pair and `StateMachineSnapshot` are untouched — keep using them when flows put suspension points at the top level. Deep snapshots inherit the same rules: equivalent graph per nesting level, cross-runtime interchangeable, Node-scoped scratch resumes as defaults at every level.
+
+See `NxFSM.Examples/ReadmeExamples/FeatureExamples.cs` for the runnable version.
 
 ### Restart policy
 
@@ -1128,7 +1154,6 @@ The machine has more nodes to process but is returning control to the caller (e.
 ## Roadmap
 
 - sync twins for the remaining async-only constructs (history subgraphs, waits, timeouts)
-- hierarchical snapshots so composite-internal progress survives durable suspend/resume
 - validator and Mermaid-export awareness of composite interiors
 - continued ergonomics improvements around DSL authoring and serialization
 

@@ -8,7 +8,9 @@ namespace NxGraph.Fsm;
 /// Sync twin of <see cref="Async.AsyncDynamicParallelState"/> (runtime parity): at the start
 /// of each visit a selector reads the machine-bound <see cref="BlackboardContext"/> and
 /// returns a <see cref="RegionMask"/> deciding which region graphs run. Only selected regions
-/// are stepped; unselected regions are never stepped and never reset. Join semantics match
+/// are stepped; unselected regions are never stepped (a region left terminal by an earlier
+/// visit is reset on the next visit's first tick, selected or not, so stale results never
+/// leak across visits). Join semantics match
 /// <see cref="ParallelState"/>: <see cref="Result.Success"/> only when every selected region
 /// succeeded, else <see cref="Result.Failure"/> through the parent's unified fault model.
 /// <para>
@@ -20,7 +22,7 @@ namespace NxGraph.Fsm;
 /// (compose with <see cref="RegionMask.Bit"/> and <c>|</c>, or precompute masks at setup).
 /// </para>
 /// </summary>
-public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboardSettable
+public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
 {
     private readonly Func<BlackboardContext, RegionMask> _selector;
     private readonly StateMachine[] _regions;
@@ -81,9 +83,82 @@ public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboar
         for (int i = 0; i < regions.Length; i++)
         {
             _regions[i] = new StateMachine(regions[i]);
+            // Manual keeps a finished region's terminal status readable between the join and
+            // the next visit — deep suspend recomputes the join's failure aggregation from
+            // those statuses. The fresh-visit reset happens in ResetTerminalRegions instead.
+            _regions[i].SetRestartPolicy(RestartPolicy.Manual);
         }
 
         _done = new bool[regions.Length];
+    }
+
+    // ── ISuspendableComposite ─────────────────────────────────────────────
+    // Same durable state as ParallelState, with one addition that makes Done capture (not
+    // derivation) mandatory: a deselected region is done-without-terminal-status (its machine
+    // never ran), so child statuses alone cannot reconstruct the selection projected into
+    // _done at the visit's first tick. The selector is NOT re-evaluated on resume — the
+    // captured Done bits carry the visit's fixed selection.
+
+    CompositeSnapshot ISuspendableComposite.SuspendComposite(int nodeIndex)
+    {
+        StateMachineDeepSnapshot[] children = new StateMachineDeepSnapshot[_regions.Length];
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            children[i] = _regions[i].SuspendDeep();
+        }
+
+        return new CompositeSnapshot(nodeIndex, _inFlight, (bool[])_done.Clone(), children);
+    }
+
+    void ISuspendableComposite.ResumeComposite(CompositeSnapshot snapshot)
+    {
+        DeepSnapshots.ValidateShape(snapshot, expectedChildren: _regions.Length, expectedDoneBits: _done.Length);
+        _inFlight = snapshot.InFlight;
+        for (int i = 0; i < _done.Length; i++)
+        {
+            _done[i] = snapshot.Done[i];
+        }
+
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            DeepSnapshots.ResumeChild(_regions[i], snapshot, i);
+        }
+
+        RecomputeJoinBookkeeping();
+    }
+
+    private void RecomputeJoinBookkeeping()
+    {
+        // _remaining and _anyFailed are deliberately not captured — recompute them so the
+        // wire shape cannot self-contradict. A deselected region is done with a non-terminal
+        // machine status and therefore never counts as failed.
+        _remaining = 0;
+        _anyFailed = false;
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (!_done[i])
+            {
+                _remaining++;
+            }
+            else if (_regions[i].Status == ExecutionStatus.Failed)
+            {
+                _anyFailed = true;
+            }
+        }
+    }
+
+    private void ResetTerminalRegions()
+    {
+        // Fresh visit: regions left terminal by the previous visit start over (selected or
+        // not this time). Mid-run regions are left as-is, matching ParallelState.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (_regions[i].Status is ExecutionStatus.Completed or ExecutionStatus.Failed
+                or ExecutionStatus.Cancelled)
+            {
+                _regions[i].Reset();
+            }
+        }
     }
 
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
@@ -101,6 +176,7 @@ public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboar
     {
         if (!_inFlight)
         {
+            ResetTerminalRegions();
             RegionMask selected = _selector(_blackboards);
             ValidateMask(selected);
 

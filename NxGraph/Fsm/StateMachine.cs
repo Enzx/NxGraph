@@ -65,7 +65,8 @@ public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer =
 /// must have its <see cref="INode.Logic"/> populated (i.e. implement <see cref="ILogic"/>).
 /// </para>
 /// </summary>
-public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable
+public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable,
+    ISuspendableComposite
 {
     public readonly Graph Graph;
     private BlackboardContext _blackboards;
@@ -400,6 +401,62 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _executeGate = snapshot.MidRun;
         HasEntered = snapshot.MidRun;
         _status = snapshot.Status;
+    }
+
+    /// <summary>
+    /// Deep variant of <see cref="Suspend"/>: captures this machine's position plus the
+    /// internal state of every composite in its graph that holds durable state (nested
+    /// machine positions, history's remembered child position, RoundPerTick mid-visit
+    /// bookkeeping) into a <see cref="StateMachineDeepSnapshot"/>. Same gates as
+    /// <see cref="Suspend"/> — legal between any two <see cref="State.Execute"/> ticks,
+    /// mid-run included; the extra cost is one linear walk over the graph's nodes plus the
+    /// composites' own recursive captures — cold path by contract, allocation is expected.
+    /// The shallow pair and <see cref="StateMachineSnapshot"/> are untouched; use them when
+    /// flows keep suspension points at the top level.
+    /// </summary>
+    public StateMachineDeepSnapshot SuspendDeep()
+    {
+        StateMachineSnapshot self = Suspend();
+        return new StateMachineDeepSnapshot(self, DeepSnapshots.Capture(Graph));
+    }
+
+    /// <summary>
+    /// Restores a snapshot produced by <see cref="SuspendDeep"/> onto this machine: first the
+    /// machine's own position via <see cref="Resume"/> (all its gates and checks apply
+    /// unchanged), then each captured composite via
+    /// <see cref="ISuspendableComposite.ResumeComposite"/> after validating that the claimed
+    /// node exists and implements the interface. A composite node absent from
+    /// <see cref="StateMachineDeepSnapshot.Composites"/> re-enters fresh (sparse capture).
+    /// Node-scoped scratch resumes as defaults at every nesting level.
+    /// </summary>
+    public void ResumeDeep(StateMachineDeepSnapshot snapshot)
+    {
+        if (snapshot is null)
+        {
+            throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        Resume(snapshot.Self);
+        DeepSnapshots.ResumeComposites(Graph, snapshot.Composites);
+    }
+
+    // ── ISuspendableComposite — the sync machine nested as a node ─────────
+    // A sync StateMachine used directly as node logic (.SubGraph(mode, child) without
+    // history) persists cross-tick state under RoundPerTick: its child run is mid-flight
+    // between parent ticks. It therefore captures itself as a single-child composite —
+    // the mid-run flag rides inside the child snapshot's own MidRun, so InFlight stays
+    // false. The async machine deliberately has no counterpart: it always runs its child
+    // to terminal inside one ExecuteAsync and holds no durable visit state as a node.
+
+    CompositeSnapshot ISuspendableComposite.SuspendComposite(int nodeIndex)
+    {
+        return new CompositeSnapshot(nodeIndex, InFlight: false, Done: [], Children: [SuspendDeep()]);
+    }
+
+    void ISuspendableComposite.ResumeComposite(CompositeSnapshot snapshot)
+    {
+        DeepSnapshots.ValidateShape(snapshot, expectedChildren: 1, expectedDoneBits: 0);
+        DeepSnapshots.ResumeChild(this, snapshot, 0);
     }
 
     // ── State overrides — Execute() is the stepped entry point ────────────

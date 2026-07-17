@@ -21,12 +21,14 @@ namespace NxGraph.Fsm;
 /// <see cref="Execute"/> call (usable from both runtimes via the sync-logic adapter);
 /// <see cref="ParallelStepMode.RoundPerTick"/> advances one child node per call and returns
 /// <see cref="Result.InProgress"/> in between (sync runtime only — the async loop rejects
-/// node-level <see cref="Result.InProgress"/>). A parent suspend between RoundPerTick ticks
-/// does not capture composite-internal position (snapshots are primitives-only); resuming on
-/// a fresh graph restarts the visit.
+/// node-level <see cref="Result.InProgress"/>). A parent <c>Suspend()</c> between
+/// RoundPerTick ticks does not capture composite-internal position (flat snapshots are
+/// primitives-only); resuming that on a fresh graph restarts the visit. Use the parent's
+/// <c>SuspendDeep()</c>/<c>ResumeDeep(...)</c> to carry the mid-visit position and the
+/// remembered history across a durable boundary (see <see cref="ISuspendableComposite"/>).
 /// </para>
 /// </summary>
-public sealed class HistoryState : ILogic, ISubGraphProvider, IBlackboardSettable
+public sealed class HistoryState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
 {
     /// <summary>The wrapped child machine.</summary>
     public StateMachine Child { get; }
@@ -57,6 +59,24 @@ public sealed class HistoryState : ILogic, ISubGraphProvider, IBlackboardSettabl
         // auto-resetting to the start — that position is exactly the history to resume from.
         Child.SetRestartPolicy(RestartPolicy.Manual);
         Mode = mode;
+    }
+
+    // ── ISuspendableComposite ─────────────────────────────────────────────
+    // Two things persist across Execute() calls: the RoundPerTick visit flag (_inFlight)
+    // and the child machine's position — mid-run between ticks, or terminal-Failed history
+    // under RestartPolicy.Manual. Capturing the child's deep snapshot preserves exactly the
+    // shape the re-entry lift in Execute consumes, so no new lift logic is needed on resume.
+
+    CompositeSnapshot ISuspendableComposite.SuspendComposite(int nodeIndex)
+    {
+        return new CompositeSnapshot(nodeIndex, _inFlight, Done: [], Children: [Child.SuspendDeep()]);
+    }
+
+    void ISuspendableComposite.ResumeComposite(CompositeSnapshot snapshot)
+    {
+        DeepSnapshots.ValidateShape(snapshot, expectedChildren: 1, expectedDoneBits: 0);
+        _inFlight = snapshot.InFlight;
+        DeepSnapshots.ResumeChild(Child, snapshot, 0);
     }
 
     public Result Execute()
