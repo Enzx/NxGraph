@@ -21,6 +21,7 @@ Source staging copies:
 - `Fsm`
 - `Graphs`
 - `Shims`
+- `Tokens`
 - `Result.cs`
 - `ResultHelpers.cs`
 

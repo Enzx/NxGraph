@@ -5,9 +5,11 @@ NxGraph is a lean finite state machine / stateflow library with:
 - a fluent authoring DSL
 - sync and async runtimes
 - failure edges, retries, and timeouts (unified fault model)
-- composites: subgraphs, history, parallel regions
-- durable suspend/resume via snapshots
-- scoped blackboards
+- composites: subgraphs, history, parallel regions (static and dynamic selection)
+- a token runtime with fork/join for many-active-tokens flows (all / any / quorum merges)
+- durable suspend/resume via snapshots, including deep suspend of composite trees
+- scoped blackboards and typed step I/O ports
+- in-node wall-clock concurrency (`.ToAllAsync(...)`)
 - graph validation, observers, replay, and Mermaid export
 
 ## Install
@@ -29,7 +31,7 @@ Or pin a specific release tag:
 ```json
 {
   "dependencies": {
-    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm/v2.0.1-alpha"
+    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm/v2.1.0-alpha"
   }
 }
 ```
