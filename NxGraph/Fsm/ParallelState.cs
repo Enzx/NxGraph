@@ -28,7 +28,7 @@ namespace NxGraph.Fsm;
 /// (<see cref="ILogic"/>) node logic, as with any sync-run graph.
 /// </para>
 /// </summary>
-public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettable
+public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
 {
     private readonly StateMachine[] _regions;
     private readonly bool[] _done;
@@ -81,15 +81,89 @@ public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettab
         for (int i = 0; i < regions.Length; i++)
         {
             _regions[i] = new StateMachine(regions[i]);
+            // Manual keeps a finished region's terminal status readable between the join and
+            // the next visit (instead of auto-resetting to Ready the instant it finishes) —
+            // deep suspend recomputes the join's failure aggregation from those statuses.
+            // The fresh-visit reset happens in ResetTerminalRegions instead, so visits still
+            // start clean exactly as they did under the regions' old auto-reset.
+            _regions[i].SetRestartPolicy(RestartPolicy.Manual);
         }
 
         _done = new bool[regions.Length];
+    }
+
+    // ── ISuspendableComposite ─────────────────────────────────────────────
+    // RoundPerTick join bookkeeping spans Execute() calls: the visit flag, the per-region
+    // done bits, and each region machine's own position persist between ticks. _remaining
+    // and _anyFailed are derivable (regions minus done popcount / any region Failed) and are
+    // deliberately not captured — they are recomputed on resume so the wire shape cannot
+    // self-contradict.
+
+    CompositeSnapshot ISuspendableComposite.SuspendComposite(int nodeIndex)
+    {
+        StateMachineDeepSnapshot[] children = new StateMachineDeepSnapshot[_regions.Length];
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            children[i] = _regions[i].SuspendDeep();
+        }
+
+        return new CompositeSnapshot(nodeIndex, _inFlight, (bool[])_done.Clone(), children);
+    }
+
+    void ISuspendableComposite.ResumeComposite(CompositeSnapshot snapshot)
+    {
+        DeepSnapshots.ValidateShape(snapshot, expectedChildren: _regions.Length, expectedDoneBits: _done.Length);
+        _inFlight = snapshot.InFlight;
+        for (int i = 0; i < _done.Length; i++)
+        {
+            _done[i] = snapshot.Done[i];
+        }
+
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            DeepSnapshots.ResumeChild(_regions[i], snapshot, i);
+        }
+
+        RecomputeJoinBookkeeping();
+    }
+
+    private void RecomputeJoinBookkeeping()
+    {
+        _remaining = 0;
+        _anyFailed = false;
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (!_done[i])
+            {
+                _remaining++;
+            }
+            else if (_regions[i].Status == ExecutionStatus.Failed)
+            {
+                _anyFailed = true;
+            }
+        }
+    }
+
+    private void ResetTerminalRegions()
+    {
+        // Fresh visit: regions left terminal by the previous visit start over. Mid-run
+        // regions (possible after an escaping exception dropped the join) are left as-is,
+        // matching the old behavior where they continued from their positions.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (_regions[i].Status is ExecutionStatus.Completed or ExecutionStatus.Failed
+                or ExecutionStatus.Cancelled)
+            {
+                _regions[i].Reset();
+            }
+        }
     }
 
     public Result Execute()
     {
         if (!_inFlight)
         {
+            ResetTerminalRegions();
             for (int i = 0; i < _done.Length; i++)
             {
                 _done[i] = false;

@@ -7,7 +7,7 @@ This project provides serialization and deserialization functionalities for [NxG
 A durable flow is shipped as separate artifacts, each with its own lifecycle:
 
 1. **Graph structure** — `GraphSerializer.ToJsonAsync`/`ToBinaryAsync` (node logic encoded via your `ILogicCodec`).
-2. **Machine position** — `StateMachineSnapshot`, a primitives-only record you serialize with any serializer.
+2. **Machine position** — a shallow `StateMachineSnapshot` or, when the flow's suspension points live inside composites, a deep `StateMachineDeepSnapshot` from `SuspendDeep()` (which additionally captures composite-internal position — nested machines, history children, sync parallel regions). Both are primitives-only records you serialize with any serializer; the library never serializes them itself.
 3. **One payload per blackboard** — `BlackboardSerializer.ToJsonAsync`/`ToBinaryAsync`; a global board saves once per world, graph boards per entity.
 
 Restore is *restore-into*: schemas are code and cannot be reconstructed from a payload, so you create a live `Blackboard` over the current schema and apply the payload over its defaults (`RestoreFromJsonAsync`/`RestoreFromBinaryAsync`). Post-state is always defaults + payload — keys added to the schema after the save keep their defaults, and stale pre-restore values never survive.

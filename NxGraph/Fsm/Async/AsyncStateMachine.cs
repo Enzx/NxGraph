@@ -553,6 +553,42 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     }
 
     /// <summary>
+    /// Deep variant of <see cref="Suspend"/>: captures this machine's position plus the
+    /// internal state of every composite in its graph that holds durable state (nested
+    /// machine positions, history's remembered child position, sync RoundPerTick mid-visit
+    /// bookkeeping) into a <see cref="StateMachineDeepSnapshot"/>. Same gates as
+    /// <see cref="Suspend"/>; the extra cost is one linear walk over the graph's nodes plus
+    /// the composites' own recursive captures — cold path by contract, allocation is expected.
+    /// The shallow pair and <see cref="StateMachineSnapshot"/> are untouched; use them when
+    /// flows keep suspension points at the top level.
+    /// </summary>
+    public StateMachineDeepSnapshot SuspendDeep()
+    {
+        StateMachineSnapshot self = Suspend();
+        return new StateMachineDeepSnapshot(self, DeepSnapshots.Capture(Graph));
+    }
+
+    /// <summary>
+    /// Restores a snapshot produced by <see cref="SuspendDeep"/> onto this machine: first the
+    /// machine's own position via <see cref="Resume"/> (all its gates and checks apply
+    /// unchanged), then each captured composite via
+    /// <see cref="ISuspendableComposite.ResumeComposite"/> after validating that the claimed
+    /// node exists and implements the interface. A composite node absent from
+    /// <see cref="StateMachineDeepSnapshot.Composites"/> re-enters fresh (sparse capture).
+    /// Node-scoped scratch resumes as defaults at every nesting level.
+    /// </summary>
+    public void ResumeDeep(StateMachineDeepSnapshot snapshot)
+    {
+        if (snapshot is null)
+        {
+            throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        Resume(snapshot.Self);
+        DeepSnapshots.ResumeComposites(Graph, snapshot.Composites);
+    }
+
+    /// <summary>
     /// Advances the machine by exactly one node execution, mirroring the sync machine's
     /// frame-stepped <c>Execute()</c>. Returns <see cref="Result.InProgress"/> while more nodes
     /// remain and the terminal result when the run finishes. The first call begins a run

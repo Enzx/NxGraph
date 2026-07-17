@@ -430,6 +430,46 @@ public class AllocationGateTests
         AssertZeroAlloc(machine);
     }
 
+    // ── Step I/O ports: produce → pipe → consume over one Graph board ───
+
+    private static (Blackboard io, BlackboardKey<int> raw, BlackboardKey<int> doubled) PortBoards()
+    {
+        BlackboardSchema schema = new("flow-io");
+        BlackboardKey<int> raw = schema.Register<int>("raw");
+        BlackboardKey<int> doubled = schema.Register<int>("doubled");
+        return (new Blackboard(schema), raw, doubled);
+    }
+
+    [Test]
+    public async Task async_port_produce_pipe_consume_is_allocation_free()
+    {
+        (Blackboard io, BlackboardKey<int> raw, BlackboardKey<int> doubled) = PortBoards();
+
+        Graph graph = GraphBuilder
+            .Start()
+            .ToAsync(raw, (bb, _) => new ValueTask<int>(bb.Get(raw) + 1))
+            .ToAsync(raw, doubled, (value, _, _) => new ValueTask<int>(value * 2))
+            .ToAsync(doubled, (value, _, _) => value > 0 ? ResultHelpers.Success : ResultHelpers.Failure)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine().WithBlackboard(io));
+    }
+
+    [Test]
+    public void sync_port_produce_pipe_consume_is_allocation_free()
+    {
+        (Blackboard io, BlackboardKey<int> raw, BlackboardKey<int> doubled) = PortBoards();
+
+        Graph graph = GraphBuilder
+            .Start()
+            .To(raw, bb => bb.Get(raw) + 1)
+            .To(raw, doubled, (value, _) => value * 2)
+            .To(doubled, (value, _) => value > 0 ? Result.Success : Result.Failure)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(io));
+    }
+
     [Test]
     public async Task async_blackboard_if_branch_is_allocation_free()
     {
@@ -644,6 +684,22 @@ public class AllocationGateTests
         Graph graph = GraphBuilder
             .StartWith(() => Result.Success)
             .ToWithTimeout(TimeSpan.FromSeconds(5), () => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public void sync_to_all_join_is_allocation_free()
+    {
+        // The async AsyncAllState allocates per execution by design (task materialization
+        // dwarfed by the I/O it overlaps) — exemption recorded in spec 012, no async case.
+        Graph graph = GraphBuilder
+            .Start()
+            .ToAll(
+                _ => Result.Success,
+                _ => Result.Success,
+                _ => Result.Success)
             .Build();
 
         AssertZeroAlloc(graph.ToStateMachine());

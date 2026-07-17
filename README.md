@@ -16,7 +16,7 @@ NxGraph is a lean, high-performance finite state machine / stateflow library for
 - stepped execution for Unity (`Update()`-loop friendly)
 - a unified fault model: per-node retries, failure edges (`.OnError`), and timeouts
 - composites: subgraphs (with history), parallel regions, and blackboard-selected dynamic regions
-- durable suspend/resume via serializable snapshots
+- durable suspend/resume via serializable snapshots (shallow, or deep with composite internals)
 - scoped blackboards (typed, zero-boxing shared memory)
 - graph validation
 - observers, tracing, replay, and Mermaid export
@@ -47,6 +47,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Naming nodes](#naming-nodes)
   - [Agents / context injection](#agents--context-injection)
   - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
+  - [Step I/O (ports)](#step-io-ports)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution-stepped-model)
@@ -235,6 +236,8 @@ Every fan-out construct answers two questions: **how many successors run**, and 
 | **Many in one flat graph** | Token runtime — [`.ForkTo(...)` + `JoinState`](#token-runtime-fork-join-and-mid-graph-merge) fan tokens out and merge them mid-graph (all / any / M-of-N) | The same fork/join graph — which tokens reach a join, and when, is decided by each token's own path at runtime |
 
 The FSM runtimes keep exactly one active node, and many-at-once execution lives inside the parallel composites, which join back into the single-active flow at the composite boundary. When the flow genuinely needs several active nodes in **one flat graph** — a forked path that rejoins the parent flow mid-graph, the same node active k times, M-of-N merges — that is the [token runtime](#token-runtime-fork-join-and-mid-graph-merge): a third runtime beside the sync/async machines (`TokenMachine`/`AsyncTokenMachine`), not a change to them.
+
+> **None of these overlap in time.** Every construct in the table interleaves cooperatively — one node per region (or per token) per round, on the caller's thread — so two 20-second API calls placed in parallel regions still take about 40 seconds wall-clock. For genuine wall-clock concurrency, run the calls inside **one node** with [`.ToAllAsync(...)`](#in-node-concurrency-toallasync): the same two calls overlap and finish in about 20 seconds. Regions structure *logic*; nodes structure *time*.
 
 ### Waits and timeouts
 
@@ -429,6 +432,49 @@ Graph graph = GraphBuilder.StartWith(new UploadState()).Retry(3)
 
 Like the state machines, a blackboard is owned by a single runner at a time (not thread-safe).
 
+### Step I/O (ports)
+
+Steps communicate through the blackboard — there is deliberately no hidden output→input piping between nodes. The shipped convention for *this step's output feeds that step's input* is a **port**: an ordinary **Graph-scoped** `BlackboardKey<T>`, one per producing step, named for the **datum**, not the step (`io.Register<string>("draft")`, not `"writeDraft.out"` — several steps may legally produce the same port, e.g. a retry-rewrite step). Producers `Set`, consumers `Get`; a consumer that can run before any producer reads the key's registered default — register a meaningful default or guard in the step. Declare the schema on the graph with `.WithSchema(io)` and bind a board per machine with `.WithBlackboard(new Blackboard(io))` — the existing paths, unchanged.
+
+The port DSL overloads read/write ports around the step lambda, so the common produce→transform→consume chain needs no manual `bb.Get`/`bb.Set` and the graph stays a shareable template:
+
+```csharp
+static class FlowIo
+{
+    public static readonly BlackboardSchema Schema = new("flow-io"); // Graph scope (default)
+    public static readonly BlackboardKey<string> Draft = Schema.Register<string>("draft", "");
+    public static readonly BlackboardKey<string> Final = Schema.Register<string>("final", "");
+}
+
+// Async: produce → pipe → consume.
+Graph graph = GraphBuilder
+    .Start()
+    .ToAsync(FlowIo.Draft, (bb, ct) => new ValueTask<string>("a draft"))                  // producer: value → port
+    .ToAsync(FlowIo.Draft, FlowIo.Final, (draft, bb, ct) => new ValueTask<string>($"[polished] {draft}")) // pipe
+    .ToAsync(FlowIo.Final, (text, bb, ct) => PublishAsync(text))                          // consumer: port → Result
+    .WithSchema(FlowIo.Schema)
+    .Build();
+
+Result result = await graph.ToAsyncStateMachine()
+    .WithBlackboard(new Blackboard(FlowIo.Schema))
+    .ExecuteAsync();
+```
+
+```csharp
+// Sync twin — the same shapes without the CancellationToken.
+Graph graph = GraphBuilder
+    .Start()
+    .To(FlowIo.Draft, bb => "a draft")
+    .To(FlowIo.Draft, FlowIo.Final, (draft, bb) => $"[polished] {draft}")
+    .To(FlowIo.Final, (text, bb) => Publish(text))
+    .WithSchema(FlowIo.Schema)
+    .Build();
+```
+
+Producer and pipe steps **cannot fail** — their lambdas return the value, and the relay writes it to the port and returns `Success`. A step that both computes a value and can fail keeps using the plain context relay (`.To(bb => ...)`) with an explicit `bb.Set(...)` on its success path; exceptions thrown by a step propagate exactly as from every relay.
+
+> **Node-scope trap:** a Node-scoped key cannot pipe — Node scratch resets on the success transition, so the producer's write is back at its default before the consumer runs. The port overloads reject Node-scoped keys at wiring time with an `ArgumentException`. Global-scoped keys are accepted (legitimate for world-state ports) but shared across machines — two machines over one template would overwrite each other's values, so the default recommendation stays Graph scope.
+
 ---
 
 ## Execution
@@ -615,6 +661,33 @@ StateMachine fsm = GraphBuilder
 
 The selector runs once per composite execution and fixes the selected set for that run; unselected regions are never stepped. An empty mask is a vacuous join (immediate `Success`); mask bits at or above the region count throw; up to 64 regions per composite. Selectors execute on the measured zero-allocation path, so compose masks with `RegionMask.Bit(i) | ...` as above — allocation-free — while `RegionMask.Of(params)` allocates its array and belongs at setup time only. Both variants exist in both runtimes (`.Parallel(selector, ...)` for async, `.Parallel(mode, selector, ...)` for sync). See `NxFSM.Examples/ParallelDemo` for runnable sync and async demos.
 
+#### In-node concurrency: `.ToAllAsync(...)`
+
+Parallel regions are cooperative, not thread-concurrent — and that is a recorded design decision, not an oversight: truly concurrent regions would make every shared Global/Graph board access a data race (forcing a thread-safety mode onto the blackboards), deliver observer callbacks concurrently (breaking the event-ordering contracts the observer tests codify), allocate task machinery in what is today a zero-allocation round loop, and have no meaningful sync twin. The library's position is **regions structure logic, nodes structure time**: when two 20-second I/O calls must overlap in wall-clock time, run them inside a *single node* with `.ToAllAsync(...)` — every work starts with the node's own `CancellationToken`, all are awaited, and the results join afterwards: `Success` iff every work returned `Success`, else one ordinary node `Failure` feeding the unified fault model (`.Retry(...)` re-runs *all* works; `.OnError(...)` sees one node failure). There is no early abort — a failing work never cancels its siblings, so partial effects are never timing-dependent (a consumer wanting first-failure-cancels composes a linked CTS inside its works); a throwing work propagates its exception after all works settle, and cancelling the machine's token cancels all works.
+
+**Disjoint keys are the contract:** the works share one routed `BlackboardContext`, which is not thread-safe — concurrent works must touch **disjoint** keys. Same-key access from two works is a data race; distinct keys write to distinct slots and are genuinely safe. The recommended shape is one [output port](#step-io-ports) per work, combined by the next node:
+
+```csharp
+static class ScoutIo
+{
+    public static readonly BlackboardSchema Schema = new("scout-io"); // Graph scope (default)
+    public static readonly BlackboardKey<string> Weather = Schema.Register<string>("weather", "");
+    public static readonly BlackboardKey<string> Terrain = Schema.Register<string>("terrain", "");
+}
+
+Graph graph = GraphBuilder
+    .Start()
+    .ToAllAsync( // both calls in flight at once — ~max(t1, t2), not t1 + t2
+        async (bb, ct) => { bb.Set(ScoutIo.Weather, await FetchWeatherAsync(ct)); return Result.Success; },
+        async (bb, ct) => { bb.Set(ScoutIo.Terrain, await FetchTerrainAsync(ct)); return Result.Success; })
+    .ToAsync(ScoutIo.Weather, (weather, bb, ct) => // the next node combines the ports
+        PlanRouteAsync(weather, bb.Get(ScoutIo.Terrain)))
+    .WithSchema(ScoutIo.Schema)
+    .Build();
+```
+
+The sync twin `.ToAll(...)` runs its works sequentially, in order, within one tick — wall-clock overlap is an async-only mechanic, exactly like retry backoff — with identical join semantics, including no early abort, so a graph moved between runtimes sees the same board effects; as plain `ILogic` it also runs under the async machine via the adapter, and it stays allocation-free per tick. `.ToAllAsync` allocates per execution by design (task materialization is dwarfed by the I/O it overlaps). The join is deliberately all-or-nothing: for *some-of-many* joining ("succeed when m of n arrive"), use the token runtime's [`JoinPolicy.Quorum`](#token-runtime-fork-join-and-mid-graph-merge) — that is the logical quorum tool, and duplicating it at node level would blur the two models. See `NxFSM.Examples/ReadmeExamples/InNodeConcurrencyExample.cs` for the runnable version.
+
 ### Token runtime: fork, join, and mid-graph merge
 
 Parallel composites join at the composite boundary. When forked paths must **rejoin the parent flow mid-graph** — or the same node must be active for several work items at once — use the token runtime (`NxGraph.Tokens`): N pooled tokens flow through one flat graph, scheduled in cooperative rounds (one node per token per round, deliberately not thread-concurrent).
@@ -693,9 +766,35 @@ while (result == Result.InProgress)
 
 - `Suspend()` is legal between `StepAsync()`/`Execute()` calls of a stepped run, or on an idle/terminal machine; it captures the current node, status, retry attempts, and `LastOutcome`.
 - `Resume(snapshot)` requires a graph that is structurally equivalent (same node indices); re-attach agents/blackboards before continuing.
-- A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), the snapshot, and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
+- A fully durable flow persists three artifacts: the graph payload (`GraphSerializer`), one machine snapshot (shallow **or** deep, below), and one `BlackboardSerializer` payload per bound board — see [Serialization](#serialization).
 - Node-scoped blackboards are transient by definition and are **not** part of the durable flow: `Resume(snapshot)` restores Node keys to their registered defaults — a node suspended mid-visit loses its scratch.
-- Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a resumed composite starts its visit fresh.
+- Composite-internal progress (positions inside parallel regions or history children) is not part of the flat snapshot; a shallow-resumed composite starts its visit fresh. Use the deep pair below when suspension points live inside composites.
+
+#### Deep suspend — capturing composite internals
+
+`SuspendDeep()`/`ResumeDeep(...)` are the opt-in deep pair on both machines: same gates and rules as the shallow pair, but the snapshot additionally carries the composite tree — nested machine positions, a history composite's remembered child position, and the sync `RoundPerTick` composites' mid-visit bookkeeping (per-region done bits, dynamic-parallel deselection included):
+
+```csharp
+using System.Text.Json;
+
+AsyncStateMachine first = flow.ToAsyncStateMachine();    // flow nests a history subgraph
+await first.StepAsync();                                 // child failed; parent is at the repair step
+StateMachineDeepSnapshot deep = first.SuspendDeep();     // position + composite internals
+
+string json = JsonSerializer.Serialize(deep);            // still plain records — any serializer works
+
+// Later — fresh machine over an equivalent (rebuilt) graph:
+AsyncStateMachine second = rebuiltFlow.ToAsyncStateMachine();
+second.ResumeDeep(JsonSerializer.Deserialize<StateMachineDeepSnapshot>(json)!);
+// on re-entry the history child resumes at its last-active node — not from its start
+```
+
+- `StateMachineDeepSnapshot` = the shallow snapshot (`Self`) plus one `CompositeSnapshot` per composite that holds durable state; child machines carry their own deep snapshots recursively. Everything stays primitives/arrays — zero-configuration serializable, caller-serialized.
+- Capture is sparse and interface-driven (`ISuspendableComposite`): the sync nested machine, `AsyncHistoryState`/`HistoryState`, and the sync `ParallelState`/`DynamicParallelState` implement it; the async parallel composites run their regions to terminal within one execution, hold no durable state, and correctly contribute nothing. A composite absent from the snapshot re-enters fresh.
+- Custom containers opt in by implementing `ISuspendableComposite` — the third leg of the container contract beside `ISubGraphProvider` and `IBlackboardSettable` forwarding.
+- The shallow pair and `StateMachineSnapshot` are untouched — keep using them when flows put suspension points at the top level. Deep snapshots inherit the same rules: equivalent graph per nesting level, cross-runtime interchangeable, Node-scoped scratch resumes as defaults at every level.
+
+See `NxFSM.Examples/ReadmeExamples/FeatureExamples.cs` for the runnable version.
 
 ### Restart policy
 
@@ -975,6 +1074,7 @@ The solution includes a runnable examples project with:
 - a serialization round-trip example
 - a sync Dungeon Crawler example using the DSL, observers, director nodes, loops, and named states
 - a blackboard demo (scoped shared memory, schema declarations, per-entity boards)
+- a step I/O ports demo (typed produce → pipe → consume chains over Graph-scoped port keys)
 - **parallel-region demos**: the sync Stronghold Siege (`ParallelStepMode.RoundPerTick` frame ticking, `RunToJoin` waves, blackboard-selected dynamic regions) and the async Expedition Camp (cooperative round-robin interleaving under `AsyncStateMachine`, dynamic region selection)
 
 Run it with:
@@ -1083,7 +1183,6 @@ The machine has more nodes to process but is returning control to the caller (e.
 ## Roadmap
 
 - sync twins for the remaining async-only constructs (history subgraphs, waits, timeouts)
-- hierarchical snapshots so composite-internal progress survives durable suspend/resume
 - validator and Mermaid-export awareness of composite interiors
 - continued ergonomics improvements around DSL authoring and serialization
 

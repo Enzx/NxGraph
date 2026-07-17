@@ -19,7 +19,7 @@ namespace NxGraph.Fsm.Async;
 /// only on the failure-recovery path, which is off the hot loop by definition.
 /// </para>
 /// </summary>
-public sealed class AsyncHistoryState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
+public sealed class AsyncHistoryState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
 {
     /// <summary>The wrapped child machine.</summary>
     public AsyncStateMachine Child { get; }
@@ -41,6 +41,25 @@ public sealed class AsyncHistoryState : IAsyncLogic, ISubGraphProvider, IBlackbo
         // Manual keeps the child's position (current node) intact after a failure instead of
         // auto-resetting to the start — that position is exactly the history to resume from.
         Child.SetRestartPolicy(RestartPolicy.Manual);
+    }
+
+    // ── ISuspendableComposite ─────────────────────────────────────────────
+    // History's memory *is* the child machine's terminal position, kept live under
+    // RestartPolicy.Manual. Capturing the child's deep snapshot (Failed status included —
+    // machine Suspend rejects only transient statuses) preserves exactly the shape the
+    // re-entry lift in ExecuteAsync consumes, so a deep-resumed fresh machine re-enters
+    // at the remembered node with no new lift logic. Async composites are never mid-visit
+    // at a parent step boundary, so InFlight is always false here.
+
+    CompositeSnapshot ISuspendableComposite.SuspendComposite(int nodeIndex)
+    {
+        return new CompositeSnapshot(nodeIndex, InFlight: false, Done: [], Children: [Child.SuspendDeep()]);
+    }
+
+    void ISuspendableComposite.ResumeComposite(CompositeSnapshot snapshot)
+    {
+        DeepSnapshots.ValidateShape(snapshot, expectedChildren: 1, expectedDoneBits: 0);
+        DeepSnapshots.ResumeChild(Child, snapshot, 0);
     }
 
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)

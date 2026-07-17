@@ -26,6 +26,13 @@ namespace NxGraph.Fsm.Async;
 /// every region machine itself. Agent stamping still reaches regions via
 /// <see cref="ISubGraphProvider"/>.
 /// </para>
+/// <para>
+/// Deliberately does <b>not</b> implement <see cref="ISuspendableComposite"/>: like
+/// <see cref="AsyncParallelState"/>, every execution evaluates the selector, runs the
+/// selected regions to terminal inside one <c>ExecuteAsync</c>, and keeps no durable visit
+/// or cross-visit state at a parent step boundary — there is nothing for a deep snapshot to
+/// capture, and its absence from one is correct, not a gap.
+/// </para>
 /// </summary>
 public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
 {

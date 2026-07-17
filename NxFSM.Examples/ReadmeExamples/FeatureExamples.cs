@@ -10,7 +10,7 @@ namespace NxFSM.Examples.ReadmeExamples;
 /// <summary>
 /// Runnable versions of the README sections added with the 2.x feature wave:
 /// error handling (retries + failure edges), Goto loops, named outcomes,
-/// subgraph composites, and durable suspend/resume.
+/// subgraph composites, and durable suspend/resume (shallow and deep).
 /// </summary>
 public static class FeatureExamples
 {
@@ -21,6 +21,7 @@ public static class FeatureExamples
         await NamedOutcomesAsync();
         await SubGraphCompositeAsync();
         await DurableSuspendResumeAsync();
+        await DeepSuspendResumeAsync();
     }
 
     // ── Error handling: retries and failure edges ─────────────────────────
@@ -164,5 +165,56 @@ public static class FeatureExamples
             result = second.Execute();
 
         Console.WriteLine($"Resumed run finished: {result}");
+    }
+
+    // ── Deep suspend / resume: composite internals survive the boundary ───
+
+    static async ValueTask DeepSuspendResumeAsync()
+    {
+        Console.WriteLine("=== Feature: Deep suspend/resume (composite internals) ===");
+
+        bool repaired = false;
+
+        Graph BuildFlow()
+        {
+            Graph child = GraphBuilder
+                .StartWithAsync(_ =>
+                {
+                    Console.WriteLine("  child: step 1");
+                    return ResultHelpers.Success;
+                })
+                .ToAsync(_ =>
+                {
+                    Console.WriteLine("  child: step 2");
+                    return repaired ? ResultHelpers.Success : ResultHelpers.Failure;
+                })
+                .Build();
+
+            StateToken sub = GraphBuilder.Start().SubGraph(child, history: true).SetName("Work");
+            StateToken repair = sub.Builder.TokenFor(sub.Builder.AddNode(new AsyncRelayState(_ =>
+            {
+                repaired = true;
+                Console.WriteLine("  repair ran");
+                return ResultHelpers.Success;
+            })));
+            repair.Goto("Work");
+            return sub.OnError(repair).Build();
+        }
+
+        AsyncStateMachine first = BuildFlow().ToAsyncStateMachine();
+        await first.StepAsync();                              // child failed at step 2; parent at repair
+        StateMachineDeepSnapshot deep = first.SuspendDeep();  // position + composite internals
+
+        string json = JsonSerializer.Serialize(deep);         // still plain records — any serializer works
+
+        // Later — fresh machine over an equivalent (rebuilt) graph:
+        AsyncStateMachine second = BuildFlow().ToAsyncStateMachine();
+        second.ResumeDeep(JsonSerializer.Deserialize<StateMachineDeepSnapshot>(json)!);
+
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
+            result = await second.StepAsync();
+
+        Console.WriteLine($"Deep-resumed run finished: {result} (child resumed at step 2 — step 1 did not re-run)");
     }
 }
