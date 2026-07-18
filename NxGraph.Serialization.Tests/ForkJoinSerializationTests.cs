@@ -509,6 +509,7 @@ public class ForkJoinSerializationTests
             NodeId.JoinStateMarker.Name,
             NodeId.DynamicParallelStateMarker.Name,
             NodeId.SyncDynamicParallelStateMarker.Name,
+            NodeId.EventEntryStateMarker.Name,
         ];
 
         Assert.That(markers, Is.Unique, "Every wire marker string must be distinct.");

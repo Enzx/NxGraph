@@ -729,6 +729,85 @@ public class AllocationGateTests
         AssertZeroAlloc(token.ToStateMachine(new NoopSyncObserver()));
     }
 
+    // ── Event entry points (spec 013): typed raise + run ────────────────
+
+    private readonly record struct GatePing(int Value);
+
+    private static (Graph graph, Blackboard board, BlackboardKey<GatePing> ping) EventGraph(bool sync)
+    {
+        BlackboardSchema schema = new("gate-events");
+        BlackboardKey<GatePing> ping = schema.Register<GatePing>("ping");
+
+        Graph graph = sync
+            ? GraphBuilder.StartWithEvents()
+                .On(ping, e => e
+                    .To(bb => bb.Get(ping).Value >= 0 ? Result.Success : Result.Failure)
+                    .To(ping, (evt, _) => evt.Value >= 0 ? Result.Success : Result.Failure))
+                .WithSchema(schema)
+                .Build()
+            : GraphBuilder.StartWithEvents()
+                .On(ping, e => e
+                    .ToAsync((bb, _) => bb.Get(ping).Value >= 0 ? ResultHelpers.Success : ResultHelpers.Failure)
+                    .ToAsync(ping, (evt, _, _) => evt.Value >= 0 ? ResultHelpers.Success : ResultHelpers.Failure))
+                .WithSchema(schema)
+                .Build();
+
+        return (graph, new Blackboard(schema), ping);
+    }
+
+    [Test]
+    public async Task async_typed_event_raise_and_run_is_allocation_free()
+    {
+        (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: false);
+        AsyncStateMachine machine = graph.ToAsyncStateMachine().WithBlackboard(board);
+
+        for (int i = 0; i < 50; i++)
+        {
+            await machine.ExecuteAsync(new GatePing(i));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            await machine.ExecuteAsync(new GatePing(i));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Typed event raise allocated {allocated} B over {Iterations} runs.");
+    }
+
+    [Test]
+    public void sync_typed_event_raise_and_run_is_allocation_free()
+    {
+        (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: true);
+        StateMachine machine = graph.ToStateMachine().WithBlackboard(board);
+
+        for (int i = 0; i < 50; i++)
+        {
+            RaiseToCompletion(machine, new GatePing(i));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            RaiseToCompletion(machine, new GatePing(i));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Sync typed event raise allocated {allocated} B over {Iterations} runs.");
+    }
+
+    private static void RaiseToCompletion<TEvent>(StateMachine machine, TEvent evt)
+    {
+        Result result = machine.Execute(evt);
+        while (result == Result.InProgress)
+        {
+            result = machine.Execute();
+        }
+    }
+
     // ── Token runtime (spec 007): pooled tokens, fork/join, per-token scratch ──
 
     private static void AssertZeroAllocTokens(NxGraph.Tokens.TokenMachine machine)
@@ -848,6 +927,86 @@ public class AllocationGateTests
     public async Task async_token_with_observer_is_allocation_free()
     {
         await AssertZeroAllocTokensAsync(TokenDiamond().ToAsyncTokenMachine(new NoopAsyncTokenObserver()));
+    }
+
+    // ── Behaviors: sequence run loop + binding resolution (spec 014) ────
+    //
+    // A behavior node with a key-bound Log (observer-less, so no string is ever formatted)
+    // and a SetValue must execute at 0 B steady-state: the run loop is an array walk over
+    // one stack context, and binding resolution is a branch plus a typed Get.
+
+    private static (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) BehaviorFixture()
+    {
+        BlackboardSchema schema = new("behaviors");
+        BlackboardKey<string> message = schema.Register("message", "steady");
+        BlackboardKey<int> source = schema.Register("source", 7);
+        BlackboardKey<int> target = schema.Register<int>("target");
+
+        Behaviors.Log log = new(Behaviors.LogSeverity.Info, message);
+        Behaviors.SetValue<int> set = new(target, source);
+        return (log, set, new Blackboard(schema));
+    }
+
+    [Test]
+    public async Task async_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) = BehaviorFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviorsAsync(log, set)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine().WithBlackboard(board));
+    }
+
+    [Test]
+    public void sync_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) = BehaviorFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviors(log, set)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
+    }
+
+    // ── Repeat: bounded sub-node iteration (spec 015) ───────────────────
+    //
+    // A Repeat with a key-bound count and an index key over a SetValue body must execute at
+    // 0 B steady-state: count resolution is a branch plus a typed Get (once at entry), the
+    // index write is a typed Set, and iteration is an array walk.
+
+    private static (Behaviors.Repeat repeat, Blackboard board) RepeatFixture()
+    {
+        BlackboardSchema schema = new("repeat");
+        BlackboardKey<int> trips = schema.Register("trips", 3);
+        BlackboardKey<int> index = schema.Register("i", 0);
+        BlackboardKey<int> source = schema.Register("source", 7);
+        BlackboardKey<int> target = schema.Register<int>("target");
+
+        Behaviors.Repeat repeat = new(trips, index, new Behaviors.SetValue<int>(target, source));
+        return (repeat, new Blackboard(schema));
+    }
+
+    [Test]
+    public async Task async_repeat_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Repeat repeat, Blackboard board) = RepeatFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviorsAsync(repeat)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine().WithBlackboard(board));
+    }
+
+    [Test]
+    public void sync_repeat_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Repeat repeat, Blackboard board) = RepeatFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviors(repeat)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
     }
 
     private sealed class NoopAsyncTokenObserver : NxGraph.Tokens.IAsyncTokenMachineObserver

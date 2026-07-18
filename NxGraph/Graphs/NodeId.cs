@@ -67,6 +67,9 @@ public struct NodeId(int index) : IEquatable<NodeId>
     public static NodeId JoinStateMarker => new(-9) { Name = "JoinState" };
     public static NodeId DynamicParallelStateMarker => new(-10) { Name = "DynamicParallelState" };
     public static NodeId SyncDynamicParallelStateMarker => new(-11) { Name = "SyncDynamicParallelState" };
+    public static NodeId EventEntryStateMarker => new(-12) { Name = "EventEntryState" };
+    public static NodeId BehaviorStateMarker => new(-13) { Name = "BehaviorState" };
+    public static NodeId AsyncBehaviorStateMarker => new(-14) { Name = "AsyncBehaviorState" };
 
     /// <summary>
     /// Represents the start NodeId with an index of 0 and a name of "Start".

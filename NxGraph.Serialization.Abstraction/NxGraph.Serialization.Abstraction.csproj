@@ -25,6 +25,12 @@
         <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>
     </ItemGroup>
     <ItemGroup>
+        <!-- The behavior entry-codec hook (IBehaviorEntryCodec + the internal writer/reader
+             ctors) is internal wiring for GraphSerializer's payload sessions, not public
+             surface — see BehaviorFieldWriter.WriteBehaviors. -->
+        <InternalsVisibleTo Include="NxGraph.Serialization"/>
+    </ItemGroup>
+    <ItemGroup>
         <None Include="Docs\readme.md" Pack="true" PackagePath="Docs\"/>
     </ItemGroup>
 

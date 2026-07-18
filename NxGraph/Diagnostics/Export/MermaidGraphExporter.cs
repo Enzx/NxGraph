@@ -181,6 +181,32 @@ public sealed class MermaidGraphExporter : IGraphExporter
                 continue;
             }
 
+            // Event entries (spec 013) render as an event surface, not an anonymous switch:
+            // each entry edge carries the event type's short name, and the Otherwise edge is
+            // labeled "otherwise". Dashed like other director edges — the branch taken is a
+            // runtime (raise-time) decision.
+            if (EventEntryOf(dn) is { } eventEntry)
+            {
+                string entryVar = NodeVar(i);
+                foreach (EventRegistration registration in eventEntry.Registrations)
+                {
+                    int dstIdx = registration.Target.Index;
+                    if ((uint)dstIdx >= (uint)graph.NodeCount) continue;
+                    sb.Append("  ").Append(entryVar).Append(" -. ")
+                        .Append(EscapeLabel(registration.EventTypeShortName)).Append(" .-> ")
+                        .Append(NodeVar(dstIdx)).AppendLine();
+                }
+
+                int defaultIdx = eventEntry.DefaultTarget.Index;
+                if (!eventEntry.DefaultTarget.Equals(NodeId.Default) && (uint)defaultIdx < (uint)graph.NodeCount)
+                {
+                    sb.Append("  ").Append(entryVar).Append(" -. otherwise .-> ")
+                        .Append(NodeVar(defaultIdx)).AppendLine();
+                }
+
+                continue;
+            }
+
             IEnumerable<NodeId>? targets =
                 (dn.AsyncLogic as IDirector)?.EnumerateStaticTargets()
                 ?? (dn.Logic as IDirector)?.EnumerateStaticTargets()
@@ -211,6 +237,9 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
     private static JoinState? JoinOf(LogicNode node) =>
         node.Logic as JoinState ?? node.AsyncLogic as JoinState;
+
+    private static EventEntryState? EventEntryOf(LogicNode node) =>
+        node.AsyncLogic as EventEntryState ?? node.Logic as EventEntryState;
 
     private static bool IsFork(Graph graph, int index) =>
         graph.GetNodeByIndex(index) is LogicNode ln && ForkOf(ln) is not null;

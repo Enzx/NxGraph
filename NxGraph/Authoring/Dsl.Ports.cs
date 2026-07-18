@@ -13,7 +13,7 @@ public static partial class Dsl
     // overloads only read/write ports around the step lambda; routing, validation, and
     // durability are the blackboard's existing machinery.
 
-    private static void ThrowIfNotPortScope<T>(in BlackboardKey<T> key, string paramName)
+    internal static void ThrowIfNotPortScope<T>(in BlackboardKey<T> key, string paramName)
     {
         if (key.Schema is null)
         {

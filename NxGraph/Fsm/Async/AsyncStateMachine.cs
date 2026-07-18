@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Diagnostics.Replay;
@@ -70,6 +71,11 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     private bool _nodeEntered; // the current node's EnterAction has fired for this visit
     private readonly int[]? _outcomeCodes; // graph-owned; null when no node declares one
 
+    // Event dispatch (spec 013): node 0's dispatcher, cached at construction (BuildReporterTable
+    // precedent) so a raise never probes the graph; null for graphs without event entries.
+    private readonly EventEntryState? _eventEntry;
+    private NodeId _pendingEntry = NodeId.Default; // armed by a typed raise, consumed at run start
+
     /// <summary>
     /// The outcome code of the node the last run terminated at (default 0).
     /// Reset when a new run starts.
@@ -94,6 +100,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
         _reporters = BuildReporterTable(graph);
+        _eventEntry = FindEventEntry(graph);
         _retryPolicies = graph.RetryPolicies;
         _outcomeCodes = graph.OutcomeCodes;
         if (graph.NodeSchema is { } nodeSchema)
@@ -187,6 +194,137 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     }
 
     private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
+
+    private static EventEntryState? FindEventEntry(Graph graph)
+    {
+        return graph.TryGetNodeByIndex(NodeId.Start.Index, out INode? node) && node is LogicNode logicNode
+            ? logicNode.AsyncLogic as EventEntryState ?? logicNode.Logic as EventEntryState
+            : null;
+    }
+
+    /// <summary>
+    /// Stamps the pending event entry onto the dispatcher and clears the machine's field.
+    /// Called at every run start, right after <see cref="ApplyExecutionContext"/> —
+    /// unconditionally (<see cref="NodeId.Default"/> when no raise armed one), same
+    /// philosophy as the blackboard re-stamp: a stale entry must never leak into a later
+    /// plain run, and interleaved machines sharing a graph each stamp their own.
+    /// </summary>
+    private void StampPendingEntry()
+    {
+        if (_eventEntry is null)
+        {
+            return;
+        }
+
+        _eventEntry.SetPendingEntry(_pendingEntry);
+        _pendingEntry = NodeId.Default;
+    }
+
+    // ── Typed event raise surface (spec 013) ────────────────────────────
+
+    /// <summary>
+    /// Runs the machine to its terminal result (see <see cref="AsyncState.ExecuteAsync"/>).
+    /// Declared here (hiding the base method by forwarding) so overload resolution keeps
+    /// routing <c>ExecuteAsync()</c>/<c>ExecuteAsync(ct)</c> to the plain run — without this,
+    /// the typed raise overload below would capture a lone <see cref="CancellationToken"/>
+    /// argument as an event payload.
+    /// </summary>
+    public new ValueTask<Result> ExecuteAsync(CancellationToken ct = default) => base.ExecuteAsync(ct);
+
+    /// <summary>
+    /// Raises a typed event: resolves <typeparamref name="TEvent"/> against the graph's event
+    /// entries, delivers the payload through the registration's blackboard key into this
+    /// machine's bound boards (typed end-to-end — struct events never box), and starts an
+    /// ordinary run at the entry's chain. One event = one run: the machine must be idle, and
+    /// the existing restart policies apply verbatim (under <see cref="RestartPolicy.Auto"/>
+    /// the machine is re-raisable after each run; under <see cref="RestartPolicy.Manual"/> a
+    /// raise after a terminal run throws the usual "call Reset()" error). Hosts that want
+    /// buffering feed this from their own queue (e.g. a <c>Channel&lt;T&gt;</c>).
+    /// </summary>
+    public ValueTask<Result> ExecuteAsync<TEvent>(TEvent evt, CancellationToken ct = default)
+    {
+        ArmRaise(evt);
+        return RunRaisedAsync(ct);
+    }
+
+    /// <summary>
+    /// Typed-raise twin of <see cref="StepAsync(CancellationToken)"/>: raises the event and
+    /// advances the run by exactly one node. Legal only as a run's <b>first</b> step — the
+    /// dispatch decision is made at run start, so raising mid-stepped-run throws. Continue
+    /// the run with plain <see cref="StepAsync(CancellationToken)"/> calls.
+    /// </summary>
+    public ValueTask<Result> StepAsync<TEvent>(TEvent evt, CancellationToken ct = default)
+    {
+        if (_stepping)
+        {
+            throw new InvalidOperationException(
+                "A stepped run is in progress — a typed event can only start a run. Finish it with StepAsync " +
+                "or Reset() before raising.");
+        }
+
+        ArmRaise(evt);
+        return StepRaisedAsync(ct);
+    }
+
+    private void ArmRaise<TEvent>(TEvent evt)
+    {
+        EventEntryState? dispatcher = _eventEntry;
+        if (dispatcher is null)
+        {
+            ThrowNoEventEntries();
+        }
+
+        // Best-effort idle guard — the execute gate in the plain path remains the real barrier.
+        ExecutionStatus status = Status;
+        if (status is ExecutionStatus.Starting or ExecutionStatus.Running or ExecutionStatus.Transitioning)
+        {
+            ThrowRaiseWhileExecuting();
+        }
+
+        _pendingEntry = dispatcher!.RaiseInto(in _blackboards, evt);
+    }
+
+    private async ValueTask<Result> RunRaisedAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await ExecuteAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Consumed at run start; anything left means the run never started (terminal-Manual
+            // throw, Ignore policy) — clear so the entry cannot leak into a later plain run.
+            _pendingEntry = NodeId.Default;
+        }
+    }
+
+    private async ValueTask<Result> StepRaisedAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await StepAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Same guarantee as RunRaisedAsync: a step that never started a run must not
+            // leave the entry armed. A successfully started stepped run consumed it already.
+            if (!_stepping)
+            {
+                _pendingEntry = NodeId.Default;
+            }
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowNoEventEntries() =>
+        throw new InvalidOperationException(
+            "This graph has no event entries — author it with GraphBuilder.StartWithEvents() to raise typed events.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowRaiseWhileExecuting() =>
+        throw new InvalidOperationException(
+            "Cannot raise an event while the machine is executing — an event starts a new run. Await completion " +
+            "(or finish the stepped run) before raising.");
 
     private static ILogReporter?[] BuildReporterTable(Graph graph)
     {
@@ -335,6 +473,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
             // Re-stamp this machine's context onto the (potentially shared) graph before running.
             ApplyExecutionContext();
+            StampPendingEntry();
 
             // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
             await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
@@ -628,6 +767,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                     }
 
                     ApplyExecutionContext();
+                    StampPendingEntry();
 
                     await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
                     _current = _initial;
@@ -747,8 +887,10 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             if (reporter is not null)
             {
                 // Reassigned on every visit so interleaved machines sharing a graph each
-                // attribute log reports to their own observer.
-                reporter.LogReport = _cachedLogReportCallback;
+                // attribute log reports to their own observer; null when this machine has no
+                // observer, so nodes that gate report formatting on a wired callback
+                // (behavior composites) pay nothing on observer-less machines.
+                reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
             }
 
             LogicNode logic = (LogicNode)node;

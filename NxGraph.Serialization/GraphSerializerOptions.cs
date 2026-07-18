@@ -24,4 +24,13 @@ public sealed class GraphSerializerOptions
     /// logic codec's — the container payload rides in the same node DTO slot.
     /// </summary>
     public IContainerCodec? ContainerCodec { get; init; }
+
+    /// <summary>
+    /// Resolves behavior payload identities (payload version 8). When left null the
+    /// serializer uses a fresh default <see cref="BehaviorRegistry"/>, which carries the
+    /// standard set (<c>Log</c>, closed <c>SetValue&lt;T&gt;</c>) built in — standard-set
+    /// graphs round-trip with zero options. Configure one to register reconstruction
+    /// factories for user <c>ISerializableBehavior</c> implementations.
+    /// </summary>
+    public IBehaviorRegistry? BehaviorRegistry { get; init; }
 }

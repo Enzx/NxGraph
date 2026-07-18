@@ -12,13 +12,15 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
     private const int VersionFourHeaderCount = 10;
     private const int VersionFiveHeaderCount = 11;
     private const int VersionSixHeaderCount = 14;
+    private const int VersionSevenHeaderCount = 15;
+    private const int VersionEightHeaderCount = 16;
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {
         // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[],
         //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[], 9.Composites[], 10.Uids[],
-        //  11.Forks[], 12.Joins[], 13.Containers[]]
-        writer.WriteArrayHeader(VersionSixHeaderCount);
+        //  11.Forks[], 12.Joins[], 13.Containers[], 14.EventEntries[], 15.Behaviors[]]
+        writer.WriteArrayHeader(VersionEightHeaderCount);
         writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
@@ -41,6 +43,10 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             .Serialize(ref writer, value.Joins, options);
         options.Resolver.GetFormatterWithVerify<ContainerDto[]>()
             .Serialize(ref writer, value.Containers, options);
+        options.Resolver.GetFormatterWithVerify<EventEntryDto[]>()
+            .Serialize(ref writer, value.EventEntries, options);
+        options.Resolver.GetFormatterWithVerify<BehaviorDto[]>()
+            .Serialize(ref writer, value.Behaviors, options);
     }
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -73,6 +79,13 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 6 when count < VersionSixHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionSixHeaderCount} elements, got {count}");
+            case 7 when count < VersionSevenHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionSevenHeaderCount} elements, got {count}");
+            // v9 changed only the behavior field model (nested entries), not the header shape.
+            case 8 or 9 when count < VersionEightHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionEightHeaderCount} elements, got {count}");
         }
 
         int index = reader.ReadInt32();
@@ -127,9 +140,25 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
                 .Deserialize(ref reader, options);
         }
 
+        // Pre-v7 payloads end after Containers; the event entry section arrived with version 7.
+        EventEntryDto[] eventEntries = [];
+        if (count >= VersionSevenHeaderCount)
+        {
+            eventEntries = options.Resolver.GetFormatterWithVerify<EventEntryDto[]>()
+                .Deserialize(ref reader, options);
+        }
+
+        // Pre-v8 payloads end after EventEntries; the behavior section arrived with version 8.
+        BehaviorDto[] behaviors = [];
+        if (count >= VersionEightHeaderCount)
+        {
+            behaviors = options.Resolver.GetFormatterWithVerify<BehaviorDto[]>()
+                .Deserialize(ref reader, options);
+        }
+
         reader.Depth--;
 
         return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames,
-            composites, uids, forks, joins, containers) { Version = version };
+            composites, uids, forks, joins, containers, eventEntries, behaviors) { Version = version };
     }
 }
