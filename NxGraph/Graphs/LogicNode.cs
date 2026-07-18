@@ -113,6 +113,14 @@ public class LogicNode : INode
     /// </summary>
     public static readonly LogicNode SyncDynamicParallelStateMarker =
         new(NodeId.SyncDynamicParallelStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for event-entry dispatcher owner nodes during (de)serialization (wire marker
+    /// string "EventEntryState", payload version 7). One marker for both runtimes — the
+    /// dispatcher is one class implementing both logic interfaces.
+    /// </summary>
+    public static readonly LogicNode EventEntryStateMarker =
+        new(NodeId.EventEntryStateMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>

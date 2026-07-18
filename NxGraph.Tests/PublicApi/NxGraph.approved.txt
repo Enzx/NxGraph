@@ -176,6 +176,22 @@ struct NxGraph.Authoring.Dsl+SwitchBuilder`1
   method SwitchBuilder`1 CaseAsync(TKey, NxGraph.Graphs.IAsyncLogic)
   method SwitchBuilder`1 Default(NxGraph.Graphs.ILogic)
   method SwitchBuilder`1 DefaultAsync(NxGraph.Graphs.IAsyncLogic)
+sealed class NxGraph.Authoring.EventBranch
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken)
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken To(System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+struct NxGraph.Authoring.EventsToken
+  method NxGraph.Authoring.EventsToken On[TEvent](NxGraph.Blackboards.BlackboardKey`1[TEvent], System.Func`2[NxGraph.Authoring.EventBranch,NxGraph.Authoring.StateToken])
+  method NxGraph.Authoring.EventsToken Otherwise(System.Func`2[NxGraph.Authoring.EventBranch,NxGraph.Authoring.StateToken])
+  method NxGraph.Authoring.EventsToken WithSchema(NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Graphs.Graph Build(Boolean)
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
 sealed class NxGraph.Authoring.ForkBranch
   method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken)
   method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
@@ -194,6 +210,7 @@ struct NxGraph.Authoring.GotoToken
   property NxGraph.Authoring.GraphBuilder Builder { get; }
 sealed class NxGraph.Authoring.GraphBuilder
   ctor Void .ctor()
+  method NxGraph.Authoring.EventsToken StartWithEvents()
   method NxGraph.Authoring.GraphBuilder AddFailureTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   method NxGraph.Authoring.GraphBuilder AddGoto(NxGraph.Graphs.NodeId, System.String)
   method NxGraph.Authoring.GraphBuilder AddTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
@@ -301,6 +318,7 @@ struct NxGraph.Blackboards.BlackboardKey`1 : IEquatable`1
 sealed class NxGraph.Blackboards.BlackboardSchema
   ctor Void .ctor(System.String, NxGraph.Blackboards.BlackboardScope)
   method Boolean TryGetKey(System.String, NxGraph.Blackboards.BlackboardKeyDescriptor ByRef)
+  method Boolean TryResolve[T](System.String, NxGraph.Blackboards.BlackboardKey`1[T] ByRef)
   method NxGraph.Blackboards.BlackboardKey`1[T] Register[T](System.String)
   method NxGraph.Blackboards.BlackboardKey`1[T] Register[T](System.String, T)
   property Boolean IsFrozen { get; }
@@ -479,11 +497,14 @@ class NxGraph.Fsm.Async.AsyncStateMachine : NxGraph.Fsm.Async.AsyncState, NxGrap
   field readonly NxGraph.Graphs.Graph Graph
   method NxGraph.Fsm.StateMachineDeepSnapshot SuspendDeep()
   method NxGraph.Fsm.StateMachineSnapshot Suspend()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync[TEvent](TEvent, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] Reset(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] StepAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] StepAsync[TEvent](TEvent, System.Threading.CancellationToken)
   method Void Resume(NxGraph.Fsm.StateMachineSnapshot)
   method Void ResumeDeep(NxGraph.Fsm.StateMachineDeepSnapshot)
   method Void SetAutoReset(Boolean)
@@ -543,6 +564,19 @@ sealed class NxGraph.Fsm.DynamicParallelState : NxGraph.Blackboards.IBlackboardS
   property NxGraph.Fsm.ParallelStepMode Mode { get; }
   property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.StateMachine] Regions { get; }
   property System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] Selector { get; }
+sealed class NxGraph.Fsm.EventEntryState : NxGraph.Fsm.IAsyncDirector, NxGraph.Fsm.IDirector, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ILogic
+  ctor Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration])
+  ctor Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration], NxGraph.Graphs.NodeId)
+  property NxGraph.Graphs.NodeId DefaultTarget { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration] Registrations { get; }
+abstract class NxGraph.Fsm.EventRegistration
+  method NxGraph.Fsm.EventRegistration Unbound(System.String, System.String, NxGraph.Graphs.NodeId)
+  property NxGraph.Graphs.NodeId Target { get; }
+  property System.String EventTypeName { get; }
+  property System.String KeyName { get; }
+sealed class NxGraph.Fsm.EventRegistration`1 : NxGraph.Fsm.EventRegistration
+  ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TEvent], NxGraph.Graphs.NodeId)
+  property NxGraph.Blackboards.BlackboardKey`1[TEvent] Key { get; }
 enum NxGraph.Fsm.ExecutionStatus : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Cancelled = 6
   Completed = 4
@@ -677,6 +711,7 @@ class NxGraph.Fsm.StateMachine : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackbo
   field readonly NxGraph.Graphs.Graph Graph
   method NxGraph.Fsm.StateMachineDeepSnapshot SuspendDeep()
   method NxGraph.Fsm.StateMachineSnapshot Suspend()
+  method NxGraph.Result Execute[TEvent](TEvent)
   method NxGraph.Result OnRun()
   method NxGraph.Result Reset()
   method Void OnEnter()
@@ -806,6 +841,7 @@ class NxGraph.Graphs.LogicNode : NxGraph.Graphs.INode
   ctor Void .ctor(NxGraph.Graphs.NodeId, NxGraph.Graphs.IAsyncLogic, System.Action, System.Action)
   field static readonly NxGraph.Graphs.LogicNode DynamicParallelStateMarker
   field static readonly NxGraph.Graphs.LogicNode Empty
+  field static readonly NxGraph.Graphs.LogicNode EventEntryStateMarker
   field static readonly NxGraph.Graphs.LogicNode ForkStateMarker
   field static readonly NxGraph.Graphs.LogicNode HistoryStateMarker
   field static readonly NxGraph.Graphs.LogicNode JoinStateMarker
@@ -835,6 +871,7 @@ struct NxGraph.Graphs.NodeId : System.IEquatable`1[[NxGraph.Graphs.NodeId]]
   property Int32 Index { get; }
   property NxGraph.Graphs.NodeId Default { get; }
   property NxGraph.Graphs.NodeId DynamicParallelStateMarker { get; }
+  property NxGraph.Graphs.NodeId EventEntryStateMarker { get; }
   property NxGraph.Graphs.NodeId ForkStateMarker { get; }
   property NxGraph.Graphs.NodeId HistoryStateMarker { get; }
   property NxGraph.Graphs.NodeId JoinStateMarker { get; }

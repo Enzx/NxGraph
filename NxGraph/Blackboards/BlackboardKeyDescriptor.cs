@@ -50,6 +50,9 @@ internal sealed class SlotDefinition<T> : BlackboardKeyDescriptor
         _defaultValue = defaultValue;
     }
 
+    /// <summary>The typed key this slot was registered under (schema rebinding lookups).</summary>
+    internal BlackboardKey<T> Key => _key;
+
     public override object? GetValue(Blackboard blackboard) => blackboard.Get(_key);
 
     public override void SetValue(Blackboard blackboard, object? value) => blackboard.Set(_key, (T)value!);

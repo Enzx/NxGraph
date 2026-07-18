@@ -729,6 +729,85 @@ public class AllocationGateTests
         AssertZeroAlloc(token.ToStateMachine(new NoopSyncObserver()));
     }
 
+    // ── Event entry points (spec 013): typed raise + run ────────────────
+
+    private readonly record struct GatePing(int Value);
+
+    private static (Graph graph, Blackboard board, BlackboardKey<GatePing> ping) EventGraph(bool sync)
+    {
+        BlackboardSchema schema = new("gate-events");
+        BlackboardKey<GatePing> ping = schema.Register<GatePing>("ping");
+
+        Graph graph = sync
+            ? GraphBuilder.StartWithEvents()
+                .On(ping, e => e
+                    .To(bb => bb.Get(ping).Value >= 0 ? Result.Success : Result.Failure)
+                    .To(ping, (evt, _) => evt.Value >= 0 ? Result.Success : Result.Failure))
+                .WithSchema(schema)
+                .Build()
+            : GraphBuilder.StartWithEvents()
+                .On(ping, e => e
+                    .ToAsync((bb, _) => bb.Get(ping).Value >= 0 ? ResultHelpers.Success : ResultHelpers.Failure)
+                    .ToAsync(ping, (evt, _, _) => evt.Value >= 0 ? ResultHelpers.Success : ResultHelpers.Failure))
+                .WithSchema(schema)
+                .Build();
+
+        return (graph, new Blackboard(schema), ping);
+    }
+
+    [Test]
+    public async Task async_typed_event_raise_and_run_is_allocation_free()
+    {
+        (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: false);
+        AsyncStateMachine machine = graph.ToAsyncStateMachine().WithBlackboard(board);
+
+        for (int i = 0; i < 50; i++)
+        {
+            await machine.ExecuteAsync(new GatePing(i));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            await machine.ExecuteAsync(new GatePing(i));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Typed event raise allocated {allocated} B over {Iterations} runs.");
+    }
+
+    [Test]
+    public void sync_typed_event_raise_and_run_is_allocation_free()
+    {
+        (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: true);
+        StateMachine machine = graph.ToStateMachine().WithBlackboard(board);
+
+        for (int i = 0; i < 50; i++)
+        {
+            RaiseToCompletion(machine, new GatePing(i));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < Iterations; i++)
+        {
+            RaiseToCompletion(machine, new GatePing(i));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.That(allocated, Is.Zero,
+            $"Sync typed event raise allocated {allocated} B over {Iterations} runs.");
+    }
+
+    private static void RaiseToCompletion<TEvent>(StateMachine machine, TEvent evt)
+    {
+        Result result = machine.Execute(evt);
+        while (result == Result.InProgress)
+        {
+            result = machine.Execute();
+        }
+    }
+
     // ── Token runtime (spec 007): pooled tokens, fork/join, per-token scratch ──
 
     private static void AssertZeroAllocTokens(NxGraph.Tokens.TokenMachine machine)

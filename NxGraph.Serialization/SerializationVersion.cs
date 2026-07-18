@@ -13,6 +13,10 @@ public static class SerializationVersion
     //     composite kinds + SelectorKey ("DynamicParallelState"/"SyncDynamicParallelState"
     //     markers, selector resolved via IRegionSelectorRegistry), container section
     //     (markerless claims routed to the configured IContainerCodec).
-    public const int Version = 6;
+    // v7: event entry section ("EventEntryState" marker, sparse EventEntryDto beside the
+    //     other sections) — dispatch table as (KeyName, EventTypeName, TargetIndex) entries
+    //     plus the Otherwise target; keys never ride, so the read side rebuilds unbound
+    //     registrations resolved by name against the machine's bound board at raise time.
+    public const int Version = 7;
 }
 

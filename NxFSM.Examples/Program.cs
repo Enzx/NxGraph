@@ -81,6 +81,8 @@ await BlackboardExample.RunAsync();
 Console.WriteLine();
 await PortsExample.RunAsync();
 Console.WriteLine();
+await EventEntryExample.RunAsync();
+Console.WriteLine();
 ObserverExample.Run();
 Console.WriteLine();
 await FeatureExamples.RunAsync();

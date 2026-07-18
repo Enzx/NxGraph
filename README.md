@@ -48,6 +48,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Agents / context injection](#agents--context-injection)
   - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
   - [Step I/O (ports)](#step-io-ports)
+  - [Event entry points](#event-entry-points)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution-stepped-model)
@@ -474,6 +475,56 @@ Graph graph = GraphBuilder
 Producer and pipe steps **cannot fail** — their lambdas return the value, and the relay writes it to the port and returns `Success`. A step that both computes a value and can fail keeps using the plain context relay (`.To(bb => ...)`) with an explicit `bb.Set(...)` on its success path; exceptions thrown by a step propagate exactly as from every relay.
 
 > **Node-scope trap:** a Node-scoped key cannot pipe — Node scratch resets on the success transition, so the producer's write is back at its default before the consumer runs. The port overloads reject Node-scoped keys at wiring time with an `ArgumentException`. Global-scoped keys are accepted (legitimate for world-state ports) but shared across machines — two machines over one template would overwrite each other's values, so the default recommendation stays Graph scope.
+
+### Event entry points
+
+One graph can respond to several externally-raised, **typed** events, each entering the flow at its own entry chain. An event is a **run trigger**, not an interrupt: one event starts exactly one ordinary run at the chain registered for its CLR type, with the payload delivered type-safely through a Graph-scoped `BlackboardKey<TEvent>` — the same "a port is an ordinary key" convention as step I/O, which is also what makes event payloads durable for free.
+
+```csharp
+public sealed record OrderPlaced(string OrderId, decimal Amount);
+public readonly record struct OrderCanceled(string OrderId);
+
+var shop = new BlackboardSchema("shop"); // Graph scope (default)
+BlackboardKey<OrderPlaced> orderPlaced = shop.Register<OrderPlaced>("orderPlaced");
+BlackboardKey<OrderCanceled> orderCanceled = shop.Register<OrderCanceled>("orderCanceled");
+
+Graph graph = GraphBuilder.StartWithEvents()
+    .On(orderPlaced, e => e
+        .ToAsync(orderPlaced, (order, bb, ct) => ReserveStockAsync(order))  // payload via the consumer sugar
+        .ToAsync((bb, ct) => ChargeAsync(bb.Get(orderPlaced)))              // or via bb.Get
+        .WithOutcome(1, "Placed"))
+    .On(orderCanceled, e => e
+        .ToAsync(orderCanceled, (order, bb, ct) => RefundAsync(order))
+        .WithOutcome(2, "Canceled"))
+    .Otherwise(e => e.ToAsync((bb, ct) => LogUnsolicitedAsync()))           // optional plain-run entry
+    .WithSchema(shop)
+    .Build();
+
+AsyncStateMachine machine = graph.ToAsyncStateMachine().WithBlackboard(new Blackboard(shop));
+
+Result placed = await machine.ExecuteAsync(new OrderPlaced("o-1", 42m)); // dispatch by CLR event type
+Result canceled = await machine.ExecuteAsync(new OrderCanceled("o-1"));
+Console.WriteLine(machine.LastOutcomeName); // per-entry outcome via .WithOutcome + LastOutcome
+```
+
+The sync twin raises with `machine.Execute(evt)` — the call arms the run and advances one tick; subsequent plain `Execute()` ticks continue it (normal frame-stepping). The async stepped twin is `machine.StepAsync(evt)`, legal only as a run's **first** step. Entry chains use the full DSL vocabulary — `.OnError`, `.Retry`, `.WithOutcome`, ports, composites — and may converge on shared nodes.
+
+Rules that keep the model simple:
+
+- **One event = one run.** The machine must be idle; restart policies apply verbatim (under `RestartPolicy.Manual` a raise after a terminal run throws the usual "call Reset()" error, and raising while running throws). There is no internal queue, no mid-run delivery, no deferral.
+- **Dispatch is by CLR event type** — one entry per type, enforced at wiring time. Node-scoped and schema-less keys are rejected at wiring time too; Global keys are allowed but shared across machines (prefer Graph scope).
+- A **plain run** (`ExecuteAsync()` / `Execute()`) routes to the `Otherwise` chain; without one it throws pointing at the raise API. A raised entry never leaks into a later plain run.
+- Machines **sharing one graph** each raise their own events against their own boards, exactly like agents and blackboards — sequential runs only.
+
+A host that wants buffering feeds the machine from its own queue — three lines with a `Channel<T>`:
+
+```csharp
+var queue = Channel.CreateUnbounded<OrderPlaced>();
+await foreach (OrderPlaced evt in queue.Reader.ReadAllAsync(ct))
+    await machine.ExecuteAsync(evt, ct); // one queued event = one run
+```
+
+Serialization: the dispatch table rides the graph payload (version 7) as plain structure; keys never serialize, so a deserialized graph raises by resolving the event's runtime-stable type name and the delivery key by name against the machine's bound board — see [Serialization](#serialization).
 
 ---
 
@@ -1061,6 +1112,7 @@ Notes:
 - JSON and MessagePack are both supported through `GraphSerializer`
 - your codec controls how node logic is persisted and restored
 - nested machines, history/parallel composites, and token fork/join nodes serialize out of the box; dynamic parallel composites need a `GraphSerializerOptions.SelectorRegistry` (the selector delegate rides as a named key — author graphs with the delegate instance `RegionSelectorRegistry.Register` returns), and custom `ISubGraphProvider` containers need a `GraphSerializerOptions.ContainerCodec` (you own the reconstruction recipe; the serializer recurses into `SubGraphs` for you, order-preserving)
+- event entry dispatchers serialize out of the box (payload version 7): the dispatch table — key names, runtime-stable event type names, targets, and the `Otherwise` target — is plain structure. Blackboard keys never ride the graph payload (schemas are code), so a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board, with targeted errors on a missing name or a changed value type
 
 ---
 

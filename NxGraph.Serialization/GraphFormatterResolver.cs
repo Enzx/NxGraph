@@ -157,6 +157,18 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(EventEntryDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)EventEntryDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(EventEntryDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)EventEntryArrayDtoFormatter.Instance;
+                return;
+            }
+
             Formatter = null;
         }
     }

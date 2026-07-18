@@ -193,6 +193,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         List<ForkDto> forks = [];
         List<JoinDto> joins = [];
         List<ContainerDto> containers = [];
+        List<EventEntryDto> eventEntries = [];
         INodeDto[] nodes = new INodeDto[nodeCount];
         for (int index = 0; index < nodeCount; index++)
         {
@@ -219,6 +220,32 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     {
                         joins.Add(new JoinDto(index, (byte)join.Policy.Kind, join.Policy.Count));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.JoinStateMarker.Id.Name);
+                        break;
+                    }
+
+                    // Event dispatchers (payload version 7): the dispatch table is plain
+                    // structure — key names, runtime-stable event type names, target indexes,
+                    // and the Otherwise target. Keys never ride (schemas do not serialize);
+                    // the read side rebuilds unbound registrations resolved by name at raise
+                    // time. One marker for both runtimes, like fork/join.
+                    if ((logicNode.AsyncLogic as EventEntryState ??
+                         logicNode.Logic as EventEntryState) is { } eventEntry)
+                    {
+                        EventRegistrationDto[] entries =
+                            new EventRegistrationDto[eventEntry.Registrations.Count];
+                        for (int e = 0; e < entries.Length; e++)
+                        {
+                            EventRegistration registration = eventEntry.Registrations[e];
+                            entries[e] = new EventRegistrationDto(registration.KeyName,
+                                registration.EventTypeName, registration.Target.Index);
+                        }
+
+                        int defaultTarget = eventEntry.DefaultTarget == NodeId.Default
+                            ? -1
+                            : eventEntry.DefaultTarget.Index;
+                        eventEntries.Add(new EventEntryDto(index, defaultTarget, entries));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.EventEntryStateMarker.Id.Name);
                         break;
                     }
 
@@ -445,7 +472,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
             outcomeCodes, outcomeNames, composites.ToArray(), uids, forks.ToArray(), joins.ToArray(),
-            containers.ToArray());
+            containers.ToArray(), eventEntries.ToArray());
     }
 
     /// <summary>
@@ -548,6 +575,17 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Container DTO owner index {containerDto.OwnerIndex} is duplicated in the payload.");
         }
 
+        // Claim-first for the v7 event entry section: the "EventEntryState" marker is only
+        // honored when an EventEntryDto claims the node index.
+        Dictionary<int, EventEntryDto>? eventEntryOwners = null;
+        foreach (EventEntryDto eventEntryDto in dto.EventEntries)
+        {
+            eventEntryOwners ??= new Dictionary<int, EventEntryDto>();
+            if (!eventEntryOwners.TryAdd(eventEntryDto.OwnerIndex, eventEntryDto))
+                throw new InvalidOperationException(
+                    $"Event entry DTO owner index {eventEntryDto.OwnerIndex} is duplicated in the payload.");
+        }
+
         // A node index may be claimed by at most one section. Before markerless container
         // claims this was implicit via marker matching; now it must be explicit — an
         // overlapping claim is a corrupt or crafted payload, not something to route by luck.
@@ -558,6 +596,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             AddClaims(ref claimedBy, forkOwners?.Keys, "Forks");
             AddClaims(ref claimedBy, joinOwners?.Keys, "Joins");
             AddClaims(ref claimedBy, containerOwners?.Keys, "Containers");
+            AddClaims(ref claimedBy, eventEntryOwners?.Keys, "EventEntries");
         }
 
         INode[] nodes = new INode[nodesLength];
@@ -624,6 +663,15 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         joinOwners is not null && joinOwners.ContainsKey(nodeDto.Index))
                     {
                         nodes[nodeDto.Index] = LogicNode.JoinStateMarker;
+                        break;
+                    }
+
+                    // Event entry marker (v7): honored only when an EventEntryDto claims this
+                    // node index — an unclaimed marker string is ordinary codec payload.
+                    if (textDto.Logic == LogicNode.EventEntryStateMarker.Id.Name &&
+                        eventEntryOwners is not null && eventEntryOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.EventEntryStateMarker;
                         break;
                     }
 
@@ -882,6 +930,61 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
             nodes[joinDto.OwnerIndex] = new LogicNode(new NodeId(joinDto.OwnerIndex, joinNodeName),
                 new JoinState(policy));
+        }
+
+        // Rebuild event dispatchers (v7) through the public constructor so duplicate-type-name
+        // validation re-runs. Registrations rebuild unbound — keys never ride the payload
+        // (schemas do not serialize), so raise on the rebuilt graph resolves the event type by
+        // its runtime-stable name and the delivery key by name against the machine's bound
+        // Graph board schema. Target ids rebuild as bare indexes, like fork branches.
+        foreach (EventEntryDto eventEntryDto in dto.EventEntries)
+        {
+            if (eventEntryDto.OwnerIndex < 0 || eventEntryDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Event entry DTO owner index {eventEntryDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (!ReferenceEquals(nodes[eventEntryDto.OwnerIndex], LogicNode.EventEntryStateMarker))
+                throw new InvalidOperationException(
+                    $"Event entry DTO owner index {eventEntryDto.OwnerIndex} does not reference an event-entry " +
+                    "marker node.");
+            if (eventEntryDto.Entries.Length == 0)
+                throw new InvalidOperationException(
+                    $"Event entry DTO for node {eventEntryDto.OwnerIndex} must carry at least one entry.");
+            if (eventEntryDto.DefaultTarget < -1 || eventEntryDto.DefaultTarget >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Event entry DTO for node {eventEntryDto.OwnerIndex} has default target " +
+                    $"{eventEntryDto.DefaultTarget} out of range (-1..{nodesLength - 1}).");
+
+            EventRegistration[] registrations = new EventRegistration[eventEntryDto.Entries.Length];
+            for (int e = 0; e < registrations.Length; e++)
+            {
+                EventRegistrationDto entry = eventEntryDto.Entries[e];
+                if (string.IsNullOrEmpty(entry.KeyName) || string.IsNullOrEmpty(entry.EventTypeName))
+                    throw new InvalidOperationException(
+                        $"Event entry DTO for node {eventEntryDto.OwnerIndex} has an entry with a missing key " +
+                        "or event type name.");
+                if (entry.TargetIndex < 0 || entry.TargetIndex >= nodesLength)
+                    throw new InvalidOperationException(
+                        $"Event entry DTO for node {eventEntryDto.OwnerIndex} has entry target index " +
+                        $"{entry.TargetIndex} out of range (0..{nodesLength - 1}).");
+
+                registrations[e] = EventRegistration.Unbound(entry.KeyName, entry.EventTypeName,
+                    new NodeId(entry.TargetIndex));
+            }
+
+            NodeId defaultTarget = eventEntryDto.DefaultTarget == -1
+                ? NodeId.Default
+                : new NodeId(eventEntryDto.DefaultTarget);
+
+            string eventEntryNodeName = dto.Nodes[eventEntryDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{eventEntryDto.OwnerIndex}"
+            };
+
+            nodes[eventEntryDto.OwnerIndex] =
+                new LogicNode(new NodeId(eventEntryDto.OwnerIndex, eventEntryNodeName),
+                    (IAsyncLogic)new EventEntryState(registrations, defaultTarget));
         }
 
         // Rebuild container-codec nodes (v6): children first (in wire order = SubGraphs

@@ -218,6 +218,9 @@ public static class GraphValidator
         // external tooling and two nodes claiming it makes lookups ambiguous.
         ValidateUids(graph, result);
 
+        // 4e) Event-entry lints (spec 013) — always on, mirroring the fork/join presence Info.
+        ValidateEventEntries(graph, result);
+
         // 5) If AllNodes are supplied, check for unreachable nodes and duplicate names
         if (options.AllNodes is { Count: > 0 } all)
         {
@@ -288,6 +291,73 @@ public static class GraphValidator
 
             foreach (int dup in kvp.Value)
                 result.Add(Severity.Error, $"Duplicate node UID '{kvp.Key:D}'.", graph.GetNodeByIndex(dup).Id);
+        }
+    }
+
+    private static void ValidateEventEntries(Graph graph, GraphValidationResult result)
+    {
+        if (!graph.TryGetNodeByIndex(NodeId.Start.Index, out INode? startNode) ||
+            startNode is not LogicNode startLogic ||
+            (startLogic.AsyncLogic as EventEntryState ?? startLogic.Logic as EventEntryState) is not { } dispatcher)
+        {
+            return;
+        }
+
+        NodeId dispatcherId = startNode.Id;
+        result.Add(Severity.Info,
+            "Graph starts with an event entry — start runs with the typed raise overloads " +
+            "(ExecuteAsync<TEvent>(evt) / Execute<TEvent>(evt) / StepAsync<TEvent>(evt)); a plain run " +
+            "routes to the Otherwise chain.", dispatcherId);
+
+        // Event delivery writes through the machine's bound Graph board — a graph declaring no
+        // Graph schema at all defers the failure to the unbound-board throw at raise time.
+        if (graph.Schema is null)
+        {
+            result.Add(Severity.Warning,
+                "Event graph declares no Graph-scoped blackboard schema — event delivery writes through the " +
+                "machine's bound Graph board, so a raise without one hits the unbound-scope throw. Declare " +
+                "the schema via WithSchema(...) and bind a board via WithBlackboard(...).", dispatcherId);
+        }
+
+        foreach (EventRegistration registration in dispatcher.Registrations)
+        {
+            BlackboardSchema? keySchema = registration.KeySchema;
+            if (keySchema is null)
+            {
+                continue; // unbound (deserialized) registrations resolve by name at raise time
+            }
+
+            BlackboardSchema? declared = keySchema.Scope == BlackboardScope.Global
+                ? graph.GlobalSchema
+                : graph.Schema;
+            if (declared is not null && !ReferenceEquals(declared, keySchema))
+            {
+                result.Add(Severity.Warning,
+                    $"Event key '{registration.KeyName}' is registered on a schema that is not the graph's " +
+                    $"declared {keySchema.Scope} schema — a board bound over the declared schema makes " +
+                    "delivery fail at raise time.", dispatcherId);
+            }
+        }
+
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            bool isTokenNode =
+                logicNode.Logic is ForkState or JoinState ||
+                logicNode.AsyncLogic is ForkState or JoinState;
+            if (!isTokenNode)
+            {
+                continue;
+            }
+
+            result.Add(Severity.Warning,
+                "Graph combines an event entry with token fork/join nodes — event dispatch under the token " +
+                "runtime is unvalidated; keep event graphs and token graphs separate.", dispatcherId);
+            break;
         }
     }
 

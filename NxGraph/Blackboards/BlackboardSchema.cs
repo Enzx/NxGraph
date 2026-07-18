@@ -86,6 +86,26 @@ public sealed class BlackboardSchema
         return key;
     }
 
+    /// <summary>
+    /// Resolves a registered key by name with an exact value-type check. Returns
+    /// <see langword="false"/> when the name is unknown or the slot's value type is not
+    /// <typeparamref name="T"/>. Rebinding lookup for name-only references — e.g. a
+    /// deserialized event entry resolving its delivery key against the machine's bound board.
+    /// </summary>
+    public bool TryResolve<T>(string name, out BlackboardKey<T> key)
+    {
+        Guard.NotNull(name, nameof(name));
+
+        if (_ordinalByName.TryGetValue(name, out int ordinal) && _descriptors[ordinal] is SlotDefinition<T> slot)
+        {
+            key = slot.Key;
+            return true;
+        }
+
+        key = default;
+        return false;
+    }
+
     /// <summary>Looks up a slot descriptor by registered name.</summary>
     public bool TryGetKey(string name, out BlackboardKeyDescriptor descriptor)
     {

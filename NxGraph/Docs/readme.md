@@ -205,6 +205,25 @@ var sm = graph.ToAsyncStateMachine()
 
 Boards serialize independently via `BlackboardSerializer` (`NxGraph.Serialization`) — one payload per board, restored into a live board over the same schema.
 
+### Event entry points
+
+One graph can respond to several externally-raised, typed events, each entering the flow at its own entry chain. `GraphBuilder.StartWithEvents()` seeds an `EventEntryState` dispatcher as the start node; `.On(key, e => chain)` binds a CLR event type to a chain through a Graph-scoped `BlackboardKey<TEvent>` that carries the payload, and `.Otherwise(...)` declares the optional plain-run entry. Raise through the machines' typed overloads — `ExecuteAsync<TEvent>(evt)` / `Execute<TEvent>(evt)` / `StepAsync<TEvent>(evt)` — one event, one run; the machine must be idle and restart policies apply verbatim.
+
+```csharp
+var shop = new BlackboardSchema("shop");
+var orderPlaced = shop.Register<OrderPlaced>("orderPlaced");
+
+Graph graph = GraphBuilder.StartWithEvents()
+    .On(orderPlaced, e => e.ToAsync(orderPlaced, (order, bb, ct) => HandleAsync(order)))
+    .WithSchema(shop)
+    .Build();
+
+var sm = graph.ToAsyncStateMachine().WithBlackboard(new Blackboard(shop));
+await sm.ExecuteAsync(new OrderPlaced("o-1", 42m));
+```
+
+Serialization note: the dispatch table rides the graph payload since version 7 as plain structure (key names, runtime-stable event type names, targets, `Otherwise` target). Keys never serialize — a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board (`BlackboardSchema.TryResolve<T>`), with targeted errors on a missing name or changed value type. The event payload itself is ordinary board state, so `BlackboardSerializer` persists it and a run suspended mid-handler resumes with the payload intact — no event replay.
+
 ---
 
 ## Execution

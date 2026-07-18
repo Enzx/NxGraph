@@ -98,6 +98,11 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     private bool _nodeEntered; // the current node's EnterAction has fired for this visit
     private readonly int[]? _outcomeCodes; // graph-owned; null when no node declares one
 
+    // Event dispatch (spec 013): node 0's dispatcher, cached at construction (log-report-table
+    // precedent) so a raise never probes the graph; null for graphs without event entries.
+    private readonly EventEntryState? _eventEntry;
+    private NodeId _pendingEntry = NodeId.Default; // armed by a typed raise, consumed at run start
+
     /// <summary>
     /// The outcome code of the node the last run terminated at (default 0).
     /// Reset when a new run starts.
@@ -141,6 +146,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
         _logReportStates = BuildLogReportTable(graph);
+        _eventEntry = FindEventEntry(graph);
         _retryPolicies = graph.RetryPolicies;
         _outcomeCodes = graph.OutcomeCodes;
         if (graph.NodeSchema is { } nodeSchema)
@@ -233,6 +239,86 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                 $"{blackboard.Schema.Scope} schema '{declared.Name ?? "<unnamed>"}' declared on graph '{Graph.Id}'.");
         }
     }
+
+    private static EventEntryState? FindEventEntry(Graph graph)
+    {
+        return graph.TryGetNodeByIndex(NodeId.Start.Index, out INode? node) && node is LogicNode logicNode
+            ? logicNode.Logic as EventEntryState ?? logicNode.AsyncLogic as EventEntryState
+            : null;
+    }
+
+    /// <summary>
+    /// Stamps the pending event entry onto the dispatcher and clears the machine's field.
+    /// Called at every run start, right after <see cref="ApplyExecutionContext"/> —
+    /// unconditionally (<see cref="NodeId.Default"/> when no raise armed one), same
+    /// philosophy as the blackboard re-stamp: a stale entry must never leak into a later
+    /// plain run, and interleaved machines sharing a graph each stamp their own.
+    /// </summary>
+    private void StampPendingEntry()
+    {
+        if (_eventEntry is null)
+        {
+            return;
+        }
+
+        _eventEntry.SetPendingEntry(_pendingEntry);
+        _pendingEntry = NodeId.Default;
+    }
+
+    // ── Typed event raise surface (spec 013) ────────────────────────────
+
+    /// <summary>
+    /// Raises a typed event, mirroring <see cref="AsyncStateMachine.ExecuteAsync{TEvent}"/>:
+    /// resolves <typeparamref name="TEvent"/> against the graph's event entries, delivers the
+    /// payload through the registration's blackboard key into this machine's bound boards
+    /// (typed end-to-end — struct events never box), and arms a run at the entry's chain.
+    /// The call advances the run like plain <see cref="State.Execute"/> (one node per tick by
+    /// default); subsequent plain <c>Execute()</c> ticks continue it — normal frame-stepping.
+    /// One event = one run: the machine must be idle, and the restart policies apply verbatim.
+    /// </summary>
+    public Result Execute<TEvent>(TEvent evt)
+    {
+        ArmRaise(evt);
+        try
+        {
+            return Execute();
+        }
+        finally
+        {
+            // Consumed at run start; anything left means the run never started (terminal-Manual
+            // throw, Ignore policy) — clear so the entry cannot leak into a later plain run.
+            _pendingEntry = NodeId.Default;
+        }
+    }
+
+    private void ArmRaise<TEvent>(TEvent evt)
+    {
+        EventEntryState? dispatcher = _eventEntry;
+        if (dispatcher is null)
+        {
+            ThrowNoEventEntries();
+        }
+
+        // Best-effort idle guard — the execute gate in the plain path remains the real barrier.
+        ExecutionStatus status = _status;
+        if (status is ExecutionStatus.Starting or ExecutionStatus.Running or ExecutionStatus.Transitioning)
+        {
+            ThrowRaiseWhileExecuting();
+        }
+
+        _pendingEntry = dispatcher!.RaiseInto(in _blackboards, evt);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowNoEventEntries() =>
+        throw new InvalidOperationException(
+            "This graph has no event entries — author it with GraphBuilder.StartWithEvents() to raise typed events.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowRaiseWhileExecuting() =>
+        throw new InvalidOperationException(
+            "Cannot raise an event while the machine is executing — an event starts a new run. Finish the " +
+            "current run before raising.");
 
     private static State?[] BuildLogReportTable(Graph graph)
     {
@@ -487,6 +573,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
         // Re-stamp this machine's context onto the (potentially shared) graph before running.
         ApplyExecutionContext();
+        StampPendingEntry();
 
         TransitionTo(ExecutionStatus.Starting);
         _current = _initial;
