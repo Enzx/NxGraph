@@ -14,7 +14,7 @@ internal sealed class GraphDto
         string? name = null, RetryPolicyDto[]? retryPolicies = null, OutcomeCodeDto[]? outcomeCodes = null,
         OutcomeNameDto[]? outcomeNames = null, CompositeDto[]? composites = null, UidDto[]? uids = null,
         ForkDto[]? forks = null, JoinDto[]? joins = null, ContainerDto[]? containers = null,
-        EventEntryDto[]? eventEntries = null)
+        EventEntryDto[]? eventEntries = null, BehaviorDto[]? behaviors = null)
     {
         if (nodes.Length != transitions.Length)
             throw new ArgumentException("Nodes and transitions must have the same length.", nameof(transitions));
@@ -32,6 +32,7 @@ internal sealed class GraphDto
         Joins = joins ?? [];
         Containers = containers ?? [];
         EventEntries = eventEntries ?? [];
+        Behaviors = behaviors ?? [];
     }
 
     /// <summary>
@@ -56,5 +57,6 @@ internal sealed class GraphDto
     public JoinDto[] Joins { get; set; }
     public ContainerDto[] Containers { get; set; }
     public EventEntryDto[] EventEntries { get; set; }
+    public BehaviorDto[] Behaviors { get; set; }
 
 }

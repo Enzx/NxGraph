@@ -83,6 +83,8 @@ await PortsExample.RunAsync();
 Console.WriteLine();
 await EventEntryExample.RunAsync();
 Console.WriteLine();
+BehaviorsExample.Run();
+Console.WriteLine();
 ObserverExample.Run();
 Console.WriteLine();
 await FeatureExamples.RunAsync();

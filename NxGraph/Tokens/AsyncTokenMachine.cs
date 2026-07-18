@@ -822,7 +822,7 @@ public class AsyncTokenMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         ILogReporter? reporter = _reporters[idx];
         if (reporter is not null)
         {
-            reporter.LogReport = _cachedLogReportCallback;
+            reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
         }
 
         if (!t.NodeEntered)

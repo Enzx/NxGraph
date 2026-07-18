@@ -1,3 +1,8 @@
+sealed class NxGraph.Serialization.BehaviorRegistry : NxGraph.Serialization.Abstraction.IBehaviorRegistry
+  ctor Void .ctor()
+  method Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object ByRef)
+  method Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+  method Void Register(System.String, System.Func`2[NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object])
 sealed class NxGraph.Serialization.BlackboardSerializer : NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer, NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
   ctor Void .ctor(System.Text.Json.JsonSerializerOptions, MessagePack.MessagePackSerializerOptions)
   method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
@@ -15,6 +20,7 @@ sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstr
   method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromJsonAsync(System.IO.Stream, System.Threading.CancellationToken)
 sealed class NxGraph.Serialization.GraphSerializerOptions
   ctor Void .ctor()
+  property NxGraph.Serialization.Abstraction.IBehaviorRegistry BehaviorRegistry { get; set; }
   property NxGraph.Serialization.Abstraction.IContainerCodec ContainerCodec { get; set; }
   property NxGraph.Serialization.Abstraction.IRegionSelectorRegistry SelectorRegistry { get; set; }
 interface NxGraph.Serialization.IContainerBinaryCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]

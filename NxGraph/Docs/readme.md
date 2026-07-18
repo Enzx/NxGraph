@@ -224,6 +224,19 @@ await sm.ExecuteAsync(new OrderPlaced("o-1", 42m));
 
 Serialization note: the dispatch table rides the graph payload since version 7 as plain structure (key names, runtime-stable event type names, targets, `Otherwise` target). Keys never serialize — a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board (`BlackboardSchema.TryResolve<T>`), with targeted errors on a missing name or changed value type. The event payload itself is ordinary board state, so `BlackboardSerializer` persists it and a run suspended mid-handler resumes with the payload intact — no event replay.
 
+### Behaviors
+
+A state can be authored as a sequence of small reusable behaviors instead of a lambda: `.ToBehaviors(...)` / `.ToBehaviorsAsync(...)` run their entries in order, fail-fast (the first non-`Success` stops the sequence and the node fails — the node keeps the whole fault model: `.Retry` re-runs the list, `.OnError` reroutes). Fields are `BlackboardValue<T>` bindings — literal or blackboard key, any scope. The standard set is `Log` (report channel, formatted only when an observer is wired) and `SetValue<T>`; agent-typed behaviors (`IBehavior<TAgent>`) receive the machine-bound agent as a call parameter via `.ToBehaviors<TAgent>(...)`.
+
+```csharp
+Graph graph = GraphBuilder.Start()
+    .ToBehaviors(new Log(LogSeverity.Info, playerName), new SetValue<int>(score, 100))
+    .WithSchema(stats)
+    .Build();
+```
+
+Serialization note: behavior composites ride the graph payload since version 8 as self-describing field lists. The standard set round-trips with zero options via the default `BehaviorRegistry` (closed generics and agent types resolve from runtime-stable names); key bindings ride by name and rebind against the machine's bound boards at execution. Custom behaviors implement `ISerializableBehavior` and register a factory on `GraphSerializerOptions.BehaviorRegistry`; the agent never rides — re-attach it via `SetAgent`.
+
 ---
 
 ## Execution

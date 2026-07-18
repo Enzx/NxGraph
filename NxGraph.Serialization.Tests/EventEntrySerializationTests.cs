@@ -246,14 +246,14 @@ public class EventEntrySerializationTests
     // ── Version stamps and back compatibility ────────────────────────────
 
     [Test]
-    public async Task Payload_carries_version_seven_stamp()
+    public async Task Payload_carries_current_version_stamp()
     {
         ShopFixture shop = Shop();
         await using MemoryStream stream = new();
         await new GraphSerializer(shop.Codec).ToJsonAsync(shop.Graph, stream);
         string json = Encoding.UTF8.GetString(stream.ToArray());
 
-        Assert.That(json, Does.Contain("\"version\": 7"));
+        Assert.That(json, Does.Contain($"\"version\": {SerializationVersion.Version}"));
     }
 
     private static GraphSerializer PlainSerializer()

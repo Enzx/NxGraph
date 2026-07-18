@@ -49,6 +49,7 @@ The core package targets `net8.0` and `netstandard2.1`.
   - [Blackboards (scoped shared memory)](#blackboards-scoped-shared-memory)
   - [Step I/O (ports)](#step-io-ports)
   - [Event entry points](#event-entry-points)
+  - [Behaviors (declarative state composition)](#behaviors-declarative-state-composition)
 - [Execution](#execution)
   - [Async execution](#async-execution)
   - [Sync execution, stepped model](#sync-execution-stepped-model)
@@ -525,6 +526,34 @@ await foreach (OrderPlaced evt in queue.Reader.ReadAllAsync(ct))
 ```
 
 Serialization: the dispatch table rides the graph payload (version 7) as plain structure; keys never serialize, so a deserialized graph raises by resolving the event's runtime-stable type name and the delivery key by name against the machine's bound board — see [Serialization](#serialization).
+
+### Behaviors (declarative state composition)
+
+A state can be authored as a sequence of small, reusable **behaviors** — plain data objects whose fields are literals or blackboard bindings — instead of an opaque lambda or a hand-written `State` subclass. `.ToBehaviors(...)` / `.ToBehaviorsAsync(...)` build one node that runs its entries **in order, fail-fast**: the first non-`Success` entry stops the sequence and the node returns `Failure` (deliberately the opposite of `.ToAll`'s run-all-then-combine — sequence entries may depend on earlier entries' writes). Everything above the node is unchanged: `.Retry` re-runs the whole list (keep behaviors idempotent), `.OnError` reroutes, `.WithOutcome` codes.
+
+```csharp
+var stats = new BlackboardSchema("stats"); // Graph scope (default)
+BlackboardKey<string> playerName = stats.Register("playerName", "Hero");
+BlackboardKey<int> score = stats.Register("score", 0);
+
+Graph graph = GraphBuilder.Start()
+    .ToBehaviors(
+        new Log(LogSeverity.Info, playerName), // message bound to a key, resolved per run
+        new SetValue<int>(score, 100),         // literal write — the typed copy/constant primitive
+        new Log("checkpoint saved"))           // literal message, Info severity by default
+    .WithSchema(stats)
+    .Build();
+
+Result result = graph.ToStateMachine(observer)      // Log lands in the observer's OnLogReport
+    .WithBlackboard(new Blackboard(stats))
+    .Execute();
+```
+
+Every field is a `BlackboardValue<T>` — literal and key convert implicitly, and any scope binds (Node scratch included: behavior bindings resolve within one visit, so the ports restriction doesn't apply). `Log` emits `"[{severity}] {message}"` through the node's **report channel** (observer `OnLogReport`, never the console — and no string is even formatted on observer-less machines). The standard set is deliberately tiny — `Log` and `SetValue<T>`, each one class implementing both behavior interfaces so a single instance authors either runtime.
+
+Custom behaviors implement `IBehavior` (sync), `IAsyncBehavior` (async), or both. Agent-typed behaviors (`IBehavior<TAgent>` / `IAsyncBehavior<TAgent>`) receive the machine-bound agent **as a call parameter per execution** via the typed composites (`.ToBehaviors<TAgent>(...)`), which participate in the standard agent stamping — behaviors themselves are never stamped, so instances stay shareable across graphs and machines. Untyped composites reject agent-typed entries at wiring time; typed composites accept a mix and run plain entries agent-blind.
+
+**When to write a custom behavior vs a custom `State`:** a behavior is the right shape for a small, reusable, data-configured step — fields that an editor (or a payload) could inspect and rebind, no timing, output via `ctx.Report`/the blackboard. Write a `State` subclass when the logic needs the node lifecycle (`OnEnter`/`OnExit`), multi-tick `InProgress` progress, timeouts/cancellation shape, or when it is one-off orchestration that nothing else will reuse. Behaviors are also the first node logic that serializes **without a user codec** — see [Serialization](#serialization).
 
 ---
 
@@ -1113,6 +1142,7 @@ Notes:
 - your codec controls how node logic is persisted and restored
 - nested machines, history/parallel composites, and token fork/join nodes serialize out of the box; dynamic parallel composites need a `GraphSerializerOptions.SelectorRegistry` (the selector delegate rides as a named key — author graphs with the delegate instance `RegionSelectorRegistry.Register` returns), and custom `ISubGraphProvider` containers need a `GraphSerializerOptions.ContainerCodec` (you own the reconstruction recipe; the serializer recurses into `SubGraphs` for you, order-preserving)
 - event entry dispatchers serialize out of the box (payload version 7): the dispatch table — key names, runtime-stable event type names, targets, and the `Otherwise` target — is plain structure. Blackboard keys never ride the graph payload (schemas are code), so a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board, with targeted errors on a missing name or a changed value type
+- behavior composites serialize out of the box for the standard set (payload version 8): `Log` and `SetValue<T>` ride as self-describing field lists with **zero options configured** — the default `BehaviorRegistry` reconstructs them, closing `SetValue<T>` (and `BehaviorState<TAgent>`'s agent type) from runtime-stable type names. Key bindings ride by name and rebind against the machine's bound boards at execution. Custom behaviors implement `ISerializableBehavior` (writing through the small neutral field model: strings, bools, numerics, enums, bindings) and register a reconstruction factory on `GraphSerializerOptions.BehaviorRegistry`; a behavior that does neither fails with a targeted error naming that option. The agent never rides — re-attach it via `SetAgent`/`WithAgent`
 
 ---
 

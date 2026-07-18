@@ -929,6 +929,46 @@ public class AllocationGateTests
         await AssertZeroAllocTokensAsync(TokenDiamond().ToAsyncTokenMachine(new NoopAsyncTokenObserver()));
     }
 
+    // ── Behaviors: sequence run loop + binding resolution (spec 014) ────
+    //
+    // A behavior node with a key-bound Log (observer-less, so no string is ever formatted)
+    // and a SetValue must execute at 0 B steady-state: the run loop is an array walk over
+    // one stack context, and binding resolution is a branch plus a typed Get.
+
+    private static (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) BehaviorFixture()
+    {
+        BlackboardSchema schema = new("behaviors");
+        BlackboardKey<string> message = schema.Register("message", "steady");
+        BlackboardKey<int> source = schema.Register("source", 7);
+        BlackboardKey<int> target = schema.Register<int>("target");
+
+        Behaviors.Log log = new(Behaviors.LogSeverity.Info, message);
+        Behaviors.SetValue<int> set = new(target, source);
+        return (log, set, new Blackboard(schema));
+    }
+
+    [Test]
+    public async Task async_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) = BehaviorFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviorsAsync(log, set)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine().WithBlackboard(board));
+    }
+
+    [Test]
+    public void sync_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Log log, Behaviors.SetValue<int> set, Blackboard board) = BehaviorFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviors(log, set)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
+    }
+
     private sealed class NoopAsyncTokenObserver : NxGraph.Tokens.IAsyncTokenMachineObserver
     {
         public ValueTask OnStateEntered(int tokenId, NodeId id, CancellationToken ct = default) =>

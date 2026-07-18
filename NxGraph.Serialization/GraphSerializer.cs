@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using MessagePack;
 using MessagePack.Resolvers;
+using NxGraph.Behaviors;
 using NxGraph.Blackboards;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
@@ -26,6 +27,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     private readonly ILogicCodec _codec;
     private readonly IRegionSelectorRegistry? _selectorRegistry;
     private readonly IContainerCodec? _containerCodec;
+    private readonly IBehaviorRegistry _behaviorRegistry;
     private readonly MessagePackSerializerOptions _options;
 
     private readonly JsonSerializerOptions _jsonOptions;
@@ -40,6 +42,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         ArgumentNullException.ThrowIfNull(codec);
         _selectorRegistry = options?.SelectorRegistry;
         _containerCodec = options?.ContainerCodec;
+        // The default registry carries the standard behavior set built in, so standard-set
+        // graphs round-trip with zero options configured (payload version 8).
+        _behaviorRegistry = options?.BehaviorRegistry ?? new BehaviorRegistry();
 
         // Wire-type coherence: the container codec's payload rides in the same node DTO slot
         // as the logic codec's, so their wire types must match. Fail at setup, not save time.
@@ -194,6 +199,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         List<JoinDto> joins = [];
         List<ContainerDto> containers = [];
         List<EventEntryDto> eventEntries = [];
+        List<BehaviorDto> behaviors = [];
         INodeDto[] nodes = new INodeDto[nodeCount];
         for (int index = 0; index < nodeCount; index++)
         {
@@ -246,6 +252,22 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         eventEntries.Add(new EventEntryDto(index, defaultTarget, entries));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.EventEntryStateMarker.Id.Name);
+                        break;
+                    }
+
+                    // Behavior composites (payload version 8): entries serialize into the
+                    // neutral field model — through their own ISerializableBehavior.Write or
+                    // the registry's built-in standard-set handling — and the composite's
+                    // shape (runtime, agent type) is structure. Detected via the non-generic
+                    // IBehaviorComposite surface so closed BehaviorState<TAgent> types need
+                    // no reflection here.
+                    if ((logicNode.Logic as IBehaviorComposite ??
+                         logicNode.AsyncLogic as IBehaviorComposite) is { } behaviorComposite)
+                    {
+                        behaviors.Add(BuildBehaviorDto(index, node.Id, behaviorComposite));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name, behaviorComposite.IsSync
+                            ? LogicNode.BehaviorStateMarker.Id.Name
+                            : LogicNode.AsyncBehaviorStateMarker.Id.Name);
                         break;
                     }
 
@@ -472,7 +494,43 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
             outcomeCodes, outcomeNames, composites.ToArray(), uids, forks.ToArray(), joins.ToArray(),
-            containers.ToArray(), eventEntries.ToArray());
+            containers.ToArray(), eventEntries.ToArray(), behaviors.ToArray());
+    }
+
+    /// <summary>
+    /// Serializes one behavior composite's entries into the neutral field model. Entries
+    /// implementing <see cref="ISerializableBehavior"/> write themselves; the registry covers
+    /// the standard set; anything else fails with the targeted error naming the unlocking
+    /// option (the dynamic-parallel/container precedent).
+    /// </summary>
+    private BehaviorDto BuildBehaviorDto(int index, NodeId nodeId, IBehaviorComposite composite)
+    {
+        IReadOnlyList<object> entries = composite.Entries;
+        BehaviorEntryDto[] entryDtos = new BehaviorEntryDto[entries.Count];
+        for (int i = 0; i < entries.Count; i++)
+        {
+            object entry = entries[i];
+            BehaviorFieldWriter writer = new();
+            if (entry is ISerializableBehavior serializable)
+            {
+                serializable.Write(writer);
+            }
+            else if (!_behaviorRegistry.TryWrite(entry, writer))
+            {
+                throw new NotSupportedException(
+                    $"Node '{nodeId}' contains behavior '{entry.GetType().Name}', which is neither an " +
+                    "ISerializableBehavior nor known to the behavior registry. Implement ISerializableBehavior " +
+                    "on it and register a reconstruction factory on GraphSerializerOptions.BehaviorRegistry.");
+            }
+
+            entryDtos[i] = new BehaviorEntryDto(BlackboardSerializer.StableTypeName(entry.GetType()),
+                writer.ToFields());
+        }
+
+        string? agentTypeName = composite.AgentType is { } agentType
+            ? BlackboardSerializer.StableTypeName(agentType)
+            : null;
+        return new BehaviorDto(index, composite.IsSync, agentTypeName, entryDtos);
     }
 
     /// <summary>
@@ -586,6 +644,17 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Event entry DTO owner index {eventEntryDto.OwnerIndex} is duplicated in the payload.");
         }
 
+        // Claim-first for the v8 behavior section: the "BehaviorState"/"AsyncBehaviorState"
+        // markers are only honored when a BehaviorDto claims the node index.
+        Dictionary<int, BehaviorDto>? behaviorOwners = null;
+        foreach (BehaviorDto behaviorDto in dto.Behaviors)
+        {
+            behaviorOwners ??= new Dictionary<int, BehaviorDto>();
+            if (!behaviorOwners.TryAdd(behaviorDto.OwnerIndex, behaviorDto))
+                throw new InvalidOperationException(
+                    $"Behavior DTO owner index {behaviorDto.OwnerIndex} is duplicated in the payload.");
+        }
+
         // A node index may be claimed by at most one section. Before markerless container
         // claims this was implicit via marker matching; now it must be explicit — an
         // overlapping claim is a corrupt or crafted payload, not something to route by luck.
@@ -597,6 +666,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             AddClaims(ref claimedBy, joinOwners?.Keys, "Joins");
             AddClaims(ref claimedBy, containerOwners?.Keys, "Containers");
             AddClaims(ref claimedBy, eventEntryOwners?.Keys, "EventEntries");
+            AddClaims(ref claimedBy, behaviorOwners?.Keys, "Behaviors");
         }
 
         INode[] nodes = new INode[nodesLength];
@@ -672,6 +742,25 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         eventEntryOwners is not null && eventEntryOwners.ContainsKey(nodeDto.Index))
                     {
                         nodes[nodeDto.Index] = LogicNode.EventEntryStateMarker;
+                        break;
+                    }
+
+                    // Behavior markers (v8): honored only when a BehaviorDto claims this node
+                    // index. The runtime flavor must match the claim's IsSync — a mismatched
+                    // pair is a corrupt or crafted payload.
+                    if ((textDto.Logic == LogicNode.BehaviorStateMarker.Id.Name ||
+                         textDto.Logic == LogicNode.AsyncBehaviorStateMarker.Id.Name) &&
+                        behaviorOwners is not null &&
+                        behaviorOwners.TryGetValue(nodeDto.Index, out BehaviorDto? behaviorClaim))
+                    {
+                        LogicNode expectedMarker = behaviorClaim.IsSync
+                            ? LogicNode.BehaviorStateMarker
+                            : LogicNode.AsyncBehaviorStateMarker;
+                        if (textDto.Logic != expectedMarker.Id.Name)
+                            throw new InvalidOperationException(
+                                $"Behavior DTO for node {nodeDto.Index} is {(behaviorClaim.IsSync ? "sync" : "async")} " +
+                                $"but the node is marked '{textDto.Logic}'.");
+                        nodes[nodeDto.Index] = expectedMarker;
                         break;
                     }
 
@@ -987,6 +1076,60 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     (IAsyncLogic)new EventEntryState(registrations, defaultTarget));
         }
 
+        // Rebuild behavior composites (v8) through the public constructors so entry
+        // validation (non-empty, agent-type checks) re-runs. Entries reconstruct through the
+        // behavior registry; key bindings rebuild name-bound and resolve against the
+        // machine's bound boards at execution. A typed composite's AgentTypeName closes
+        // BehaviorState<TAgent> via cold-path reflection — the agent itself never rides and
+        // is re-attached via SetAgent.
+        foreach (BehaviorDto behaviorDto in dto.Behaviors)
+        {
+            if (behaviorDto.OwnerIndex < 0 || behaviorDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Behavior DTO owner index {behaviorDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+
+            LogicNode expectedMarker = behaviorDto.IsSync
+                ? LogicNode.BehaviorStateMarker
+                : LogicNode.AsyncBehaviorStateMarker;
+            if (!ReferenceEquals(nodes[behaviorDto.OwnerIndex], expectedMarker))
+                throw new InvalidOperationException(
+                    $"Behavior DTO owner index {behaviorDto.OwnerIndex} does not reference a " +
+                    $"'{expectedMarker.Id.Name}' behavior marker node.");
+            if (behaviorDto.Entries.Length == 0)
+                throw new InvalidOperationException(
+                    $"Behavior DTO for node {behaviorDto.OwnerIndex} must carry at least one entry.");
+
+            object[] entries = new object[behaviorDto.Entries.Length];
+            for (int e = 0; e < entries.Length; e++)
+            {
+                BehaviorEntryDto entry = behaviorDto.Entries[e];
+                if (string.IsNullOrEmpty(entry.BehaviorTypeName))
+                    throw new InvalidOperationException(
+                        $"Behavior DTO for node {behaviorDto.OwnerIndex} has an entry with a missing behavior " +
+                        "type name.");
+
+                BehaviorFieldReader reader = new(entry.Fields);
+                if (!_behaviorRegistry.TryRead(entry.BehaviorTypeName, reader, out object? behavior) ||
+                    behavior is null)
+                    throw new NotSupportedException(
+                        $"Behavior DTO for node {behaviorDto.OwnerIndex} names behavior type " +
+                        $"'{entry.BehaviorTypeName}', which the behavior registry cannot reconstruct. Register " +
+                        "a factory for it on GraphSerializerOptions.BehaviorRegistry.");
+
+                entries[e] = behavior;
+            }
+
+            string behaviorNodeName = dto.Nodes[behaviorDto.OwnerIndex] switch
+            {
+                NodeTextDto nt => nt.Name,
+                NodeBinaryDto nb => nb.Name,
+                _ => $"Node_{behaviorDto.OwnerIndex}"
+            };
+
+            nodes[behaviorDto.OwnerIndex] = new LogicNode(
+                new NodeId(behaviorDto.OwnerIndex, behaviorNodeName), BuildBehaviorComposite(behaviorDto, entries));
+        }
+
         // Rebuild container-codec nodes (v6): children first (in wire order = SubGraphs
         // enumeration order), then the node's ordinary logic payload routes to the container
         // codec, which owns the reconstruction recipe.
@@ -1147,6 +1290,57 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         }
 
         return selector;
+    }
+
+    /// <summary>
+    /// Rebuilds one behavior composite from its reconstructed entries, closing the typed
+    /// variants over the payload's runtime-stable agent type name. Sync composites re-wrap
+    /// in the sync-logic adapter so the node stays runnable on both runtimes, mirroring the
+    /// nested-machine and composite installs above.
+    /// </summary>
+    private static IAsyncLogic BuildBehaviorComposite(BehaviorDto behaviorDto, object[] entries)
+    {
+        if (behaviorDto.IsSync)
+        {
+            IBehavior[] syncEntries = CastBehaviorEntries<IBehavior>(behaviorDto, entries);
+            ILogic composite = behaviorDto.AgentTypeName is null
+                ? new BehaviorState(syncEntries)
+                : (ILogic)CreateTypedComposite(behaviorDto, typeof(BehaviorState<>), syncEntries);
+            return new SyncLogicAdapter(composite);
+        }
+
+        IAsyncBehavior[] asyncEntries = CastBehaviorEntries<IAsyncBehavior>(behaviorDto, entries);
+        return behaviorDto.AgentTypeName is null
+            ? new AsyncBehaviorState(asyncEntries)
+            : (IAsyncLogic)CreateTypedComposite(behaviorDto, typeof(AsyncBehaviorState<>), asyncEntries);
+    }
+
+    private static object CreateTypedComposite(BehaviorDto behaviorDto, Type openComposite, object entriesArray)
+    {
+        if (!StableTypeResolver.TryResolve(behaviorDto.AgentTypeName!, out Type agentType))
+            throw new InvalidOperationException(
+                $"Behavior DTO for node {behaviorDto.OwnerIndex} names agent type " +
+                $"'{behaviorDto.AgentTypeName}', which cannot be resolved — ensure the assembly declaring it " +
+                "is loaded.");
+
+        // The params ctor's real signature is (IBehavior[]/IAsyncBehavior[]), so the array
+        // rides as the single constructor argument; ctor validation re-runs on load.
+        return Activator.CreateInstance(openComposite.MakeGenericType(agentType), [entriesArray])!;
+    }
+
+    private static TEntry[] CastBehaviorEntries<TEntry>(BehaviorDto behaviorDto, object[] entries)
+        where TEntry : class
+    {
+        TEntry[] typed = new TEntry[entries.Length];
+        for (int i = 0; i < entries.Length; i++)
+        {
+            typed[i] = entries[i] as TEntry ?? throw new InvalidOperationException(
+                $"Behavior DTO for node {behaviorDto.OwnerIndex}: reconstructed behavior " +
+                $"'{entries[i].GetType().Name}' does not implement {typeof(TEntry).Name}, required by the " +
+                $"{(behaviorDto.IsSync ? "sync" : "async")} composite.");
+        }
+
+        return typed;
     }
 
     /// <summary>

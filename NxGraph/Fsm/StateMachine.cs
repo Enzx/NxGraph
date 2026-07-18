@@ -688,11 +688,13 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         LogicNode logicNode = (LogicNode)node;
 
         // Wire log-report callback for nodes that support it. Reassigned on every visit so
-        // interleaved machines sharing a graph each attribute reports to their own observer.
+        // interleaved machines sharing a graph each attribute reports to their own observer;
+        // null when this machine has no observer, so nodes that gate report formatting on a
+        // wired callback (behavior composites) pay nothing on observer-less machines.
         State? stateForLog = _logReportStates[_current.Index];
         if (stateForLog is not null)
         {
-            stateForLog.SyncLogReport = _cachedLogReportCallback;
+            stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
         }
 
         // Execute the node synchronously.

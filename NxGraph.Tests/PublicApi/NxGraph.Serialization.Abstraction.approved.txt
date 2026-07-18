@@ -1,6 +1,56 @@
+sealed class NxGraph.Serialization.Abstraction.BehaviorBinding
+  ctor Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
+  property NxGraph.Serialization.Abstraction.BehaviorFieldValue Literal { get; }
+  property System.String KeyName { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorField
+  ctor Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
+  property NxGraph.Serialization.Abstraction.BehaviorFieldValue Value { get; }
+  property System.String Name { get; }
+enum NxGraph.Serialization.Abstraction.BehaviorFieldKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Binding = 7
+  Bool = 1
+  Double = 5
+  Enum = 6
+  Int32 = 2
+  Int64 = 3
+  Single = 4
+  String = 0
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldReader
+  ctor Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Serialization.Abstraction.BehaviorField])
+  method Boolean Has(System.String)
+  method Boolean ReadBool(System.String)
+  method Double ReadDouble(System.String)
+  method Int32 ReadInt32(System.String)
+  method Int64 ReadInt64(System.String)
+  method NxGraph.Behaviors.BlackboardValue`1[T] ReadBinding[T](System.String)
+  method Single ReadSingle(System.String)
+  method System.String ReadString(System.String)
+  method TEnum ReadEnum[TEnum](System.String)
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldValue
+  ctor Void .ctor(NxGraph.Serialization.Abstraction.BehaviorFieldKind, System.String, Boolean, Int64, Double, NxGraph.Serialization.Abstraction.BehaviorBinding)
+  property Boolean Flag { get; }
+  property Double Number { get; }
+  property Int64 Integer { get; }
+  property NxGraph.Serialization.Abstraction.BehaviorBinding Binding { get; }
+  property NxGraph.Serialization.Abstraction.BehaviorFieldKind Kind { get; }
+  property System.String Text { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldWriter
+  ctor Void .ctor()
+  method NxGraph.Serialization.Abstraction.BehaviorField[] ToFields()
+  method Void WriteBinding[T](System.String, NxGraph.Behaviors.BlackboardValue`1[T] ByRef)
+  method Void WriteBool(System.String, Boolean)
+  method Void WriteDouble(System.String, Double)
+  method Void WriteEnum[TEnum](System.String, TEnum)
+  method Void WriteInt32(System.String, Int32)
+  method Void WriteInt64(System.String, Int64)
+  method Void WriteSingle(System.String, Single)
+  method Void WriteString(System.String, System.String)
 enum NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   Skip = 1
   Strict = 0
+interface NxGraph.Serialization.Abstraction.IBehaviorRegistry
+  method Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object ByRef)
+  method Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
 interface NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer
   method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
@@ -25,3 +75,5 @@ interface NxGraph.Serialization.Abstraction.ILogicCodec`1 : NxGraph.Serializatio
 interface NxGraph.Serialization.Abstraction.IRegionSelectorRegistry
   method Boolean TryGetKey(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], System.String ByRef)
   method Boolean TryGetSelector(System.String, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] ByRef)
+interface NxGraph.Serialization.Abstraction.ISerializableBehavior
+  method Void Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)

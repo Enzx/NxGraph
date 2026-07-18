@@ -687,7 +687,7 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         State? stateForLog = _logReportStates[idx];
         if (stateForLog is not null)
         {
-            stateForLog.SyncLogReport = _cachedLogReportCallback;
+            stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
         }
 
         ILogic syncLogic = logicNode.Logic!;

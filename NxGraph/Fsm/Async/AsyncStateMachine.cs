@@ -887,8 +887,10 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             if (reporter is not null)
             {
                 // Reassigned on every visit so interleaved machines sharing a graph each
-                // attribute log reports to their own observer.
-                reporter.LogReport = _cachedLogReportCallback;
+                // attribute log reports to their own observer; null when this machine has no
+                // observer, so nodes that gate report formatting on a wired callback
+                // (behavior composites) pay nothing on observer-less machines.
+                reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
             }
 
             LogicNode logic = (LogicNode)node;

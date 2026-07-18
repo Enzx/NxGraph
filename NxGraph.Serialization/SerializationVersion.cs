@@ -17,6 +17,12 @@ public static class SerializationVersion
     //     other sections) — dispatch table as (KeyName, EventTypeName, TargetIndex) entries
     //     plus the Otherwise target; keys never ride, so the read side rebuilds unbound
     //     registrations resolved by name against the machine's bound board at raise time.
-    public const int Version = 7;
+    // v8: behavior composite section ("BehaviorState"/"AsyncBehaviorState" markers, sparse
+    //     BehaviorDto beside the other sections) — entries as (BehaviorTypeName, Fields[])
+    //     in the neutral field model, bindings by key name (rebound against the machine's
+    //     bound boards at execution), AgentTypeName closing BehaviorState<TAgent> on read;
+    //     the standard set (Log, SetValue<T>) rides with zero options via the default
+    //     BehaviorRegistry.
+    public const int Version = 8;
 }
 
