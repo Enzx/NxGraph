@@ -23,6 +23,12 @@ public static class SerializationVersion
     //     bound boards at execution), AgentTypeName closing BehaviorState<TAgent> on read;
     //     the standard set (Log, SetValue<T>) rides with zero options via the default
     //     BehaviorRegistry.
-    public const int Version = 8;
+    // v9: nested behavior entries (BehaviorFieldKind.Behaviors) — field values gain an
+    //     Entries slot carrying BehaviorEntry lists, encoded recursively through the
+    //     serializer's entry codec, so Repeat/AsyncRepeat bodies (and user behaviors nested
+    //     inside them) ride under the top-level entry rules; read-side nesting is capped at
+    //     32. No new section — the change lives entirely inside the field model, and pre-v9
+    //     payloads never contain the new kind, so they read unchanged.
+    public const int Version = 9;
 }
 

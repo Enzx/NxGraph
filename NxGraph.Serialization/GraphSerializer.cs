@@ -498,39 +498,88 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     }
 
     /// <summary>
-    /// Serializes one behavior composite's entries into the neutral field model. Entries
-    /// implementing <see cref="ISerializableBehavior"/> write themselves; the registry covers
-    /// the standard set; anything else fails with the targeted error naming the unlocking
-    /// option (the dynamic-parallel/container precedent).
+    /// Serializes one behavior composite's entries into the neutral field model through the
+    /// per-session entry codec. Entries implementing <see cref="ISerializableBehavior"/>
+    /// write themselves; the registry covers the standard set; anything else fails with the
+    /// targeted error naming the unlocking option (the dynamic-parallel/container precedent).
+    /// The same dispatch applies recursively to nested bodies
+    /// (<see cref="BehaviorFieldKind.Behaviors"/> fields, payload version 9).
     /// </summary>
     private BehaviorDto BuildBehaviorDto(int index, NodeId nodeId, IBehaviorComposite composite)
     {
         IReadOnlyList<object> entries = composite.Entries;
-        BehaviorEntryDto[] entryDtos = new BehaviorEntryDto[entries.Count];
+        BehaviorEntryCodec codec = new(_behaviorRegistry, $"Node '{nodeId}'");
+        BehaviorEntry[] entryDtos = new BehaviorEntry[entries.Count];
         for (int i = 0; i < entries.Count; i++)
         {
-            object entry = entries[i];
-            BehaviorFieldWriter writer = new();
-            if (entry is ISerializableBehavior serializable)
-            {
-                serializable.Write(writer);
-            }
-            else if (!_behaviorRegistry.TryWrite(entry, writer))
-            {
-                throw new NotSupportedException(
-                    $"Node '{nodeId}' contains behavior '{entry.GetType().Name}', which is neither an " +
-                    "ISerializableBehavior nor known to the behavior registry. Implement ISerializableBehavior " +
-                    "on it and register a reconstruction factory on GraphSerializerOptions.BehaviorRegistry.");
-            }
-
-            entryDtos[i] = new BehaviorEntryDto(BlackboardSerializer.StableTypeName(entry.GetType()),
-                writer.ToFields());
+            entryDtos[i] = codec.WriteEntry(entries[i]);
         }
 
         string? agentTypeName = composite.AgentType is { } agentType
             ? BlackboardSerializer.StableTypeName(agentType)
             : null;
         return new BehaviorDto(index, composite.IsSync, agentTypeName, entryDtos);
+    }
+
+    /// <summary>
+    /// Per-payload-session behavior entry codec (payload version 9): the serializer's
+    /// per-entry dispatch — write: <see cref="ISerializableBehavior.Write"/> else
+    /// <see cref="IBehaviorRegistry.TryWrite"/>; read: registry-first
+    /// <see cref="IBehaviorRegistry.TryRead"/> — wired into every
+    /// <see cref="BehaviorFieldWriter"/>/<see cref="BehaviorFieldReader"/> the serializer
+    /// creates, so nested entry lists encode under exactly the top-level rules. The read side
+    /// caps entry nesting (crafted-payload guard, matching the MessagePack formatter's cap —
+    /// the codec-neutral backstop for the JSON path).
+    /// </summary>
+    private sealed class BehaviorEntryCodec(IBehaviorRegistry registry, string owner) : IBehaviorEntryCodec
+    {
+        private int _readDepth;
+
+        public BehaviorEntry WriteEntry(object behavior)
+        {
+            BehaviorFieldWriter writer = new(this);
+            if (behavior is ISerializableBehavior serializable)
+            {
+                serializable.Write(writer);
+            }
+            else if (!registry.TryWrite(behavior, writer))
+            {
+                throw new NotSupportedException(
+                    $"{owner} contains behavior '{behavior.GetType().Name}', which is neither an " +
+                    "ISerializableBehavior nor known to the behavior registry. Implement ISerializableBehavior " +
+                    "on it and register a reconstruction factory on GraphSerializerOptions.BehaviorRegistry.");
+            }
+
+            return new BehaviorEntry(BlackboardSerializer.StableTypeName(behavior.GetType()), writer.ToFields());
+        }
+
+        public object ReadEntry(BehaviorEntry entry)
+        {
+            if (string.IsNullOrEmpty(entry.BehaviorTypeName))
+                throw new InvalidOperationException(
+                    $"{owner} has an entry with a missing behavior type name.");
+            if (_readDepth >= BehaviorDtoFormatter.MaxBehaviorNestingDepth)
+                throw new InvalidOperationException(
+                    $"{owner}: nested behavior entries exceed the maximum nesting depth " +
+                    $"({BehaviorDtoFormatter.MaxBehaviorNestingDepth}).");
+
+            _readDepth++;
+            try
+            {
+                BehaviorFieldReader reader = new(entry.Fields, this);
+                if (!registry.TryRead(entry.BehaviorTypeName, reader, out object? behavior) || behavior is null)
+                    throw new NotSupportedException(
+                        $"{owner} names behavior type '{entry.BehaviorTypeName}', which the behavior registry " +
+                        "cannot reconstruct. Register a factory for it on " +
+                        "GraphSerializerOptions.BehaviorRegistry.");
+
+                return behavior;
+            }
+            finally
+            {
+                _readDepth--;
+            }
+        }
     }
 
     /// <summary>
@@ -1099,24 +1148,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException(
                     $"Behavior DTO for node {behaviorDto.OwnerIndex} must carry at least one entry.");
 
+            // Entries reconstruct through the per-session entry codec — the same registry-first
+            // dispatch applied recursively to nested bodies (payload version 9).
+            BehaviorEntryCodec entryCodec = new(_behaviorRegistry,
+                $"Behavior DTO for node {behaviorDto.OwnerIndex}");
             object[] entries = new object[behaviorDto.Entries.Length];
             for (int e = 0; e < entries.Length; e++)
             {
-                BehaviorEntryDto entry = behaviorDto.Entries[e];
-                if (string.IsNullOrEmpty(entry.BehaviorTypeName))
-                    throw new InvalidOperationException(
-                        $"Behavior DTO for node {behaviorDto.OwnerIndex} has an entry with a missing behavior " +
-                        "type name.");
-
-                BehaviorFieldReader reader = new(entry.Fields);
-                if (!_behaviorRegistry.TryRead(entry.BehaviorTypeName, reader, out object? behavior) ||
-                    behavior is null)
-                    throw new NotSupportedException(
-                        $"Behavior DTO for node {behaviorDto.OwnerIndex} names behavior type " +
-                        $"'{entry.BehaviorTypeName}', which the behavior registry cannot reconstruct. Register " +
-                        "a factory for it on GraphSerializerOptions.BehaviorRegistry.");
-
-                entries[e] = behavior;
+                entries[e] = entryCodec.ReadEntry(behaviorDto.Entries[e]);
             }
 
             string behaviorNodeName = dto.Nodes[behaviorDto.OwnerIndex] switch

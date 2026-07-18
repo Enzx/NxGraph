@@ -2,11 +2,16 @@ sealed class NxGraph.Serialization.Abstraction.BehaviorBinding
   ctor Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
   property NxGraph.Serialization.Abstraction.BehaviorFieldValue Literal { get; }
   property System.String KeyName { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorEntry
+  ctor Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorField[])
+  property NxGraph.Serialization.Abstraction.BehaviorField[] Fields { get; }
+  property System.String BehaviorTypeName { get; }
 sealed class NxGraph.Serialization.Abstraction.BehaviorField
   ctor Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
   property NxGraph.Serialization.Abstraction.BehaviorFieldValue Value { get; }
   property System.String Name { get; }
 enum NxGraph.Serialization.Abstraction.BehaviorFieldKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  Behaviors = 8
   Binding = 7
   Bool = 1
   Double = 5
@@ -24,19 +29,22 @@ sealed class NxGraph.Serialization.Abstraction.BehaviorFieldReader
   method Int64 ReadInt64(System.String)
   method NxGraph.Behaviors.BlackboardValue`1[T] ReadBinding[T](System.String)
   method Single ReadSingle(System.String)
+  method System.Object[] ReadBehaviors(System.String)
   method System.String ReadString(System.String)
   method TEnum ReadEnum[TEnum](System.String)
 sealed class NxGraph.Serialization.Abstraction.BehaviorFieldValue
-  ctor Void .ctor(NxGraph.Serialization.Abstraction.BehaviorFieldKind, System.String, Boolean, Int64, Double, NxGraph.Serialization.Abstraction.BehaviorBinding)
+  ctor Void .ctor(NxGraph.Serialization.Abstraction.BehaviorFieldKind, System.String, Boolean, Int64, Double, NxGraph.Serialization.Abstraction.BehaviorBinding, NxGraph.Serialization.Abstraction.BehaviorEntry[])
   property Boolean Flag { get; }
   property Double Number { get; }
   property Int64 Integer { get; }
   property NxGraph.Serialization.Abstraction.BehaviorBinding Binding { get; }
+  property NxGraph.Serialization.Abstraction.BehaviorEntry[] Entries { get; }
   property NxGraph.Serialization.Abstraction.BehaviorFieldKind Kind { get; }
   property System.String Text { get; }
 sealed class NxGraph.Serialization.Abstraction.BehaviorFieldWriter
   ctor Void .ctor()
   method NxGraph.Serialization.Abstraction.BehaviorField[] ToFields()
+  method Void WriteBehaviors(System.String, System.Collections.Generic.IReadOnlyList`1[System.Object])
   method Void WriteBinding[T](System.String, NxGraph.Behaviors.BlackboardValue`1[T] ByRef)
   method Void WriteBool(System.String, Boolean)
   method Void WriteDouble(System.String, Double)

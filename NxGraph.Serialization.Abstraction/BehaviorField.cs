@@ -31,6 +31,12 @@ public enum BehaviorFieldKind : byte
 
     /// <summary>A blackboard binding (<see cref="BehaviorFieldValue.Binding"/>): key name or primitive literal.</summary>
     Binding = 7,
+
+    /// <summary>
+    /// A nested behavior entry list (<see cref="BehaviorFieldValue.Entries"/>) — bounded
+    /// composition, carrying <c>Repeat</c>/<c>AsyncRepeat</c> bodies (payload version 9).
+    /// </summary>
+    Behaviors = 8,
 }
 
 /// <summary>
@@ -45,7 +51,8 @@ public sealed class BehaviorFieldValue(
     bool flag = false,
     long integer = 0,
     double number = 0,
-    BehaviorBinding? binding = null)
+    BehaviorBinding? binding = null,
+    BehaviorEntry[]? entries = null)
 {
     /// <summary>The value kind, deciding which payload slot is meaningful.</summary>
     public BehaviorFieldKind Kind { get; } = kind;
@@ -64,6 +71,25 @@ public sealed class BehaviorFieldValue(
 
     /// <summary>Binding payload; null for every other kind.</summary>
     public BehaviorBinding? Binding { get; } = binding;
+
+    /// <summary>Nested behavior entries payload (payload version 9); null for every other kind.</summary>
+    public BehaviorEntry[]? Entries { get; } = entries;
+}
+
+/// <summary>
+/// One serialized behavior entry (payload version 9 lifted this out of the serializer's
+/// internal DTOs so nested entries can ride the neutral field model): the behavior's
+/// runtime-stable CLR type name — the same rendering the blackboard payloads use — plus its
+/// fields. The recursion closure: a <see cref="BehaviorFieldKind.Behaviors"/> field carries
+/// entries, and each entry carries fields.
+/// </summary>
+public sealed class BehaviorEntry(string behaviorTypeName, BehaviorField[] fields)
+{
+    /// <summary>The behavior's runtime-stable CLR type name — the registry's lookup identity.</summary>
+    public string BehaviorTypeName { get; } = behaviorTypeName;
+
+    /// <summary>The entry's fields in write order.</summary>
+    public BehaviorField[] Fields { get; } = fields;
 }
 
 /// <summary>

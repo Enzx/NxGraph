@@ -535,11 +535,15 @@ A state can be authored as a sequence of small, reusable **behaviors** — plain
 var stats = new BlackboardSchema("stats"); // Graph scope (default)
 BlackboardKey<string> playerName = stats.Register("playerName", "Hero");
 BlackboardKey<int> score = stats.Register("score", 0);
+BlackboardKey<int> comboHits = stats.Register("comboHits", 3);
+BlackboardKey<int> hitIndex = stats.Register("hitIndex", -1);
 
 Graph graph = GraphBuilder.Start()
     .ToBehaviors(
         new Log(LogSeverity.Info, playerName), // message bound to a key, resolved per run
         new SetValue<int>(score, 100),         // literal write — the typed copy/constant primitive
+        new Repeat(comboHits, hitIndex,        // key-bound trip count — resolved once at entry
+            new Log("combo hit")),             // body runs comboHits times; hitIndex = 0, 1, 2…
         new Log("checkpoint saved"))           // literal message, Info severity by default
     .WithSchema(stats)
     .Build();
@@ -549,7 +553,9 @@ Result result = graph.ToStateMachine(observer)      // Log lands in the observer
     .Execute();
 ```
 
-Every field is a `BlackboardValue<T>` — literal and key convert implicitly, and any scope binds (Node scratch included: behavior bindings resolve within one visit, so the ports restriction doesn't apply). `Log` emits `"[{severity}] {message}"` through the node's **report channel** (observer `OnLogReport`, never the console — and no string is even formatted on observer-less machines). The standard set is deliberately tiny — `Log` and `SetValue<T>`, each one class implementing both behavior interfaces so a single instance authors either runtime.
+Every field is a `BlackboardValue<T>` — literal and key convert implicitly, and any scope binds (Node scratch included: behavior bindings resolve within one visit, so the ports restriction doesn't apply). `Log` emits `"[{severity}] {message}"` through the node's **report channel** (observer `OnLogReport`, never the console — and no string is even formatted on observer-less machines). The standard set is deliberately tiny — `Log`, `SetValue<T>`, and `Repeat`, each implementing both behavior interfaces so a single instance authors either runtime (`AsyncRepeat` is the async-body twin, and `Repeat<TAgent>`/`AsyncRepeat<TAgent>` deliver the agent to typed body entries per iteration).
+
+`Repeat` is the one control-flow behavior — a bounded, leaf-level For: the trip count (literal or key-bound) is resolved **once at entry**, a key-bound count of zero or less runs nothing and succeeds, the optional index key is written 0-based before each iteration, and each iteration walks the body in order, fail-fast. The node fault model is untouched — a `.Retry` re-runs **all** iterations, so the idempotency note compounds with the trip count — and only the async paths can observe cancellation between iterations. Anything condition-driven (`While`, guards) stays at the node level: use a condition director plus a `.Goto` back-edge, which validators, Mermaid, and snapshots can see.
 
 Custom behaviors implement `IBehavior` (sync), `IAsyncBehavior` (async), or both. Agent-typed behaviors (`IBehavior<TAgent>` / `IAsyncBehavior<TAgent>`) receive the machine-bound agent **as a call parameter per execution** via the typed composites (`.ToBehaviors<TAgent>(...)`), which participate in the standard agent stamping — behaviors themselves are never stamped, so instances stay shareable across graphs and machines. Untyped composites reject agent-typed entries at wiring time; typed composites accept a mix and run plain entries agent-blind.
 
@@ -1143,6 +1149,7 @@ Notes:
 - nested machines, history/parallel composites, and token fork/join nodes serialize out of the box; dynamic parallel composites need a `GraphSerializerOptions.SelectorRegistry` (the selector delegate rides as a named key — author graphs with the delegate instance `RegionSelectorRegistry.Register` returns), and custom `ISubGraphProvider` containers need a `GraphSerializerOptions.ContainerCodec` (you own the reconstruction recipe; the serializer recurses into `SubGraphs` for you, order-preserving)
 - event entry dispatchers serialize out of the box (payload version 7): the dispatch table — key names, runtime-stable event type names, targets, and the `Otherwise` target — is plain structure. Blackboard keys never ride the graph payload (schemas are code), so a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board, with targeted errors on a missing name or a changed value type
 - behavior composites serialize out of the box for the standard set (payload version 8): `Log` and `SetValue<T>` ride as self-describing field lists with **zero options configured** — the default `BehaviorRegistry` reconstructs them, closing `SetValue<T>` (and `BehaviorState<TAgent>`'s agent type) from runtime-stable type names. Key bindings ride by name and rebind against the machine's bound boards at execution. Custom behaviors implement `ISerializableBehavior` (writing through the small neutral field model: strings, bools, numerics, enums, bindings) and register a reconstruction factory on `GraphSerializerOptions.BehaviorRegistry`; a behavior that does neither fails with a targeted error naming that option. The agent never rides — re-attach it via `SetAgent`/`WithAgent`
+- `Repeat` bodies ride as nested behavior entry lists (payload version 9): all four repeat forms serialize with zero options via the default registry, bodies encode recursively under exactly the top-level entry rules (user behaviors nested in a body follow the same `ISerializableBehavior` + factory contract), the count binding and index key rebind by name, and read-side nesting is capped at 32 as a crafted-payload guard. Pre-v9 payloads read unchanged
 
 ---
 

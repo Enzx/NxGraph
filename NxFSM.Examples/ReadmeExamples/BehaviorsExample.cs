@@ -12,7 +12,9 @@ namespace NxFSM.Examples.ReadmeExamples;
 /// sequence of small data-shaped behaviors — in order, fail-fast — with fields that are
 /// literals or <see cref="BlackboardValue{T}"/> key bindings. <see cref="Log"/> goes through
 /// the report channel (observer OnLogReport, never the console directly), and the same
-/// dual-interface instances author either runtime.
+/// dual-interface instances author either runtime. <see cref="Repeat"/> is the bounded
+/// leaf-level For: a key-bound trip count resolved once at entry, plus an optional 0-based
+/// index key written before each iteration.
 /// </summary>
 public static class BehaviorsExample
 {
@@ -33,11 +35,15 @@ public static class BehaviorsExample
         var stats = new BlackboardSchema("stats"); // Graph scope (default)
         BlackboardKey<string> playerName = stats.Register("playerName", "Hero");
         BlackboardKey<int> score = stats.Register("score", 0);
+        BlackboardKey<int> comboHits = stats.Register("comboHits", 3);
+        BlackboardKey<int> hitIndex = stats.Register("hitIndex", -1);
 
         Graph graph = GraphBuilder.Start()
             .ToBehaviors(
                 new Log(LogSeverity.Info, playerName), // message bound to a key, resolved per run
                 new SetValue<int>(score, 100),         // literal write — the typed copy/constant primitive
+                new Repeat(comboHits, hitIndex,        // key-bound trip count — resolved once at entry
+                    new Log("combo hit")),             // body runs comboHits times; hitIndex = 0, 1, 2…
                 new Log("checkpoint saved"))           // literal message, Info severity by default
             .WithSchema(stats)
             .Build();

@@ -82,7 +82,8 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 7 when count < VersionSevenHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionSevenHeaderCount} elements, got {count}");
-            case 8 when count < VersionEightHeaderCount:
+            // v9 changed only the behavior field model (nested entries), not the header shape.
+            case 8 or 9 when count < VersionEightHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionEightHeaderCount} elements, got {count}");
         }

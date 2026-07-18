@@ -173,7 +173,7 @@ public class BehaviorSerializationTests
     }
 
     [Test]
-    public async Task Payload_carries_markers_section_and_version_eight_stamp()
+    public async Task Payload_carries_markers_section_and_current_version_stamp()
     {
         (BlackboardSchema schema, BlackboardKey<string> message, BlackboardKey<int> target) = TestSchema();
         Graph graph = GraphBuilder.Start()
@@ -186,7 +186,7 @@ public class BehaviorSerializationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(json, Does.Contain("\"version\": 8"));
+            Assert.That(json, Does.Contain($"\"version\": {SerializationVersion.Version}"));
             Assert.That(json, Does.Contain("\"BehaviorState\""));
             Assert.That(json, Does.Contain("\"AsyncBehaviorState\""));
             Assert.That(json, Does.Contain("\"behaviors\""));

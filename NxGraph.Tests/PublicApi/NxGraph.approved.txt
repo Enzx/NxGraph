@@ -301,6 +301,22 @@ sealed class NxGraph.Behaviors.AsyncBehaviorState`1 : AsyncState`1, IAgentSettab
   ctor Void .ctor(NxGraph.Behaviors.IAsyncBehavior[])
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
   property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Behaviors { get; }
+sealed class NxGraph.Behaviors.AsyncRepeat : NxGraph.Behaviors.IAsyncBehavior
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Behaviors.AsyncRepeat Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+sealed class NxGraph.Behaviors.AsyncRepeat`1 : IAsyncBehavior`1, NxGraph.Behaviors.IAsyncAgentBehavior, NxGraph.Behaviors.IAsyncBehavior
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Behaviors.AsyncRepeat`1[TAgent] Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(TAgent, NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
 struct NxGraph.Behaviors.BehaviorContext
   method T Resolve[T](NxGraph.Behaviors.BlackboardValue`1[T] ByRef)
   method Void Report(System.String)
@@ -348,6 +364,24 @@ enum NxGraph.Behaviors.LogSeverity : System.IComparable, System.IConvertible, Sy
   Info = 1
   Trace = 0
   Warning = 2
+sealed class NxGraph.Behaviors.Repeat : NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Behaviors.Repeat Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result Execute(NxGraph.Behaviors.BehaviorContext ByRef)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+sealed class NxGraph.Behaviors.Repeat`1 : IAsyncBehavior`1, IBehavior`1, NxGraph.Behaviors.IAgentBehavior, NxGraph.Behaviors.IAsyncAgentBehavior, NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  ctor Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Behaviors.Repeat`1[TAgent] Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result Execute(TAgent, NxGraph.Behaviors.BehaviorContext ByRef)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(TAgent, NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
 sealed class NxGraph.Behaviors.SetValue`1 : NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
   ctor Void .ctor(NxGraph.Blackboards.BlackboardKey`1[T], NxGraph.Behaviors.BlackboardValue`1[T])
   method NxGraph.Behaviors.SetValue`1[T] Unbound(System.String, NxGraph.Behaviors.BlackboardValue`1[T])

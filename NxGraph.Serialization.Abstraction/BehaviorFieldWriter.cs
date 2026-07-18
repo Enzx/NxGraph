@@ -10,6 +10,17 @@ namespace NxGraph.Serialization.Abstraction;
 public sealed class BehaviorFieldWriter
 {
     private readonly List<BehaviorField> _fields = [];
+    private readonly IBehaviorEntryCodec? _entryCodec;
+
+    /// <summary>Creates a standalone writer (no nested-entry support — see <see cref="WriteBehaviors"/>).</summary>
+    public BehaviorFieldWriter()
+    {
+    }
+
+    internal BehaviorFieldWriter(IBehaviorEntryCodec? entryCodec)
+    {
+        _entryCodec = entryCodec;
+    }
 
     /// <summary>Writes a string field (null allowed).</summary>
     public void WriteString(string name, string? value) =>
@@ -56,6 +67,38 @@ public sealed class BehaviorFieldWriter
 
         Add(name, new BehaviorFieldValue(BehaviorFieldKind.Binding,
             binding: new BehaviorBinding(keyName: null, LiteralValue(value.Literal))));
+    }
+
+    /// <summary>
+    /// Writes a nested behavior entry list (payload version 9) — a <c>Repeat</c> body. Each
+    /// entry is encoded recursively by the serializer's per-entry dispatch
+    /// (<see cref="ISerializableBehavior.Write"/> else the behavior registry), so nested user
+    /// behaviors serialize under exactly the top-level rules. Only operates inside a
+    /// <c>GraphSerializer</c> payload session — the serializer wires the entry codec into the
+    /// writers it creates; a standalone writer throws a targeted error.
+    /// </summary>
+    public void WriteBehaviors(string name, IReadOnlyList<object> entries)
+    {
+        if (entries is null)
+        {
+            throw new ArgumentNullException(nameof(entries));
+        }
+
+        if (_entryCodec is null)
+        {
+            throw new InvalidOperationException(
+                "WriteBehaviors only operates inside a GraphSerializer payload session — nested behavior " +
+                "entries are encoded by the serializer's entry codec, which is not wired on a standalone " +
+                "BehaviorFieldWriter.");
+        }
+
+        BehaviorEntry[] encoded = new BehaviorEntry[entries.Count];
+        for (int i = 0; i < entries.Count; i++)
+        {
+            encoded[i] = _entryCodec.WriteEntry(entries[i]);
+        }
+
+        Add(name, new BehaviorFieldValue(BehaviorFieldKind.Behaviors, entries: encoded));
     }
 
     /// <summary>Drains the collected fields in write order.</summary>

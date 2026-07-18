@@ -12,12 +12,19 @@ namespace NxGraph.Serialization.Abstraction;
 public sealed class BehaviorFieldReader
 {
     private readonly IReadOnlyList<BehaviorField> _fields;
+    private readonly IBehaviorEntryCodec? _entryCodec;
 
-    /// <summary>Wraps a field list (in write order).</summary>
+    /// <summary>Wraps a field list (in write order) — standalone, no nested-entry support (see <see cref="ReadBehaviors"/>).</summary>
     public BehaviorFieldReader(IReadOnlyList<BehaviorField> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
         _fields = fields;
+    }
+
+    internal BehaviorFieldReader(IReadOnlyList<BehaviorField> fields, IBehaviorEntryCodec? entryCodec)
+        : this(fields)
+    {
+        _entryCodec = entryCodec;
     }
 
     /// <summary><see langword="true"/> when a field named <paramref name="name"/> exists.</summary>
@@ -81,6 +88,37 @@ public sealed class BehaviorFieldReader
         }
 
         return LiteralOf<T>(name, literal);
+    }
+
+    /// <summary>
+    /// Reads a nested behavior entry list (payload version 9) back as <b>live instances</b> —
+    /// a <c>Repeat</c> body. Each entry is reconstructed recursively through the serializer's
+    /// registry-first per-entry dispatch, with the usual targeted error for unregistered
+    /// names. Only operates inside a <c>GraphSerializer</c> payload session — the serializer
+    /// wires the entry codec into the readers it creates; a standalone reader throws a
+    /// targeted error.
+    /// </summary>
+    public object[] ReadBehaviors(string name)
+    {
+        if (_entryCodec is null)
+        {
+            throw new InvalidOperationException(
+                "ReadBehaviors only operates inside a GraphSerializer payload session — nested behavior " +
+                "entries are reconstructed by the serializer's entry codec, which is not wired on a " +
+                "standalone BehaviorFieldReader.");
+        }
+
+        BehaviorFieldValue value = Require(name, BehaviorFieldKind.Behaviors);
+        BehaviorEntry[] entries = value.Entries ?? throw new InvalidOperationException(
+            $"Behavior field '{name}' is a behavior list but carries no entries payload.");
+
+        object[] live = new object[entries.Length];
+        for (int i = 0; i < entries.Length; i++)
+        {
+            live[i] = _entryCodec.ReadEntry(entries[i]);
+        }
+
+        return live;
     }
 
     private static BlackboardValue<T> LiteralOf<T>(string name, BehaviorFieldValue literal)

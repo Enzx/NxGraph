@@ -969,6 +969,46 @@ public class AllocationGateTests
         AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
     }
 
+    // ── Repeat: bounded sub-node iteration (spec 015) ───────────────────
+    //
+    // A Repeat with a key-bound count and an index key over a SetValue body must execute at
+    // 0 B steady-state: count resolution is a branch plus a typed Get (once at entry), the
+    // index write is a typed Set, and iteration is an array walk.
+
+    private static (Behaviors.Repeat repeat, Blackboard board) RepeatFixture()
+    {
+        BlackboardSchema schema = new("repeat");
+        BlackboardKey<int> trips = schema.Register("trips", 3);
+        BlackboardKey<int> index = schema.Register("i", 0);
+        BlackboardKey<int> source = schema.Register("source", 7);
+        BlackboardKey<int> target = schema.Register<int>("target");
+
+        Behaviors.Repeat repeat = new(trips, index, new Behaviors.SetValue<int>(target, source));
+        return (repeat, new Blackboard(schema));
+    }
+
+    [Test]
+    public async Task async_repeat_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Repeat repeat, Blackboard board) = RepeatFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviorsAsync(repeat)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine().WithBlackboard(board));
+    }
+
+    [Test]
+    public void sync_repeat_behavior_node_is_allocation_free()
+    {
+        (Behaviors.Repeat repeat, Blackboard board) = RepeatFixture();
+        Graph graph = GraphBuilder.Start()
+            .ToBehaviors(repeat)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
+    }
+
     private sealed class NoopAsyncTokenObserver : NxGraph.Tokens.IAsyncTokenMachineObserver
     {
         public ValueTask OnStateEntered(int tokenId, NodeId id, CancellationToken ct = default) =>

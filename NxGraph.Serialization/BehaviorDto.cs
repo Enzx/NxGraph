@@ -4,53 +4,62 @@ using NxGraph.Serialization.Abstraction;
 namespace NxGraph.Serialization;
 
 /// <summary>
-/// One entry of a serialized behavior composite (payload version 8): the behavior's
-/// runtime-stable CLR type name (the same rendering the blackboard payloads use) plus its
-/// fields in the neutral field model.
-/// </summary>
-internal sealed record BehaviorEntryDto(string BehaviorTypeName, BehaviorField[] Fields);
-
-/// <summary>
 /// Payload entry for a behavior composite node (payload version 8). <paramref name="IsSync"/>
 /// discriminates the runtime (wire markers "BehaviorState"/"AsyncBehaviorState" must match);
 /// <paramref name="AgentTypeName"/> is the runtime-stable name closing
 /// <c>BehaviorState&lt;TAgent&gt;</c> on read, or null for the untyped composites — the agent
-/// itself never rides (it is runtime context, re-attached via <c>SetAgent</c>).
+/// itself never rides (it is runtime context, re-attached via <c>SetAgent</c>). Entries ride
+/// as the abstraction's <see cref="BehaviorEntry"/> since payload version 9, which lifted the
+/// entry shape out of this file so nested bodies (<see cref="BehaviorFieldKind.Behaviors"/>)
+/// reuse it recursively.
 /// </summary>
-internal sealed record BehaviorDto(int OwnerIndex, bool IsSync, string? AgentTypeName, BehaviorEntryDto[] Entries);
+internal sealed record BehaviorDto(int OwnerIndex, bool IsSync, string? AgentTypeName, BehaviorEntry[] Entries);
 
 internal sealed class BehaviorDtoFormatter : GraphEntityFormatter<BehaviorDto>
 {
     public static readonly BehaviorDtoFormatter Instance = new();
 
+    // Read-side cap on Behaviors-field recursion (payload version 9): a deeper nesting is a
+    // crafted or corrupt payload, not a real graph — without the cap an attacker can
+    // stack-overflow the reader (the deep-suspend depth-cap precedent). Bindings keep their
+    // own nest-one rule.
+    internal const int MaxBehaviorNestingDepth = 32;
+
     public override void Serialize(ref MessagePackWriter writer, BehaviorDto value,
         MessagePackSerializerOptions options)
     {
         // [OwnerIndex, IsSync, AgentTypeName?, [[typeName, [[name, value], ...]], ...]] —
-        // hand-rolled to pin the payload shape; field values nest one level for bindings.
+        // hand-rolled to pin the payload shape; field values nest one level for bindings and
+        // recursively (write side; the read side caps) for nested behavior entries.
         writer.WriteArrayHeader(4);
         writer.Write(value.OwnerIndex);
         writer.Write(value.IsSync);
         writer.Write(value.AgentTypeName);
         writer.WriteArrayHeader(value.Entries.Length);
-        foreach (BehaviorEntryDto entry in value.Entries)
+        foreach (BehaviorEntry entry in value.Entries)
+        {
+            WriteEntry(ref writer, entry);
+        }
+    }
+
+    private static void WriteEntry(ref MessagePackWriter writer, BehaviorEntry entry)
+    {
+        writer.WriteArrayHeader(2);
+        writer.Write(entry.BehaviorTypeName);
+        writer.WriteArrayHeader(entry.Fields.Length);
+        foreach (BehaviorField field in entry.Fields)
         {
             writer.WriteArrayHeader(2);
-            writer.Write(entry.BehaviorTypeName);
-            writer.WriteArrayHeader(entry.Fields.Length);
-            foreach (BehaviorField field in entry.Fields)
-            {
-                writer.WriteArrayHeader(2);
-                writer.Write(field.Name);
-                WriteValue(ref writer, field.Value);
-            }
+            writer.Write(field.Name);
+            WriteValue(ref writer, field.Value);
         }
     }
 
     private static void WriteValue(ref MessagePackWriter writer, BehaviorFieldValue value)
     {
-        // [Kind, Text?, Flag, Integer, Number, Binding?]
-        writer.WriteArrayHeader(6);
+        // [Kind, Text?, Flag, Integer, Number, Binding?, Entries?] — the Entries slot arrived
+        // with payload version 9 (pre-v9 payloads wrote 6 elements; both shapes read).
+        writer.WriteArrayHeader(7);
         writer.Write((byte)value.Kind);
         writer.Write(value.Text);
         writer.Write(value.Flag);
@@ -74,6 +83,19 @@ internal sealed class BehaviorDtoFormatter : GraphEntityFormatter<BehaviorDto>
         {
             writer.WriteNil();
         }
+
+        if (value.Entries is { } entries)
+        {
+            writer.WriteArrayHeader(entries.Length);
+            foreach (BehaviorEntry entry in entries)
+            {
+                WriteEntry(ref writer, entry);
+            }
+        }
+        else
+        {
+            writer.WriteNil();
+        }
     }
 
     public override BehaviorDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -85,49 +107,55 @@ internal sealed class BehaviorDtoFormatter : GraphEntityFormatter<BehaviorDto>
         bool isSync = reader.ReadBoolean();
         string? agentTypeName = reader.ReadString();
         int entryCount = reader.ReadArrayHeader();
-        BehaviorEntryDto[] entries = new BehaviorEntryDto[entryCount];
+        BehaviorEntry[] entries = new BehaviorEntry[entryCount];
         for (int i = 0; i < entryCount; i++)
         {
-            int entryLength = reader.ReadArrayHeader();
-            if (entryLength != 2)
-                throw new InvalidOperationException(
-                    $"BehaviorDto: entry {i} has {entryLength} elements, expected 2");
-
-            string typeName = reader.ReadString() ??
-                              throw new InvalidOperationException(
-                                  "BehaviorDto: behavior type name cannot be null.");
-            int fieldCount = reader.ReadArrayHeader();
-            BehaviorField[] fields = new BehaviorField[fieldCount];
-            for (int f = 0; f < fieldCount; f++)
-            {
-                int fieldLength = reader.ReadArrayHeader();
-                if (fieldLength != 2)
-                    throw new InvalidOperationException(
-                        $"BehaviorDto: field {f} has {fieldLength} elements, expected 2");
-
-                string name = reader.ReadString() ??
-                              throw new InvalidOperationException("BehaviorDto: field name cannot be null.");
-                fields[f] = new BehaviorField(name, ReadValue(ref reader, depth: 0));
-            }
-
-            entries[i] = new BehaviorEntryDto(typeName, fields);
+            entries[i] = ReadEntry(ref reader, behaviorDepth: 0);
         }
 
         return new BehaviorDto(owner, isSync, agentTypeName, entries);
     }
 
-    private static BehaviorFieldValue ReadValue(ref MessagePackReader reader, int depth)
+    private static BehaviorEntry ReadEntry(ref MessagePackReader reader, int behaviorDepth)
+    {
+        int entryLength = reader.ReadArrayHeader();
+        if (entryLength != 2)
+            throw new InvalidOperationException(
+                $"BehaviorDto: entry has {entryLength} elements, expected 2");
+
+        string typeName = reader.ReadString() ??
+                          throw new InvalidOperationException(
+                              "BehaviorDto: behavior type name cannot be null.");
+        int fieldCount = reader.ReadArrayHeader();
+        BehaviorField[] fields = new BehaviorField[fieldCount];
+        for (int f = 0; f < fieldCount; f++)
+        {
+            int fieldLength = reader.ReadArrayHeader();
+            if (fieldLength != 2)
+                throw new InvalidOperationException(
+                    $"BehaviorDto: field {f} has {fieldLength} elements, expected 2");
+
+            string name = reader.ReadString() ??
+                          throw new InvalidOperationException("BehaviorDto: field name cannot be null.");
+            fields[f] = new BehaviorField(name, ReadValue(ref reader, bindingDepth: 0, behaviorDepth));
+        }
+
+        return new BehaviorEntry(typeName, fields);
+    }
+
+    private static BehaviorFieldValue ReadValue(ref MessagePackReader reader, int bindingDepth, int behaviorDepth)
     {
         // Bindings nest exactly one literal value; anything deeper is a crafted payload.
-        if (depth > 1)
+        if (bindingDepth > 1)
             throw new InvalidOperationException("BehaviorDto: field value nesting exceeds the binding model.");
 
         int length = reader.ReadArrayHeader();
-        if (length != 6)
-            throw new InvalidOperationException($"BehaviorDto: field value has {length} elements, expected 6");
+        if (length != 6 && length != 7)
+            throw new InvalidOperationException(
+                $"BehaviorDto: field value has {length} elements, expected 6 (pre-v9) or 7");
 
         byte kind = reader.ReadByte();
-        if (kind > (byte)BehaviorFieldKind.Binding)
+        if (kind > (byte)BehaviorFieldKind.Behaviors)
             throw new InvalidOperationException($"BehaviorDto: unknown field kind {kind}.");
 
         string? text = reader.ReadString();
@@ -151,13 +179,30 @@ internal sealed class BehaviorDtoFormatter : GraphEntityFormatter<BehaviorDto>
             BehaviorFieldValue? literal = null;
             if (!reader.TryReadNil())
             {
-                literal = ReadValue(ref reader, depth + 1);
+                literal = ReadValue(ref reader, bindingDepth + 1, behaviorDepth);
             }
 
             binding = new BehaviorBinding(keyName, literal);
         }
 
-        return new BehaviorFieldValue((BehaviorFieldKind)kind, text, flag, integer, number, binding);
+        // The Entries slot (payload version 9): pre-v9 values end after the binding.
+        BehaviorEntry[]? entries = null;
+        if (length == 7 && !reader.TryReadNil())
+        {
+            if (behaviorDepth >= MaxBehaviorNestingDepth)
+                throw new InvalidOperationException(
+                    $"BehaviorDto: nested behavior entries exceed the maximum nesting depth " +
+                    $"({MaxBehaviorNestingDepth}).");
+
+            int nestedCount = reader.ReadArrayHeader();
+            entries = new BehaviorEntry[nestedCount];
+            for (int i = 0; i < nestedCount; i++)
+            {
+                entries[i] = ReadEntry(ref reader, behaviorDepth + 1);
+            }
+        }
+
+        return new BehaviorFieldValue((BehaviorFieldKind)kind, text, flag, integer, number, binding, entries);
     }
 }
 
