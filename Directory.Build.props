@@ -1,7 +1,14 @@
 <!-- Repo-wide build defaults. Every project in the solution (tests, examples, benchmarks,
      and the NxGraph.Build tool via its own Directory.Build.props import chain) inherits
      these. Per-project files keep only what genuinely differs: TargetFramework(s), package
-     Title/Description/Tags/readme, and IsPackable/IsTestProject flags. -->
+     Title/Description/Tags/readme, and IsPackable/IsTestProject flags.
+
+     TFM decision (recorded): TargetFrameworks stay per-project. The core library
+     multi-targets net8.0 + netstandard2.1 because the Unity (UPM) package stages the
+     netstandard2.1 build of NxGraph.dll; the serialization packages stay net8.0-only —
+     no netstandard2.1 consumer story exists for them (the UPM package ships only the
+     core), so widening them would cost polyfills for nothing. Revisit only if a
+     netstandard consumer of the serialization surface appears. -->
 <Project>
 
     <PropertyGroup>
