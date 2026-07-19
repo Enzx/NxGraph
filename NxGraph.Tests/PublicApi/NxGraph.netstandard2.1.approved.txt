@@ -1,0 +1,1157 @@
+static class NxGraph.Authoring.Dsl
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] CaseAsync[TKey](NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey], TKey, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] Case[TKey](NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey], TKey, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] DefaultAsync[TKey](NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] Default[TKey](NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey], System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] SwitchAsync[TKey](NxGraph.Authoring.StateToken, System.Func`1[System.Threading.Tasks.ValueTask`1[TKey]])
+  method NxGraph.Authoring.Dsl+BranchBuilder SetName(NxGraph.Authoring.Dsl+BranchBuilder, System.String)
+  method NxGraph.Authoring.Dsl+BranchBuilder Then(NxGraph.Authoring.Dsl+IfBuilder, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchBuilder Then(NxGraph.Authoring.Dsl+IfBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchBuilder ThenAsync(NxGraph.Authoring.Dsl+IfBuilder, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ThenAsync(NxGraph.Authoring.Dsl+IfBuilder, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchBuilder To(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchBuilder To(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAll(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result][])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAllAsync(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync[TIn,TOut](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync[TIn](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync[TOut](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToBehaviors(NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToBehaviorsAsync(NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToBehaviorsAsync[TAgent](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.Dsl+BranchBuilder ToBehaviors[TAgent](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.Dsl+BranchBuilder To[TIn,TOut](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.Dsl+BranchBuilder To[TIn](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchBuilder To[TOut](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.Dsl+BranchBuilder WithSchema(NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Authoring.Dsl+BranchEnd Else(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchEnd Else(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+BranchEnd ElseAsync(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchEnd ElseAsync(NxGraph.Authoring.Dsl+BranchBuilder, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+BranchEnd SetName(NxGraph.Authoring.Dsl+BranchEnd, System.String)
+  method NxGraph.Authoring.Dsl+BranchEnd WithSchema(NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Authoring.Dsl+IfBuilder If(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Boolean])
+  method NxGraph.Authoring.Dsl+IfBuilder If(NxGraph.Authoring.StateToken, System.Func`1[System.Boolean])
+  method NxGraph.Authoring.Dsl+IfBuilder If(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Boolean])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] CaseAsync[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], TKey, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] CaseAsync[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], TKey, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Case[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], TKey, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Case[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], TKey, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] DefaultAsync[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] DefaultAsync[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Default[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Default[TKey](NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey], System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Switch[TKey](NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,TKey])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Switch[TKey](NxGraph.Authoring.StateToken, System.Func`1[TKey])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Switch[TKey](NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,TKey])
+  method NxGraph.Authoring.StartToken WithSchema(NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Authoring.StateToken OnError(NxGraph.Authoring.StateToken, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken OnErrorAsync(NxGraph.Authoring.StateToken, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken Parallel(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Authoring.StateToken SetName(NxGraph.Authoring.StateToken, System.String)
+  method NxGraph.Authoring.StateToken StartWithTimeoutAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken StartWithTimeoutAsync(System.TimeSpan, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken SubGraph(NxGraph.Authoring.StartToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph, System.Boolean)
+  method NxGraph.Authoring.StateToken SubGraph(NxGraph.Authoring.StartToken, NxGraph.Graphs.Graph, System.Boolean)
+  method NxGraph.Authoring.StateToken SubGraph(NxGraph.Authoring.StateToken, NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph, System.Boolean)
+  method NxGraph.Authoring.StateToken SubGraph(NxGraph.Authoring.StateToken, NxGraph.Graphs.Graph, System.Boolean)
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.Dsl+BranchEnd, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.Dsl+BranchEnd, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StartToken, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken, System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken ToAll(NxGraph.Authoring.Dsl+BranchEnd, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result][])
+  method NxGraph.Authoring.StateToken ToAll(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result][])
+  method NxGraph.Authoring.StateToken ToAll(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result][])
+  method NxGraph.Authoring.StateToken ToAllAsync(NxGraph.Authoring.Dsl+BranchEnd, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
+  method NxGraph.Authoring.StateToken ToAllAsync(NxGraph.Authoring.StartToken, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
+  method NxGraph.Authoring.StateToken ToAllAsync(NxGraph.Authoring.StateToken, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.Dsl+BranchEnd, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.Dsl+BranchEnd, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.StartToken, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.StateToken, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Authoring.StateToken, System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TAgent](NxGraph.Authoring.StateToken, System.Func`4[TAgent,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn,TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToAsync[TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method NxGraph.Authoring.StateToken ToBehaviors(NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviors(NxGraph.Authoring.StartToken, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviors(NxGraph.Authoring.StateToken, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync(NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync(NxGraph.Authoring.StartToken, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync(NxGraph.Authoring.StateToken, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync[TAgent](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync[TAgent](NxGraph.Authoring.StartToken, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviorsAsync[TAgent](NxGraph.Authoring.StateToken, NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviors[TAgent](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviors[TAgent](NxGraph.Authoring.StartToken, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToBehaviors[TAgent](NxGraph.Authoring.StateToken, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StartToken, System.TimeSpan, NxGraph.Graphs.ILogic, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StartToken, System.TimeSpan, System.Func`1[NxGraph.Result], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StateToken, System.TimeSpan, NxGraph.Graphs.ILogic, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeout(NxGraph.Authoring.StateToken, System.TimeSpan, System.Func`1[NxGraph.Result], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StartToken, NxGraph.Graphs.IAsyncLogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StartToken, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StartToken, System.TimeSpan, NxGraph.Graphs.IAsyncLogic, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StartToken, System.TimeSpan, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StateToken, NxGraph.Graphs.IAsyncLogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StateToken, System.TimeSpan, NxGraph.Graphs.IAsyncLogic, NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken ToWithTimeoutAsync(NxGraph.Authoring.StateToken, System.TimeSpan, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Authoring.StateToken To[TAgent](NxGraph.Authoring.StateToken, System.Func`3[TAgent,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn,TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken To[TOut](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TOut](NxGraph.Authoring.StartToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken To[TOut](NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Authoring.StateToken WaitFor(NxGraph.Authoring.StartToken, System.TimeSpan)
+  method NxGraph.Authoring.StateToken WaitFor(NxGraph.Authoring.StateToken, System.TimeSpan)
+  method NxGraph.Authoring.StateToken WaitForAsync(NxGraph.Authoring.StartToken, System.TimeSpan)
+  method NxGraph.Authoring.StateToken WaitForAsync(NxGraph.Authoring.StateToken, System.TimeSpan)
+  method NxGraph.Authoring.StateToken WithSchema(NxGraph.Authoring.StateToken, NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Fsm.Async.AsyncStateMachine ToAsyncStateMachine(NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine ToAsyncStateMachine(NxGraph.Authoring.StartToken, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine ToAsyncStateMachine(NxGraph.Authoring.StateToken, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] ToAsyncStateMachine[TAgent](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] ToAsyncStateMachine[TAgent](NxGraph.Authoring.StartToken, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] ToAsyncStateMachine[TAgent](NxGraph.Authoring.StateToken, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] WithAgent[TAgent](NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent], TAgent)
+  method NxGraph.Fsm.StateMachine ToStateMachine(NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine ToStateMachine(NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine ToStateMachine(NxGraph.Authoring.StartToken, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine ToStateMachine(NxGraph.Authoring.StateToken, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] ToStateMachine[TAgent](NxGraph.Authoring.Dsl+BranchBuilder, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] ToStateMachine[TAgent](NxGraph.Authoring.Dsl+BranchEnd, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] ToStateMachine[TAgent](NxGraph.Authoring.StartToken, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] ToStateMachine[TAgent](NxGraph.Authoring.StateToken, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] WithAgent[TAgent](NxGraph.Fsm.StateMachine`1[TAgent], TAgent)
+  method NxGraph.Graphs.Graph Build(NxGraph.Authoring.Dsl+BranchBuilder)
+  method NxGraph.Graphs.Graph SetName(NxGraph.Graphs.Graph, System.String)
+  method System.TimeSpan Days(System.Double)
+  method System.TimeSpan Days(System.Int32)
+  method System.TimeSpan Hours(System.Double)
+  method System.TimeSpan Hours(System.Int32)
+  method System.TimeSpan Milliseconds(System.Double)
+  method System.TimeSpan Milliseconds(System.Int32)
+  method System.TimeSpan Minutes(System.Double)
+  method System.TimeSpan Minutes(System.Int32)
+  method System.TimeSpan Seconds(System.Double)
+  method System.TimeSpan Seconds(System.Int32)
+  method T WithBlackboard[T](T, NxGraph.Blackboards.Blackboard)
+struct NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] Case(TKey, NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] CaseAsync(TKey, NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] Default(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] DefaultAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken End()
+struct NxGraph.Authoring.Dsl+BranchBuilder
+  method NxGraph.Authoring.Dsl+BranchBuilder To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+BranchBuilder ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.Dsl+BranchBuilder WaitFor(System.TimeSpan)
+  method NxGraph.Authoring.Dsl+BranchBuilder WaitForAsync(System.TimeSpan)
+  method NxGraph.Authoring.Dsl+BranchEnd Else(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+BranchEnd ElseAsync(NxGraph.Graphs.IAsyncLogic)
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+  property NxGraph.Graphs.NodeId Tip { get; }
+struct NxGraph.Authoring.Dsl+BranchEnd
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken WaitFor(System.TimeSpan)
+  method NxGraph.Authoring.StateToken WaitForAsync(System.TimeSpan)
+  method NxGraph.Fsm.Async.AsyncStateMachine ToAsyncStateMachine(NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[T] ToAsyncStateMachine[T](NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Graphs.Graph Build(System.Boolean)
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+  property NxGraph.Graphs.NodeId Tip { get; }
+struct NxGraph.Authoring.Dsl+IfBuilder
+  method NxGraph.Authoring.Dsl+BranchBuilder Then(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+BranchBuilder ThenAsync(NxGraph.Graphs.IAsyncLogic)
+struct NxGraph.Authoring.Dsl+SwitchBuilder`1
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Case(TKey, NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] CaseAsync(TKey, NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Default(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] DefaultAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken End()
+sealed class NxGraph.Authoring.EventBranch
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken)
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken To(System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync[TIn](NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken To[TIn](NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+struct NxGraph.Authoring.EventsToken
+  method NxGraph.Authoring.EventsToken On[TEvent](NxGraph.Blackboards.BlackboardKey`1[TEvent], System.Func`2[NxGraph.Authoring.EventBranch,NxGraph.Authoring.StateToken])
+  method NxGraph.Authoring.EventsToken Otherwise(System.Func`2[NxGraph.Authoring.EventBranch,NxGraph.Authoring.StateToken])
+  method NxGraph.Authoring.EventsToken WithSchema(NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Graphs.Graph Build(System.Boolean)
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+sealed class NxGraph.Authoring.ForkBranch
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken)
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken To(System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken To(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+struct NxGraph.Authoring.ForkToken
+  method NxGraph.Authoring.ForkToken SetName(System.String)
+  method NxGraph.Graphs.Graph Build()
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+struct NxGraph.Authoring.GotoToken
+  method NxGraph.Graphs.Graph Build()
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+sealed class NxGraph.Authoring.GraphBuilder
+  ctor System.Void .ctor()
+  method NxGraph.Authoring.EventsToken StartWithEvents()
+  method NxGraph.Authoring.GraphBuilder AddFailureTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method NxGraph.Authoring.GraphBuilder AddGoto(NxGraph.Graphs.NodeId, System.String)
+  method NxGraph.Authoring.GraphBuilder AddTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method NxGraph.Authoring.GraphBuilder SetEnterAction(NxGraph.Graphs.NodeId, System.Action)
+  method NxGraph.Authoring.GraphBuilder SetExitAction(NxGraph.Graphs.NodeId, System.Action)
+  method NxGraph.Authoring.GraphBuilder SetOutcome(NxGraph.Graphs.NodeId, System.Int32, System.String)
+  method NxGraph.Authoring.GraphBuilder SetRetryPolicy(NxGraph.Graphs.NodeId, NxGraph.Fsm.RetryPolicy)
+  method NxGraph.Authoring.GraphBuilder SetUid(NxGraph.Graphs.NodeId, System.Guid)
+  method NxGraph.Authoring.GraphBuilder WithSchema(NxGraph.Blackboards.BlackboardSchema)
+  method NxGraph.Authoring.StartToken Start()
+  method NxGraph.Authoring.StateToken StartWith(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken StartWith(System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken StartWith(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Authoring.StateToken StartWithAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken StartWithAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken StartWithAsync(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Authoring.StateToken TokenFor(NxGraph.Graphs.NodeId)
+  method NxGraph.Diagnostics.Validations.GraphValidationResult Validate(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Validations.GraphValidationOptions)
+  method NxGraph.Graphs.Graph Build(System.Boolean)
+  method NxGraph.Graphs.NodeId AddNode(NxGraph.Graphs.IAsyncLogic, System.Boolean)
+  method NxGraph.Graphs.NodeId AddNode(NxGraph.Graphs.ILogic, System.Boolean)
+  method System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.NodeId] GetAllNodeIds()
+  method System.Void SetName(NxGraph.Graphs.Graph, System.String)
+  method System.Void SetName(NxGraph.Graphs.NodeId, System.String)
+static class NxGraph.Authoring.GraphBuilderExtensions
+  method NxGraph.Fsm.Async.AsyncStateMachine ToAsyncStateMachine(NxGraph.Graphs.Graph, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] Add[TAgent](NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent], TAgent)
+  method NxGraph.Fsm.Async.AsyncStateMachine`1[TAgent] ToAsyncStateMachine[TAgent](NxGraph.Graphs.Graph, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method NxGraph.Fsm.StateMachine ToStateMachine(NxGraph.Graphs.Graph, NxGraph.Fsm.IStateMachineObserver)
+  method NxGraph.Fsm.StateMachine`1[TAgent] Add[TAgent](NxGraph.Fsm.StateMachine`1[TAgent], TAgent)
+  method NxGraph.Fsm.StateMachine`1[TAgent] ToStateMachine[TAgent](NxGraph.Graphs.Graph, NxGraph.Fsm.IStateMachineObserver)
+sealed class NxGraph.Authoring.GraphValidationException : System.Exception, System.Runtime.Serialization.ISerializable
+  ctor System.Void .ctor(NxGraph.Diagnostics.Validations.GraphValidationResult)
+  property NxGraph.Diagnostics.Validations.GraphValidationResult Result { get; }
+struct NxGraph.Authoring.StartToken
+  method NxGraph.Authoring.Dsl+AsyncSwitchBuilder`1[TKey] SwitchAsync[TKey](System.Func`1[System.Threading.Tasks.ValueTask`1[TKey]])
+  method NxGraph.Authoring.Dsl+IfBuilder If(System.Func`1[System.Boolean])
+  method NxGraph.Authoring.Dsl+SwitchBuilder`1[TKey] Switch[TKey](System.Func`1[TKey])
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken To(System.Func`1[NxGraph.Result])
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken ToAsync(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method NxGraph.Graphs.Graph Build()
+struct NxGraph.Authoring.StateToken
+  method NxGraph.Authoring.GotoToken Goto(System.String)
+  method NxGraph.Authoring.StateToken OnEnter(System.Action)
+  method NxGraph.Authoring.StateToken OnError(NxGraph.Authoring.StateToken)
+  method NxGraph.Authoring.StateToken OnError(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken OnErrorAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken OnExit(System.Action)
+  method NxGraph.Authoring.StateToken Retry(System.Byte, System.TimeSpan, NxGraph.Fsm.BackoffKind)
+  method NxGraph.Authoring.StateToken To(NxGraph.Authoring.StateToken)
+  method NxGraph.Authoring.StateToken To(NxGraph.Graphs.ILogic)
+  method NxGraph.Authoring.StateToken ToAsync(NxGraph.Graphs.IAsyncLogic)
+  method NxGraph.Authoring.StateToken WithOutcome(System.Int32, System.String)
+  method NxGraph.Authoring.StateToken WithUid(System.Guid)
+  method NxGraph.Graphs.Graph Build()
+  property NxGraph.Authoring.GraphBuilder Builder { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+static class NxGraph.Authoring.TokenDsl
+  method NxGraph.Authoring.ForkToken ForkTo(NxGraph.Authoring.StartToken, System.Func`2[NxGraph.Authoring.ForkBranch,NxGraph.Authoring.StateToken][])
+  method NxGraph.Authoring.ForkToken ForkTo(NxGraph.Authoring.StateToken, System.Func`2[NxGraph.Authoring.ForkBranch,NxGraph.Authoring.StateToken][])
+  method NxGraph.Tokens.AsyncTokenMachine ToAsyncTokenMachine(NxGraph.Graphs.Graph, NxGraph.Tokens.IAsyncTokenMachineObserver, System.Int32)
+  method NxGraph.Tokens.AsyncTokenMachine`1[TAgent] ToAsyncTokenMachine[TAgent](NxGraph.Graphs.Graph, NxGraph.Tokens.IAsyncTokenMachineObserver, System.Int32)
+  method NxGraph.Tokens.TokenMachine ToTokenMachine(NxGraph.Graphs.Graph, NxGraph.Tokens.ITokenMachineObserver, System.Int32)
+  method NxGraph.Tokens.TokenMachine`1[TAgent] ToTokenMachine[TAgent](NxGraph.Graphs.Graph, NxGraph.Tokens.ITokenMachineObserver, System.Int32)
+sealed class NxGraph.Behaviors.AsyncBehaviorState : NxGraph.Fsm.Async.AsyncState, NxGraph.Behaviors.IBehaviorComposite, NxGraph.Behaviors.IBehaviorReportSink, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Behaviors { get; }
+sealed class NxGraph.Behaviors.AsyncBehaviorState`1 : AsyncState`1, IAgentSettable`1, NxGraph.Behaviors.IBehaviorComposite, NxGraph.Behaviors.IBehaviorReportSink, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Behaviors { get; }
+sealed class NxGraph.Behaviors.AsyncRepeat : NxGraph.Behaviors.IAsyncBehavior
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Behaviors.AsyncRepeat Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+sealed class NxGraph.Behaviors.AsyncRepeat`1 : IAsyncBehavior`1, NxGraph.Behaviors.IAsyncAgentBehavior, NxGraph.Behaviors.IAsyncBehavior
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IAsyncBehavior[])
+  method NxGraph.Behaviors.AsyncRepeat`1[TAgent] Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IAsyncBehavior[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(TAgent, NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IAsyncBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+struct NxGraph.Behaviors.BehaviorContext
+  method System.Void Report(System.String)
+  method T Resolve[T](NxGraph.Behaviors.BlackboardValue`1[T]&)
+  property NxGraph.Blackboards.BlackboardContext Bb { get; }
+  property System.Boolean HasReporter { get; }
+sealed class NxGraph.Behaviors.BehaviorState : NxGraph.Fsm.State, NxGraph.Behaviors.IBehaviorComposite, NxGraph.Behaviors.IBehaviorReportSink, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result OnRun()
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Behaviors { get; }
+sealed class NxGraph.Behaviors.BehaviorState`1 : State`1, IAgentSettable`1, NxGraph.Behaviors.IBehaviorComposite, NxGraph.Behaviors.IBehaviorReportSink, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result OnRun()
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Behaviors { get; }
+struct NxGraph.Behaviors.BlackboardValue`1
+  method NxGraph.Behaviors.BlackboardValue`1[T] Bound(System.String)
+  method System.String ToString()
+  operator NxGraph.Behaviors.BlackboardValue`1[T] op_Implicit(NxGraph.Blackboards.BlackboardKey`1[T])
+  operator NxGraph.Behaviors.BlackboardValue`1[T] op_Implicit(T)
+  property System.Boolean IsBound { get; }
+  property System.String KeyName { get; }
+  property T Literal { get; }
+interface NxGraph.Behaviors.IAgentBehavior : NxGraph.Behaviors.IBehavior
+interface NxGraph.Behaviors.IAsyncAgentBehavior : NxGraph.Behaviors.IAsyncBehavior
+interface NxGraph.Behaviors.IAsyncBehavior
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+interface NxGraph.Behaviors.IAsyncBehavior`1 : NxGraph.Behaviors.IAsyncAgentBehavior, NxGraph.Behaviors.IAsyncBehavior
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(TAgent, NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+interface NxGraph.Behaviors.IBehavior
+  method NxGraph.Result Execute(NxGraph.Behaviors.BehaviorContext&)
+interface NxGraph.Behaviors.IBehaviorComposite
+  property System.Boolean IsSync { get; }
+  property System.Collections.Generic.IReadOnlyList`1[System.Object] Entries { get; }
+  property System.Type AgentType { get; }
+interface NxGraph.Behaviors.IBehavior`1 : NxGraph.Behaviors.IAgentBehavior, NxGraph.Behaviors.IBehavior
+  method NxGraph.Result Execute(TAgent, NxGraph.Behaviors.BehaviorContext&)
+sealed class NxGraph.Behaviors.Log : NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[NxGraph.Behaviors.LogSeverity], NxGraph.Behaviors.BlackboardValue`1[System.String])
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.String])
+  method NxGraph.Result Execute(NxGraph.Behaviors.BehaviorContext&)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[NxGraph.Behaviors.LogSeverity] Severity { get; }
+  property NxGraph.Behaviors.BlackboardValue`1[System.String] Message { get; }
+enum NxGraph.Behaviors.LogSeverity : System.IComparable, System.IConvertible, System.IFormattable
+  Error = 3
+  Info = 1
+  Trace = 0
+  Warning = 2
+sealed class NxGraph.Behaviors.Repeat : NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Behaviors.Repeat Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result Execute(NxGraph.Behaviors.BehaviorContext&)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+sealed class NxGraph.Behaviors.Repeat`1 : IAsyncBehavior`1, IBehavior`1, NxGraph.Behaviors.IAgentBehavior, NxGraph.Behaviors.IAsyncAgentBehavior, NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  ctor System.Void .ctor(NxGraph.Behaviors.BlackboardValue`1[System.Int32], NxGraph.Blackboards.BlackboardKey`1[System.Int32], NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Behaviors.Repeat`1[TAgent] Unbound(NxGraph.Behaviors.BlackboardValue`1[System.Int32], System.String, NxGraph.Behaviors.IBehavior[])
+  method NxGraph.Result Execute(TAgent, NxGraph.Behaviors.BehaviorContext&)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(TAgent, NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[System.Int32] Count { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Behaviors.IBehavior] Body { get; }
+  property System.String IndexKeyName { get; }
+sealed class NxGraph.Behaviors.SetValue`1 : NxGraph.Behaviors.IAsyncBehavior, NxGraph.Behaviors.IBehavior
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[T], NxGraph.Behaviors.BlackboardValue`1[T])
+  method NxGraph.Behaviors.SetValue`1[T] Unbound(System.String, NxGraph.Behaviors.BlackboardValue`1[T])
+  method NxGraph.Result Execute(NxGraph.Behaviors.BehaviorContext&)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(NxGraph.Behaviors.BehaviorContext, System.Threading.CancellationToken)
+  property NxGraph.Behaviors.BlackboardValue`1[T] Value { get; }
+  property NxGraph.Blackboards.BlackboardKey`1[T] Key { get; }
+  property System.String KeyName { get; }
+sealed class NxGraph.Blackboards.Blackboard
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardSchema)
+  method System.Boolean TryGet[T](NxGraph.Blackboards.BlackboardKey`1[T], T&)
+  method System.Void ResetToDefaults()
+  method System.Void Set[T](NxGraph.Blackboards.BlackboardKey`1[T], T)
+  method T Get[T](NxGraph.Blackboards.BlackboardKey`1[T])
+  method T& GetRef[T](NxGraph.Blackboards.BlackboardKey`1[T])
+  property NxGraph.Blackboards.BlackboardSchema Schema { get; }
+struct NxGraph.Blackboards.BlackboardContext
+  ctor System.Void .ctor(NxGraph.Blackboards.Blackboard, NxGraph.Blackboards.Blackboard, NxGraph.Blackboards.Blackboard)
+  method NxGraph.Blackboards.Blackboard Board(NxGraph.Blackboards.BlackboardScope)
+  method NxGraph.Blackboards.BlackboardContext With(NxGraph.Blackboards.Blackboard)
+  method NxGraph.Blackboards.BlackboardContext WithoutNode()
+  method System.Boolean HasBoard(NxGraph.Blackboards.BlackboardScope)
+  method System.Boolean TryGet[T](NxGraph.Blackboards.BlackboardKey`1[T], T&)
+  method System.Void Set[T](NxGraph.Blackboards.BlackboardKey`1[T], T)
+  method T Get[T](NxGraph.Blackboards.BlackboardKey`1[T])
+  method T& GetRef[T](NxGraph.Blackboards.BlackboardKey`1[T])
+  property NxGraph.Blackboards.Blackboard Global { get; }
+  property NxGraph.Blackboards.Blackboard Graph { get; }
+  property NxGraph.Blackboards.Blackboard Node { get; }
+  property System.Boolean IsEmpty { get; }
+abstract class NxGraph.Blackboards.BlackboardKeyDescriptor
+  method System.Object GetValue(NxGraph.Blackboards.Blackboard)
+  method System.Void ResetValue(NxGraph.Blackboards.Blackboard)
+  method System.Void SetValue(NxGraph.Blackboards.Blackboard, System.Object)
+  property System.Int32 Ordinal { get; }
+  property System.String Name { get; }
+  property System.Type ValueType { get; }
+struct NxGraph.Blackboards.BlackboardKey`1 : IEquatable`1
+  method System.Boolean Equals(NxGraph.Blackboards.BlackboardKey`1[T])
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  operator System.Boolean op_Equality(NxGraph.Blackboards.BlackboardKey`1[T], NxGraph.Blackboards.BlackboardKey`1[T])
+  operator System.Boolean op_Inequality(NxGraph.Blackboards.BlackboardKey`1[T], NxGraph.Blackboards.BlackboardKey`1[T])
+  property System.Boolean IsValid { get; }
+  property System.String Name { get; }
+sealed class NxGraph.Blackboards.BlackboardSchema
+  ctor System.Void .ctor(System.String, NxGraph.Blackboards.BlackboardScope)
+  method NxGraph.Blackboards.BlackboardKey`1[T] Register[T](System.String)
+  method NxGraph.Blackboards.BlackboardKey`1[T] Register[T](System.String, T)
+  method System.Boolean TryGetKey(System.String, NxGraph.Blackboards.BlackboardKeyDescriptor&)
+  method System.Boolean TryResolve[T](System.String, NxGraph.Blackboards.BlackboardKey`1[T]&)
+  property NxGraph.Blackboards.BlackboardScope Scope { get; }
+  property System.Boolean IsFrozen { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Blackboards.BlackboardKeyDescriptor] Keys { get; }
+  property System.Int32 KeyCount { get; }
+  property System.String Name { get; }
+enum NxGraph.Blackboards.BlackboardScope : System.IComparable, System.IConvertible, System.IFormattable
+  Global = 0
+  Graph = 1
+  Node = 2
+interface NxGraph.Blackboards.IBlackboardBindable
+  method System.Void SetBlackboard(NxGraph.Blackboards.Blackboard)
+interface NxGraph.Blackboards.IBlackboardSettable
+  method System.Void SetBlackboards(NxGraph.Blackboards.BlackboardContext&)
+class NxGraph.Diagnostics.Export.ExportOptions
+  ctor System.Void .ctor()
+enum NxGraph.Diagnostics.Export.FlowDirection : System.IComparable, System.IConvertible, System.IFormattable
+  BottomToTop = 3
+  LeftToRight = 1
+  RightToLeft = 2
+  TopToBottom = 0
+static class NxGraph.Diagnostics.Export.GraphExportExtensions
+  method System.String ExportWith(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Export.IGraphExporter, NxGraph.Diagnostics.Export.ExportOptions)
+  method System.String ToMermaid(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Export.MermaidExportOptions)
+interface NxGraph.Diagnostics.Export.IGraphExporter
+  method System.String Export(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Export.ExportOptions)
+  property System.String ContentType { get; }
+  property System.String FileExtension { get; }
+  property System.String Format { get; }
+sealed class NxGraph.Diagnostics.Export.MermaidExportOptions : NxGraph.Diagnostics.Export.ExportOptions
+  ctor System.Void .ctor()
+  property NxGraph.Diagnostics.Export.FlowDirection Direction { get; set; }
+  property System.Boolean AddTerminalNode { get; set; }
+  property System.Boolean ShowNodeIndices { get; set; }
+  property System.Boolean UseNodeNames { get; set; }
+  property System.String TerminalLabel { get; set; }
+  property System.String Title { get; set; }
+sealed class NxGraph.Diagnostics.Export.MermaidGraphExporter : NxGraph.Diagnostics.Export.IGraphExporter
+  ctor System.Void .ctor()
+  method System.String Export(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Export.ExportOptions)
+  property System.String ContentType { get; }
+  property System.String FileExtension { get; }
+  property System.String Format { get; }
+enum NxGraph.Diagnostics.Replay.EventType : System.IComparable, System.IConvertible, System.IFormattable
+  Log = 9
+  StateEntered = 0
+  StateExited = 1
+  StateFailed = 3
+  StateMachineCancelled = 7
+  StateMachineCompleted = 6
+  StateMachineReset = 4
+  StateMachineStarted = 5
+  StatusChanged = 8
+  Transition = 2
+interface NxGraph.Diagnostics.Replay.ILogReporter
+  property System.Func`3[System.String,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask] LogReport { get; set; }
+struct NxGraph.Diagnostics.Replay.ReplayEvent
+  ctor System.Void .ctor(NxGraph.Diagnostics.Replay.EventType, NxGraph.Graphs.NodeId, System.Nullable`1[NxGraph.Graphs.NodeId], System.String, System.Int64)
+  property NxGraph.Diagnostics.Replay.EventType Type { get; }
+  property NxGraph.Graphs.NodeId SourceId { get; }
+  property System.Int64 Timestamp { get; }
+  property System.Nullable`1[NxGraph.Graphs.NodeId] TargetId { get; }
+  property System.String Message { get; }
+sealed class NxGraph.Diagnostics.Replay.ReplayRecorder : NxGraph.Fsm.IAsyncStateMachineObserver, NxGraph.Fsm.IStateMachineObserver
+  ctor System.Void .ctor(System.Int32)
+  method System.ReadOnlyMemory`1[NxGraph.Diagnostics.Replay.ReplayEvent] GetEvents()
+  method System.Threading.Tasks.ValueTask OnLogReport(NxGraph.Graphs.NodeId, System.String, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateEntered(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateExited(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateFailed(NxGraph.Graphs.NodeId, System.Exception, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineCancelled(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineCompleted(NxGraph.Graphs.NodeId, NxGraph.Result, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineReset(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineStarted(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask StateMachineStatusChanged(NxGraph.Graphs.NodeId, NxGraph.Fsm.ExecutionStatus, NxGraph.Fsm.ExecutionStatus, System.Threading.CancellationToken)
+  method System.Void Clear()
+  property NxGraph.Diagnostics.Replay.ReplayEvent Item[System.Int32] { get; }
+  property System.Int32 Capacity { get; }
+  property System.Int32 Count { get; }
+  property System.Int64 DroppedCount { get; }
+class NxGraph.Diagnostics.Replay.StateMachineReplay
+  ctor System.Void .ctor(System.ReadOnlySpan`1[NxGraph.Diagnostics.Replay.ReplayEvent])
+  method NxGraph.Diagnostics.Replay.ReplayEvent[] Deserialize(System.Byte[])
+  method System.Byte[] Serialize()
+  method System.Void ReplayAll(System.Action`1[NxGraph.Diagnostics.Replay.ReplayEvent])
+  property System.Collections.Generic.IEnumerable`1[NxGraph.Diagnostics.Replay.ReplayEvent] Events { get; }
+sealed class NxGraph.Diagnostics.Validations.GraphDiagnostic
+  ctor System.Void .ctor(NxGraph.Diagnostics.Validations.Severity, System.String, NxGraph.Graphs.NodeId)
+  method System.String ToString()
+  property NxGraph.Diagnostics.Validations.Severity Severity { get; }
+  property NxGraph.Graphs.NodeId Node { get; }
+  property System.String Message { get; }
+static class NxGraph.Diagnostics.Validations.GraphValidationExtensions
+  method NxGraph.Diagnostics.Validations.GraphValidationResult ValidateAndThrowIfErrorsDebug(NxGraph.Graphs.Graph, System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.NodeId])
+sealed class NxGraph.Diagnostics.Validations.GraphValidationOptions
+  ctor System.Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.NodeId])
+  property System.Boolean StrictAsyncCompatible { get; set; }
+  property System.Boolean StrictNoTerminalPath { get; set; }
+  property System.Boolean StrictSyncOnly { get; set; }
+  property System.Boolean WarnOnSelfLoop { get; set; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.NodeId] AllNodes { get; set; }
+sealed class NxGraph.Diagnostics.Validations.GraphValidationResult
+  ctor System.Void .ctor()
+  method System.String ToString()
+  property System.Boolean HasErrors { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Diagnostics.Validations.GraphDiagnostic] Diagnostics { get; }
+static class NxGraph.Diagnostics.Validations.GraphValidator
+  method NxGraph.Diagnostics.Validations.GraphValidationResult Validate(NxGraph.Graphs.Graph, NxGraph.Diagnostics.Validations.GraphValidationOptions)
+enum NxGraph.Diagnostics.Validations.Severity : System.IComparable, System.IConvertible, System.IFormattable
+  Error = 2
+  Info = 0
+  Warning = 1
+sealed class NxGraph.Fsm.AllState : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result][])
+  method NxGraph.Result OnRun()
+sealed class NxGraph.Fsm.Async.AsyncAllState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(System.Func`1[System.Threading.Tasks.ValueTask`1[System.Boolean]], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Threading.Tasks.ValueTask`1[System.Boolean]], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.NodeId] SelectNextAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+class NxGraph.Fsm.Async.AsyncCompositeState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.IAsyncLogic)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  property NxGraph.Graphs.IAsyncLogic Child { get; }
+sealed class NxGraph.Fsm.Async.AsyncDynamicParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
+  property System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] Selector { get; }
+sealed class NxGraph.Fsm.Async.AsyncHistoryState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  property NxGraph.Fsm.Async.AsyncStateMachine Child { get; }
+sealed class NxGraph.Fsm.Async.AsyncParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph[])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.Async.AsyncStateMachine] Regions { get; }
+sealed class NxGraph.Fsm.Async.AsyncPortConsumerRelayState`1 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncPortPipeRelayState`2 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`4[TIn,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncPortProducerRelayState`1 : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[TOut]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncRelayState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  ctor System.Void .ctor(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.Async.AsyncRelayState`1 : AsyncState`1, IAgentSettable`1, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(System.Func`3[TAgent,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[TAgent,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`3[TAgent,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  ctor System.Void .ctor(System.Func`4[TAgent,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`4[TAgent,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], System.Func`4[TAgent,NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]])
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+abstract class NxGraph.Fsm.Async.AsyncState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor()
+  method System.Threading.Tasks.ValueTask LogAsync(System.String, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  property NxGraph.Blackboards.BlackboardContext Bb { get; }
+  property System.Func`3[System.String,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask] LogReport { get; set; }
+class NxGraph.Fsm.Async.AsyncStateMachine : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Fsm.IAsyncStateMachineObserver)
+  field readonly NxGraph.Graphs.Graph Graph
+  method NxGraph.Fsm.StateMachineDeepSnapshot SuspendDeep()
+  method NxGraph.Fsm.StateMachineSnapshot Suspend()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync[TEvent](TEvent, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] Reset(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] StepAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] StepAsync[TEvent](TEvent, System.Threading.CancellationToken)
+  method System.Void Resume(NxGraph.Fsm.StateMachineSnapshot)
+  method System.Void ResumeDeep(NxGraph.Fsm.StateMachineDeepSnapshot)
+  method System.Void SetAutoReset(System.Boolean)
+  method System.Void SetBlackboard(NxGraph.Blackboards.Blackboard)
+  method System.Void SetRestartPolicy(NxGraph.Fsm.RestartPolicy)
+  property NxGraph.Fsm.ExecutionStatus Status { get; }
+  property System.Int32 LastOutcome { get; }
+  property System.String LastOutcomeName { get; }
+class NxGraph.Fsm.Async.AsyncStateMachine`1 : NxGraph.Fsm.Async.AsyncStateMachine, IAgentSettable`1, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Fsm.IAsyncStateMachineObserver)
+  method System.Void SetAgent(TAgent)
+abstract class NxGraph.Fsm.Async.AsyncState`1 : NxGraph.Fsm.Async.AsyncState, IAgentSettable`1, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor()
+  field TAgent Agent
+  method System.Void SetAgent(TAgent)
+sealed class NxGraph.Fsm.Async.AsyncSwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(System.Func`1[System.Threading.Tasks.ValueTask`1[TKey]], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Threading.Tasks.ValueTask`1[TKey]], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.NodeId] SelectNextAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+class NxGraph.Fsm.Async.AsyncTimeoutState : NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Graphs.IAsyncLogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+static class NxGraph.Fsm.Async.AsyncWait
+  method NxGraph.Fsm.Async.AsyncState For(System.TimeSpan)
+static class NxGraph.Fsm.Async.Timeout
+  method NxGraph.Graphs.IAsyncLogic For(System.TimeSpan, System.Func`2[System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]], NxGraph.Fsm.TimeoutBehavior)
+  method NxGraph.Graphs.IAsyncLogic Wrap(NxGraph.Graphs.IAsyncLogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+enum NxGraph.Fsm.BackoffKind : System.IComparable, System.IConvertible, System.IFormattable
+  Exponential = 2
+  Fixed = 0
+  Linear = 1
+sealed class NxGraph.Fsm.ChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Func`1[System.Boolean], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Boolean], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method NxGraph.Graphs.NodeId SelectNext()
+  method NxGraph.Result Execute()
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+sealed class NxGraph.Fsm.CompositeSnapshot : System.IEquatable`1[[NxGraph.Fsm.CompositeSnapshot]]
+  ctor System.Void .ctor(System.Int32, System.Boolean, System.Boolean[], NxGraph.Fsm.StateMachineDeepSnapshot[])
+  method NxGraph.Fsm.CompositeSnapshot <Clone>$()
+  method System.Boolean Equals(NxGraph.Fsm.CompositeSnapshot)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(System.Int32&, System.Boolean&, System.Boolean[]&, NxGraph.Fsm.StateMachineDeepSnapshot[]&)
+  operator System.Boolean op_Equality(NxGraph.Fsm.CompositeSnapshot, NxGraph.Fsm.CompositeSnapshot)
+  operator System.Boolean op_Inequality(NxGraph.Fsm.CompositeSnapshot, NxGraph.Fsm.CompositeSnapshot)
+  property NxGraph.Fsm.StateMachineDeepSnapshot[] Children { get; set; }
+  property System.Boolean InFlight { get; set; }
+  property System.Boolean[] Done { get; set; }
+  property System.Int32 NodeIndex { get; set; }
+sealed class NxGraph.Fsm.DynamicParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Fsm.ParallelStepMode, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], NxGraph.Graphs.Graph[])
+  method NxGraph.Result Execute()
+  property NxGraph.Fsm.ParallelStepMode Mode { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.StateMachine] Regions { get; }
+  property System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] Selector { get; }
+sealed class NxGraph.Fsm.EventEntryState : NxGraph.Fsm.IAsyncDirector, NxGraph.Fsm.IDirector, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration])
+  ctor System.Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration], NxGraph.Graphs.NodeId)
+  property NxGraph.Graphs.NodeId DefaultTarget { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.EventRegistration] Registrations { get; }
+abstract class NxGraph.Fsm.EventRegistration
+  method NxGraph.Fsm.EventRegistration Unbound(System.String, System.String, NxGraph.Graphs.NodeId)
+  property NxGraph.Graphs.NodeId Target { get; }
+  property System.String EventTypeName { get; }
+  property System.String KeyName { get; }
+sealed class NxGraph.Fsm.EventRegistration`1 : NxGraph.Fsm.EventRegistration
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TEvent], NxGraph.Graphs.NodeId)
+  property NxGraph.Blackboards.BlackboardKey`1[TEvent] Key { get; }
+enum NxGraph.Fsm.ExecutionStatus : System.IComparable, System.IConvertible, System.IFormattable
+  Cancelled = 6
+  Completed = 4
+  Created = 0
+  Failed = 5
+  Ready = 8
+  Resetting = 7
+  Running = 2
+  Starting = 1
+  Transitioning = 3
+sealed class NxGraph.Fsm.HistoryState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Fsm.ParallelStepMode)
+  method NxGraph.Result Execute()
+  property NxGraph.Fsm.ParallelStepMode Mode { get; }
+  property NxGraph.Fsm.StateMachine Child { get; }
+interface NxGraph.Fsm.IAgentSettable`1
+  method System.Void SetAgent(TAgent)
+interface NxGraph.Fsm.IAsyncDirector
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.NodeId] SelectNextAsync(System.Threading.CancellationToken)
+interface NxGraph.Fsm.IAsyncStateMachineObserver
+  method System.Threading.Tasks.ValueTask OnLogReport(NxGraph.Graphs.NodeId, System.String, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateEntered(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateExited(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateFailed(NxGraph.Graphs.NodeId, System.Exception, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineCancelled(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineCompleted(NxGraph.Graphs.NodeId, NxGraph.Result, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineReset(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateMachineStarted(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask StateMachineStatusChanged(NxGraph.Graphs.NodeId, NxGraph.Fsm.ExecutionStatus, NxGraph.Fsm.ExecutionStatus, System.Threading.CancellationToken)
+interface NxGraph.Fsm.IDirector
+  method NxGraph.Graphs.NodeId SelectNext()
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+interface NxGraph.Fsm.IStateMachineObserver
+  method System.Void OnLogReport(NxGraph.Graphs.NodeId, System.String)
+  method System.Void OnStateEntered(NxGraph.Graphs.NodeId)
+  method System.Void OnStateExited(NxGraph.Graphs.NodeId)
+  method System.Void OnStateFailed(NxGraph.Graphs.NodeId, System.Exception)
+  method System.Void OnStateMachineCompleted(NxGraph.Graphs.NodeId, NxGraph.Result)
+  method System.Void OnStateMachineReset(NxGraph.Graphs.NodeId)
+  method System.Void OnStateMachineStarted(NxGraph.Graphs.NodeId)
+  method System.Void OnTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method System.Void StateMachineStatusChanged(NxGraph.Graphs.NodeId, NxGraph.Fsm.ExecutionStatus, NxGraph.Fsm.ExecutionStatus)
+interface NxGraph.Fsm.ISuspendableComposite
+  method NxGraph.Fsm.CompositeSnapshot SuspendComposite(System.Int32)
+  method System.Void ResumeComposite(NxGraph.Fsm.CompositeSnapshot)
+sealed class NxGraph.Fsm.NodeStatusTracker
+  ctor System.Void .ctor()
+  method NxGraph.Fsm.ExecutionStatus Get(NxGraph.Graphs.NodeId)
+  method System.TimeSpan GetDuration(NxGraph.Graphs.NodeId)
+  method System.Void Initialize(NxGraph.Graphs.Graph)
+  method System.Void MarkCancelled(NxGraph.Graphs.NodeId)
+  method System.Void MarkEntered(NxGraph.Graphs.NodeId)
+  method System.Void MarkExited(NxGraph.Graphs.NodeId, System.Boolean)
+  method System.Void MarkTransitioned(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method System.Void Reset()
+  property System.Boolean IsInitialized { get; }
+  property System.Int32 Length { get; }
+sealed class NxGraph.Fsm.NodeStatusTrackingObserver : NxGraph.Fsm.IAsyncStateMachineObserver
+  ctor System.Void .ctor(NxGraph.Fsm.NodeStatusTracker)
+  method System.Threading.Tasks.ValueTask OnStateEntered(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateExited(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateFailed(NxGraph.Graphs.NodeId, System.Exception, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+sealed class NxGraph.Fsm.ParallelState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Fsm.ParallelStepMode, NxGraph.Graphs.Graph[])
+  method NxGraph.Result Execute()
+  property NxGraph.Fsm.ParallelStepMode Mode { get; }
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Fsm.StateMachine] Regions { get; }
+enum NxGraph.Fsm.ParallelStepMode : System.IComparable, System.IConvertible, System.IFormattable
+  RoundPerTick = 1
+  RunToJoin = 0
+sealed class NxGraph.Fsm.PortConsumerRelayState`1 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,NxGraph.Result])
+  method NxGraph.Result OnRun()
+sealed class NxGraph.Fsm.PortPipeRelayState`2 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TIn], NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`3[TIn,NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Result OnRun()
+sealed class NxGraph.Fsm.PortProducerRelayState`1 : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Blackboards.BlackboardKey`1[TOut], System.Func`2[NxGraph.Blackboards.BlackboardContext,TOut])
+  method NxGraph.Result OnRun()
+struct NxGraph.Fsm.RegionMask : System.IEquatable`1[[NxGraph.Fsm.RegionMask]]
+  method NxGraph.Fsm.RegionMask All(System.Int32)
+  method NxGraph.Fsm.RegionMask Bit(System.Int32)
+  method NxGraph.Fsm.RegionMask Of(System.Int32[])
+  method System.Boolean Contains(System.Int32)
+  method System.Boolean Equals(NxGraph.Fsm.RegionMask)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  operator NxGraph.Fsm.RegionMask op_BitwiseOr(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  operator System.Boolean op_Equality(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  operator System.Boolean op_Inequality(NxGraph.Fsm.RegionMask, NxGraph.Fsm.RegionMask)
+  property NxGraph.Fsm.RegionMask None { get; }
+  property System.Boolean IsEmpty { get; }
+  property System.Int32 Count { get; }
+sealed class NxGraph.Fsm.RelayState : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Func`1[NxGraph.Result], System.Action, System.Action)
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Result], System.Action`1[NxGraph.Blackboards.BlackboardContext], System.Action`1[NxGraph.Blackboards.BlackboardContext])
+  method NxGraph.Result OnRun()
+  method System.Void OnEnter()
+  method System.Void OnExit()
+sealed class NxGraph.Fsm.RelayState`1 : State`1, IAgentSettable`1, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Func`2[TAgent,NxGraph.Result], System.Action`1[TAgent], System.Action`1[TAgent])
+  ctor System.Void .ctor(System.Func`3[TAgent,NxGraph.Blackboards.BlackboardContext,NxGraph.Result], System.Action`2[TAgent,NxGraph.Blackboards.BlackboardContext], System.Action`2[TAgent,NxGraph.Blackboards.BlackboardContext])
+  method NxGraph.Result OnRun()
+  method System.Void OnEnter()
+  method System.Void OnExit()
+enum NxGraph.Fsm.RestartPolicy : System.IComparable, System.IConvertible, System.IFormattable
+  Auto = 0
+  Ignore = 2
+  Manual = 1
+struct NxGraph.Fsm.RetryPolicy
+  ctor System.Void .ctor(System.Byte, System.TimeSpan, NxGraph.Fsm.BackoffKind)
+  field static readonly NxGraph.Fsm.RetryPolicy None
+  method System.TimeSpan DelayForAttempt(System.Int32)
+  property NxGraph.Fsm.BackoffKind BackoffKind { get; }
+  property System.Byte MaxAttempts { get; }
+  property System.TimeSpan Backoff { get; }
+abstract class NxGraph.Fsm.State : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor()
+  method NxGraph.Result Execute()
+  method NxGraph.Result OnRun()
+  method System.Void Log(System.String)
+  method System.Void OnEnter()
+  method System.Void OnExit()
+  property NxGraph.Blackboards.BlackboardContext Bb { get; }
+  property System.Action`1[System.String] SyncLogReport { get; set; }
+class NxGraph.Fsm.StateMachine : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Fsm.IStateMachineObserver)
+  field readonly NxGraph.Graphs.Graph Graph
+  method NxGraph.Fsm.StateMachineDeepSnapshot SuspendDeep()
+  method NxGraph.Fsm.StateMachineSnapshot Suspend()
+  method NxGraph.Result Execute[TEvent](TEvent)
+  method NxGraph.Result OnRun()
+  method NxGraph.Result Reset()
+  method System.Void OnEnter()
+  method System.Void OnExit()
+  method System.Void Resume(NxGraph.Fsm.StateMachineSnapshot)
+  method System.Void ResumeDeep(NxGraph.Fsm.StateMachineDeepSnapshot)
+  method System.Void SetAutoReset(System.Boolean)
+  method System.Void SetBlackboard(NxGraph.Blackboards.Blackboard)
+  method System.Void SetResetPolicy(NxGraph.Fsm.RestartPolicy)
+  method System.Void SetRestartPolicy(NxGraph.Fsm.RestartPolicy)
+  method System.Void SetStepMode(NxGraph.Fsm.ParallelStepMode)
+  property NxGraph.Fsm.ExecutionStatus Status { get; }
+  property NxGraph.Fsm.ParallelStepMode StepMode { get; }
+  property System.Int32 LastOutcome { get; }
+  property System.String LastOutcomeName { get; }
+sealed class NxGraph.Fsm.StateMachineDeepSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineDeepSnapshot]]
+  ctor System.Void .ctor(NxGraph.Fsm.StateMachineSnapshot, NxGraph.Fsm.CompositeSnapshot[])
+  method NxGraph.Fsm.StateMachineDeepSnapshot <Clone>$()
+  method System.Boolean Equals(NxGraph.Fsm.StateMachineDeepSnapshot)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(NxGraph.Fsm.StateMachineSnapshot&, NxGraph.Fsm.CompositeSnapshot[]&)
+  operator System.Boolean op_Equality(NxGraph.Fsm.StateMachineDeepSnapshot, NxGraph.Fsm.StateMachineDeepSnapshot)
+  operator System.Boolean op_Inequality(NxGraph.Fsm.StateMachineDeepSnapshot, NxGraph.Fsm.StateMachineDeepSnapshot)
+  property NxGraph.Fsm.CompositeSnapshot[] Composites { get; set; }
+  property NxGraph.Fsm.StateMachineSnapshot Self { get; set; }
+sealed class NxGraph.Fsm.StateMachineSnapshot : System.IEquatable`1[[NxGraph.Fsm.StateMachineSnapshot]]
+  ctor System.Void .ctor(System.Int32, NxGraph.Fsm.ExecutionStatus, System.Int32, System.Boolean, System.Boolean, System.Int32)
+  method NxGraph.Fsm.StateMachineSnapshot <Clone>$()
+  method System.Boolean Equals(NxGraph.Fsm.StateMachineSnapshot)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(System.Int32&, NxGraph.Fsm.ExecutionStatus&, System.Int32&, System.Boolean&, System.Boolean&, System.Int32&)
+  operator System.Boolean op_Equality(NxGraph.Fsm.StateMachineSnapshot, NxGraph.Fsm.StateMachineSnapshot)
+  operator System.Boolean op_Inequality(NxGraph.Fsm.StateMachineSnapshot, NxGraph.Fsm.StateMachineSnapshot)
+  property NxGraph.Fsm.ExecutionStatus Status { get; set; }
+  property System.Boolean MidRun { get; set; }
+  property System.Boolean NodeEntered { get; set; }
+  property System.Int32 Attempts { get; set; }
+  property System.Int32 CurrentNodeIndex { get; set; }
+  property System.Int32 LastOutcome { get; set; }
+class NxGraph.Fsm.StateMachine`1 : NxGraph.Fsm.StateMachine, IAgentSettable`1, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Fsm.ISuspendableComposite, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Fsm.IStateMachineObserver)
+  method System.Void SetAgent(TAgent)
+abstract class NxGraph.Fsm.State`1 : NxGraph.Fsm.State, IAgentSettable`1, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor()
+  field TAgent Agent
+  method System.Void SetAgent(TAgent)
+sealed class NxGraph.Fsm.SwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.Func`1[TKey], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,TKey], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
+  method NxGraph.Graphs.NodeId SelectNext()
+  method NxGraph.Result Execute()
+  method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
+enum NxGraph.Fsm.TimeoutBehavior : System.IComparable, System.IConvertible, System.IFormattable
+  Fail = 0
+  Throw = 1
+sealed class NxGraph.Fsm.TimeoutState : NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Graphs.ILogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
+  ctor System.Void .ctor(NxGraph.Graphs.ILogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior, System.Func`1[System.Int64])
+  method NxGraph.Result Execute()
+sealed class NxGraph.Fsm.WaitState : NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(System.TimeSpan)
+  ctor System.Void .ctor(System.TimeSpan, System.Func`1[System.Int64])
+  method NxGraph.Result Execute()
+sealed class NxGraph.Graphs.EmptyAsyncLogic : NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+sealed class NxGraph.Graphs.EmptyLogic : NxGraph.Graphs.ILogic
+  ctor System.Void .ctor()
+  method NxGraph.Result Execute()
+sealed class NxGraph.Graphs.Graph : NxGraph.Graphs.IGraph, NxGraph.Graphs.INode
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId, NxGraph.Graphs.INode[], NxGraph.Graphs.Transition[], NxGraph.Graphs.IAsyncLogic, NxGraph.Fsm.RetryPolicy[], System.Int32[], System.Collections.Generic.IReadOnlyDictionary`2[System.Int32,System.String], NxGraph.Blackboards.BlackboardSchema, NxGraph.Blackboards.BlackboardSchema, NxGraph.Blackboards.BlackboardSchema, System.Guid[])
+  method NxGraph.Graphs.INode GetNodeByIndex(System.Int32)
+  method NxGraph.Graphs.Transition GetTransitionByIndex(System.Int32)
+  method System.Boolean TryGetNode(NxGraph.Graphs.NodeId, NxGraph.Graphs.INode&)
+  method System.Boolean TryGetNodeByIndex(System.Int32, NxGraph.Graphs.INode&)
+  method System.Boolean TryGetNodeByUid(System.Guid, NxGraph.Graphs.INode&)
+  method System.Boolean TryGetTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.Transition&)
+  method System.Void SetAgent[TAgent](TAgent)
+  method System.Void SetBlackboards(NxGraph.Blackboards.BlackboardContext&)
+  property NxGraph.Blackboards.BlackboardSchema GlobalSchema { get; }
+  property NxGraph.Blackboards.BlackboardSchema NodeSchema { get; }
+  property NxGraph.Blackboards.BlackboardSchema Schema { get; }
+  property NxGraph.Fsm.RetryPolicy[] RetryPolicies { get; }
+  property NxGraph.Graphs.IAsyncLogic AsyncLogic { get; }
+  property NxGraph.Graphs.ILogic Logic { get; }
+  property NxGraph.Graphs.INode StartNode { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+  property System.Collections.Generic.IReadOnlyDictionary`2[System.Int32,System.String] OutcomeNames { get; }
+  property System.Guid[] Uids { get; }
+  property System.Int32 NodeCount { get; }
+  property System.Int32 TransitionCount { get; }
+  property System.Int32[] OutcomeCodes { get; }
+interface NxGraph.Graphs.IAsyncLogic
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+interface NxGraph.Graphs.IGraph
+  method System.Boolean TryGetNode(NxGraph.Graphs.NodeId, NxGraph.Graphs.INode&)
+  method System.Boolean TryGetTransition(NxGraph.Graphs.NodeId, NxGraph.Graphs.Transition&)
+  method System.Void SetAgent[TAgent](TAgent)
+  property NxGraph.Graphs.INode StartNode { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+  property System.Int32 NodeCount { get; }
+  property System.Int32 TransitionCount { get; }
+interface NxGraph.Graphs.ILogic
+  method NxGraph.Result Execute()
+interface NxGraph.Graphs.INode
+  property NxGraph.Graphs.IAsyncLogic AsyncLogic { get; }
+  property NxGraph.Graphs.ILogic Logic { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+interface NxGraph.Graphs.ISubGraphProvider
+  property System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.Graph] SubGraphs { get; }
+class NxGraph.Graphs.LogicNode : NxGraph.Graphs.INode
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId, NxGraph.Graphs.IAsyncLogic, System.Action, System.Action)
+  field static readonly NxGraph.Graphs.LogicNode AsyncBehaviorStateMarker
+  field static readonly NxGraph.Graphs.LogicNode BehaviorStateMarker
+  field static readonly NxGraph.Graphs.LogicNode DynamicParallelStateMarker
+  field static readonly NxGraph.Graphs.LogicNode Empty
+  field static readonly NxGraph.Graphs.LogicNode EventEntryStateMarker
+  field static readonly NxGraph.Graphs.LogicNode ForkStateMarker
+  field static readonly NxGraph.Graphs.LogicNode HistoryStateMarker
+  field static readonly NxGraph.Graphs.LogicNode JoinStateMarker
+  field static readonly NxGraph.Graphs.LogicNode ParallelStateMarker
+  field static readonly NxGraph.Graphs.LogicNode StateMachineMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncDynamicParallelStateMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncHistoryStateMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncParallelStateMarker
+  field static readonly NxGraph.Graphs.LogicNode SyncStateMachineMarker
+  property NxGraph.Graphs.IAsyncLogic AsyncLogic { get; }
+  property NxGraph.Graphs.ILogic Logic { get; }
+  property NxGraph.Graphs.NodeId Id { get; }
+  property System.Action EnterAction { get; }
+  property System.Action ExitAction { get; }
+struct NxGraph.Graphs.NodeId : System.IEquatable`1[[NxGraph.Graphs.NodeId]]
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId, System.String)
+  ctor System.Void .ctor(System.Int32)
+  ctor System.Void .ctor(System.Int32, System.String)
+  method NxGraph.Graphs.NodeId WithName(System.String)
+  method System.Boolean Equals(NxGraph.Graphs.NodeId)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  operator System.Boolean op_Equality(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  operator System.Boolean op_Inequality(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  property NxGraph.Graphs.NodeId AsyncBehaviorStateMarker { get; }
+  property NxGraph.Graphs.NodeId BehaviorStateMarker { get; }
+  property NxGraph.Graphs.NodeId Default { get; }
+  property NxGraph.Graphs.NodeId DynamicParallelStateMarker { get; }
+  property NxGraph.Graphs.NodeId EventEntryStateMarker { get; }
+  property NxGraph.Graphs.NodeId ForkStateMarker { get; }
+  property NxGraph.Graphs.NodeId HistoryStateMarker { get; }
+  property NxGraph.Graphs.NodeId JoinStateMarker { get; }
+  property NxGraph.Graphs.NodeId ParallelStateMarker { get; }
+  property NxGraph.Graphs.NodeId Start { get; }
+  property NxGraph.Graphs.NodeId StateMachineMarker { get; }
+  property NxGraph.Graphs.NodeId SyncDynamicParallelStateMarker { get; }
+  property NxGraph.Graphs.NodeId SyncHistoryStateMarker { get; }
+  property NxGraph.Graphs.NodeId SyncParallelStateMarker { get; }
+  property NxGraph.Graphs.NodeId SyncStateMachineMarker { get; }
+  property System.Int32 Index { get; }
+  property System.String Name { get; }
+sealed class NxGraph.Graphs.SyncLogicAdapter : NxGraph.Graphs.IAsyncLogic
+  ctor System.Void .ctor(NxGraph.Graphs.ILogic)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
+  property NxGraph.Graphs.ILogic Logic { get; }
+struct NxGraph.Graphs.Transition
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId)
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  field static readonly NxGraph.Graphs.Transition Empty
+  property NxGraph.Graphs.NodeId Destination { get; }
+  property NxGraph.Graphs.NodeId FailureDestination { get; }
+  property System.Boolean HasFailureDestination { get; }
+  property System.Boolean IsEmpty { get; }
+struct NxGraph.Result : System.IEquatable`1[[NxGraph.Result]]
+  field static readonly NxGraph.Result Continue
+  field static readonly NxGraph.Result Failure
+  field static readonly NxGraph.Result InProgress
+  field static readonly NxGraph.Result Success
+  method NxGraph.Result Fail(System.String)
+  method NxGraph.Result Ok(System.String)
+  method System.Boolean Equals(NxGraph.Result)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  operator System.Boolean op_Equality(NxGraph.Result, NxGraph.Result)
+  operator System.Boolean op_Inequality(NxGraph.Result, NxGraph.Result)
+  property NxGraph.Result+StatusCode Code { get; }
+  property System.Boolean IsCompleted { get; }
+  property System.Boolean IsFailure { get; }
+  property System.Boolean IsInProgress { get; }
+  property System.Boolean IsSuccess { get; }
+  property System.String Message { get; }
+enum NxGraph.Result+StatusCode : System.IComparable, System.IConvertible, System.IFormattable
+  Continue = 2
+  Failure = 1
+  InProgress = 2
+  Success = 0
+static class NxGraph.ResultHelpers
+  field static readonly System.Threading.Tasks.ValueTask CompletedTask
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Continue
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Failure
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] InProgress
+  field static readonly System.Threading.Tasks.ValueTask`1[[NxGraph.Result]] Success
+class NxGraph.Tokens.AsyncTokenMachine : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Tokens.IAsyncTokenMachineObserver, System.Int32)
+  field readonly NxGraph.Graphs.Graph Graph
+  method NxGraph.Tokens.TokenMachineSnapshot Suspend()
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnEnterAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnExitAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] Reset(System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Result] StepAsync(System.Threading.CancellationToken)
+  method System.Void Resume(NxGraph.Tokens.TokenMachineSnapshot)
+  method System.Void SetBlackboard(NxGraph.Blackboards.Blackboard)
+  method System.Void SetRestartPolicy(NxGraph.Fsm.RestartPolicy)
+  property NxGraph.Fsm.ExecutionStatus Status { get; }
+  property System.Int32 LiveTokenCount { get; }
+class NxGraph.Tokens.AsyncTokenMachine`1 : NxGraph.Tokens.AsyncTokenMachine, IAgentSettable`1, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Tokens.IAsyncTokenMachineObserver, System.Int32)
+  method System.Void SetAgent(TAgent)
+sealed class NxGraph.Tokens.ForkState : NxGraph.Fsm.IAsyncDirector, NxGraph.Fsm.IDirector, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Graphs.NodeId[])
+  property System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.NodeId] Branches { get; }
+interface NxGraph.Tokens.IAsyncTokenMachineObserver
+  method System.Threading.Tasks.ValueTask OnJoinFired(NxGraph.Graphs.NodeId, System.Int32, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnLogReport(System.Int32, NxGraph.Graphs.NodeId, System.String, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateEntered(System.Int32, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateExited(System.Int32, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnStateFailed(System.Int32, NxGraph.Graphs.NodeId, System.Exception, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenMachineCancelled(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenMachineCompleted(NxGraph.Graphs.NodeId, NxGraph.Result, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenMachineReset(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenMachineStarted(NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenRetired(System.Int32, NxGraph.Graphs.NodeId, NxGraph.Tokens.TokenRetireReason, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTokenSpawned(System.Int32, System.Int32, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask OnTransition(System.Int32, NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask TokenMachineStatusChanged(NxGraph.Graphs.NodeId, NxGraph.Fsm.ExecutionStatus, NxGraph.Fsm.ExecutionStatus, System.Threading.CancellationToken)
+interface NxGraph.Tokens.ITokenMachineObserver
+  method System.Void OnJoinFired(NxGraph.Graphs.NodeId, System.Int32)
+  method System.Void OnLogReport(System.Int32, NxGraph.Graphs.NodeId, System.String)
+  method System.Void OnStateEntered(System.Int32, NxGraph.Graphs.NodeId)
+  method System.Void OnStateExited(System.Int32, NxGraph.Graphs.NodeId)
+  method System.Void OnStateFailed(System.Int32, NxGraph.Graphs.NodeId, System.Exception)
+  method System.Void OnTokenMachineCompleted(NxGraph.Graphs.NodeId, NxGraph.Result)
+  method System.Void OnTokenMachineReset(NxGraph.Graphs.NodeId)
+  method System.Void OnTokenMachineStarted(NxGraph.Graphs.NodeId)
+  method System.Void OnTokenRetired(System.Int32, NxGraph.Graphs.NodeId, NxGraph.Tokens.TokenRetireReason)
+  method System.Void OnTokenSpawned(System.Int32, System.Int32, NxGraph.Graphs.NodeId)
+  method System.Void OnTransition(System.Int32, NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
+  method System.Void TokenMachineStatusChanged(NxGraph.Graphs.NodeId, NxGraph.Fsm.ExecutionStatus, NxGraph.Fsm.ExecutionStatus)
+enum NxGraph.Tokens.JoinKind : System.IComparable, System.IConvertible, System.IFormattable
+  All = 0
+  Any = 1
+  Quorum = 2
+struct NxGraph.Tokens.JoinPolicy
+  method NxGraph.Tokens.JoinPolicy All(System.Int32)
+  method NxGraph.Tokens.JoinPolicy Quorum(System.Int32)
+  method System.String ToString()
+  property NxGraph.Tokens.JoinKind Kind { get; }
+  property NxGraph.Tokens.JoinPolicy Any { get; }
+  property System.Int32 Count { get; }
+  property System.Int32 RequiredCount { get; }
+sealed class NxGraph.Tokens.JoinState : NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ILogic
+  ctor System.Void .ctor(NxGraph.Tokens.JoinPolicy)
+  property NxGraph.Tokens.JoinPolicy Policy { get; }
+class NxGraph.Tokens.TokenMachine : NxGraph.Fsm.State, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Tokens.ITokenMachineObserver, System.Int32)
+  field readonly NxGraph.Graphs.Graph Graph
+  field static System.Int32 DefaultMaxTokens
+  method NxGraph.Result OnRun()
+  method NxGraph.Result Reset()
+  method NxGraph.Tokens.TokenMachineSnapshot Suspend()
+  method System.Void OnEnter()
+  method System.Void OnExit()
+  method System.Void Resume(NxGraph.Tokens.TokenMachineSnapshot)
+  method System.Void SetBlackboard(NxGraph.Blackboards.Blackboard)
+  method System.Void SetRestartPolicy(NxGraph.Fsm.RestartPolicy)
+  method System.Void SetStepMode(NxGraph.Fsm.ParallelStepMode)
+  property NxGraph.Fsm.ExecutionStatus Status { get; }
+  property NxGraph.Fsm.ParallelStepMode StepMode { get; }
+  property System.Int32 LiveTokenCount { get; }
+sealed class NxGraph.Tokens.TokenMachineSnapshot : System.IEquatable`1[[NxGraph.Tokens.TokenMachineSnapshot]]
+  ctor System.Void .ctor(NxGraph.Fsm.ExecutionStatus, System.Boolean, System.Int32, NxGraph.Tokens.TokenRecord[], System.Int32[])
+  method NxGraph.Tokens.TokenMachineSnapshot <Clone>$()
+  method System.Boolean Equals(NxGraph.Tokens.TokenMachineSnapshot)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(NxGraph.Fsm.ExecutionStatus&, System.Boolean&, System.Int32&, NxGraph.Tokens.TokenRecord[]&, System.Int32[]&)
+  operator System.Boolean op_Equality(NxGraph.Tokens.TokenMachineSnapshot, NxGraph.Tokens.TokenMachineSnapshot)
+  operator System.Boolean op_Inequality(NxGraph.Tokens.TokenMachineSnapshot, NxGraph.Tokens.TokenMachineSnapshot)
+  property NxGraph.Fsm.ExecutionStatus Status { get; set; }
+  property NxGraph.Tokens.TokenRecord[] Tokens { get; set; }
+  property System.Boolean AnyTokenDied { get; set; }
+  property System.Boolean MidRun { get; set; }
+  property System.Boolean[] JoinsFired { get; set; }
+  property System.Int32 NextTokenId { get; set; }
+  property System.Int32[] JoinArrivals { get; set; }
+class NxGraph.Tokens.TokenMachine`1 : NxGraph.Tokens.TokenMachine, IAgentSettable`1, NxGraph.Blackboards.IBlackboardBindable, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.ILogic, NxGraph.Graphs.ISubGraphProvider
+  ctor System.Void .ctor(NxGraph.Graphs.Graph, NxGraph.Tokens.ITokenMachineObserver, System.Int32)
+  method System.Void SetAgent(TAgent)
+enum NxGraph.Tokens.TokenPhase : System.IComparable, System.IConvertible, System.IFormattable
+  Parked = 1
+  Runnable = 0
+sealed class NxGraph.Tokens.TokenRecord : System.IEquatable`1[[NxGraph.Tokens.TokenRecord]]
+  ctor System.Void .ctor(System.Int32, System.Int32, System.Int32, System.Boolean, NxGraph.Tokens.TokenPhase)
+  method NxGraph.Tokens.TokenRecord <Clone>$()
+  method System.Boolean Equals(NxGraph.Tokens.TokenRecord)
+  method System.Boolean Equals(System.Object)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(System.Int32&, System.Int32&, System.Int32&, System.Boolean&, NxGraph.Tokens.TokenPhase&)
+  operator System.Boolean op_Equality(NxGraph.Tokens.TokenRecord, NxGraph.Tokens.TokenRecord)
+  operator System.Boolean op_Inequality(NxGraph.Tokens.TokenRecord, NxGraph.Tokens.TokenRecord)
+  property NxGraph.Tokens.TokenPhase Phase { get; set; }
+  property System.Boolean NodeEntered { get; set; }
+  property System.Int32 Attempts { get; set; }
+  property System.Int32 Id { get; set; }
+  property System.Int32 NodeIndex { get; set; }
+enum NxGraph.Tokens.TokenRetireReason : System.IComparable, System.IConvertible, System.IFormattable
+  Absorbed = 4
+  Completed = 0
+  Failed = 1
+  Joined = 2
+  Starved = 3
+static class System.ArgumentNullExceptionShim
+  method System.Void ThrowIfNull(System.Object, System.String)

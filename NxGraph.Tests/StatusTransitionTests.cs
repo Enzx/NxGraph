@@ -26,7 +26,7 @@ public class StatusTransitionTests
     }
 
     [Test]
-    public async Task status_sets_cancelled_on_cancellation()
+    public void status_sets_cancelled_on_cancellation()
     {
         CancellationTokenSource cts = new(10);
         AsyncStateMachine fsm = GraphBuilder
@@ -34,10 +34,10 @@ public class StatusTransitionTests
             .ToAsyncStateMachine();
         fsm.SetAutoReset(false);
 
+        // The timed cts (10 ms) does the cancelling while the machine awaits; by the time
+        // the assertion completes the token has already fired.
         Assert.That(async () => await fsm.ExecuteAsync(cts.Token),
             Throws.InstanceOf<OperationCanceledException>());
-
-        await cts.CancelAsync();
 
         Assert.That(fsm.Status, Is.EqualTo(ExecutionStatus.Cancelled));
     }

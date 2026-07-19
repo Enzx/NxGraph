@@ -195,12 +195,64 @@ public class AsyncTokenMachineTests
     }
 
     [Test]
+    public async Task token_multiplicity_same_node_active_for_each_token()
+    {
+        int sharedRuns = 0;
+        JoinState merge = new(JoinPolicy.Any);
+        Fsm.Async.AsyncRelayState shared = new(_ =>
+        {
+            sharedRuns++;
+            return ResultHelpers.Success;
+        });
+
+        Graph graph = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success)
+            .ForkTo(
+                b => b.ToAsync(shared).To(merge),
+                // Same head instance dedupes to the same node — the chain past it is already
+                // wired by the first branch.
+                b => b.ToAsync(shared))
+            .Build();
+
+        Result result = await graph.ToAsyncTokenMachine().ExecuteAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(sharedRuns, Is.EqualTo(2),
+                "Both fork branches dedupe to the same node; two tokens each execute it once.");
+        });
+    }
+
+    [Test]
+    public void pool_exhaustion_throws_and_fails_the_machine()
+    {
+        Graph graph = GraphBuilder.StartWithAsync(_ => ResultHelpers.Success)
+            .ForkTo(
+                b => b.ToAsync(_ => ResultHelpers.Success),
+                b => b.ToAsync(_ => ResultHelpers.Success),
+                b => b.ToAsync(_ => ResultHelpers.Success))
+            .Build();
+
+        AsyncTokenMachine machine = graph.ToAsyncTokenMachine(maxTokens: 2);
+        machine.SetRestartPolicy(RestartPolicy.Manual);
+
+        Assert.Multiple(() =>
+        {
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await machine.ExecuteAsync());
+            Assert.That(machine.Status, Is.EqualTo(ExecutionStatus.Failed));
+        });
+    }
+
+    [Test]
     public void cancellation_flows_out_and_cancels_the_machine()
     {
         using CancellationTokenSource cts = new();
+        // Bounded wait (30 s, not Timeout.InfiniteTimeSpan) as the hang backstop: if token
+        // plumbing regresses, the node completes and the assertions go red in bounded time
+        // instead of hanging the suite.
         Graph graph = GraphBuilder.StartWithAsync(async ct =>
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);
                 return Result.Success;
             })
             .Build();

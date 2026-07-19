@@ -35,7 +35,9 @@ public class AllStateTests
         // Each work signals its own start, then awaits the other's signal. The node completes
         // only if both works were started before either finished — i.e. under true overlap.
         // Sequential execution (await one work to completion before starting the next) would
-        // never finish; no timing assertions are involved.
+        // stall the handshake; no timing assertions are involved. The 30 s WaitAsync bound is
+        // the hang backstop: a concurrency regression turns into a bounded red test (the
+        // TimeoutException surfaces through the machine), never a hung suite.
         TaskCompletionSource first = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource second = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -45,13 +47,13 @@ public class AllStateTests
                 async (_, _) =>
                 {
                     first.SetResult();
-                    await second.Task;
+                    await second.Task.WaitAsync(TimeSpan.FromSeconds(30));
                     return Result.Success;
                 },
                 async (_, _) =>
                 {
                     second.SetResult();
-                    await first.Task;
+                    await first.Task.WaitAsync(TimeSpan.FromSeconds(30));
                     return Result.Success;
                 })
             .Build();
@@ -200,6 +202,10 @@ public class AllStateTests
         bool[] cancelled = new bool[2];
         CancellationTokenSource cts = new(10);
 
+        // The waits are bounded (30 s, not Timeout.Infinite) as the hang backstop: the works
+        // only ever see the token through the library's own plumbing, so no test-side guard
+        // can reach a hang if that plumbing regresses — with a bounded delay such a
+        // regression completes the works and turns the assertions red instead of hanging.
         Graph graph = GraphBuilder
             .Start()
             .ToAllAsync(
@@ -207,7 +213,7 @@ public class AllStateTests
                 {
                     try
                     {
-                        await Task.Delay(System.Threading.Timeout.Infinite, ct);
+                        await Task.Delay(TimeSpan.FromSeconds(30), ct);
                     }
                     catch (OperationCanceledException)
                     {
@@ -221,7 +227,7 @@ public class AllStateTests
                 {
                     try
                     {
-                        await Task.Delay(System.Threading.Timeout.Infinite, ct);
+                        await Task.Delay(TimeSpan.FromSeconds(30), ct);
                     }
                     catch (OperationCanceledException)
                     {
@@ -250,6 +256,7 @@ public class AllStateTests
 
         // The handshake forces both works to be mid-flight while writing, so the writes
         // genuinely overlap — distinct keys mean distinct slots, which is the contract.
+        // The 30 s WaitAsync bound is the hang backstop (see the overlap test above).
         TaskCompletionSource leftStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource rightStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -259,14 +266,14 @@ public class AllStateTests
                 async (bb, _) =>
                 {
                     leftStarted.SetResult();
-                    await rightStarted.Task;
+                    await rightStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
                     bb.Set(left, 21);
                     return Result.Success;
                 },
                 async (bb, _) =>
                 {
                     rightStarted.SetResult();
-                    await leftStarted.Task;
+                    await leftStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
                     bb.Set(right, 42);
                     return Result.Success;
                 })

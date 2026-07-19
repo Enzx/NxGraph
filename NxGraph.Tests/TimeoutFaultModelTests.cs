@@ -12,20 +12,25 @@ namespace NxGraph.Tests;
 [TestFixture]
 public class TimeoutFaultModelTests
 {
-    private static readonly Func<CancellationToken, ValueTask<Result>> HangForever =
+    // Hangs until cancelled, but bounded at 30 s rather than Timeout.InfiniteTimeSpan: if the
+    // timeout wrapper (or the token plumbing it relies on) regresses, the run goes red in
+    // bounded time instead of hanging the whole suite. The [CancelAfter] guards below (whose
+    // token is threaded into the machine) report the same regression much earlier.
+    private static readonly Func<CancellationToken, ValueTask<Result>> HangUntilCancelled =
         async ct =>
         {
-            await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, ct);
+            await Task.Delay(TimeSpan.FromSeconds(30), ct);
             return Result.Success;
         };
 
     [Test]
-    public async Task timeout_routes_through_the_failure_edge()
+    [CancelAfter(10_000)]
+    public async Task timeout_routes_through_the_failure_edge(CancellationToken ct)
     {
         bool cleanupRan = false;
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangForever, TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangUntilCancelled, TimeoutBehavior.Fail)
             .OnErrorAsync(_ =>
             {
                 cleanupRan = true;
@@ -33,7 +38,7 @@ public class TimeoutFaultModelTests
             })
             .Build();
 
-        Result result = await graph.ToAsyncStateMachine().ExecuteAsync();
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync(ct);
 
         Assert.Multiple(() =>
         {
@@ -43,17 +48,18 @@ public class TimeoutFaultModelTests
     }
 
     [Test]
-    public async Task timeout_is_retried_by_the_node_retry_policy()
+    [CancelAfter(10_000)]
+    public async Task timeout_is_retried_by_the_node_retry_policy(CancellationToken ct)
     {
         int executions = 0;
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), async ct =>
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), async innerCt =>
             {
                 executions++;
                 if (executions < 2)
                 {
-                    await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, ct);
+                    await Task.Delay(TimeSpan.FromSeconds(30), innerCt); // bounded hang, see above
                 }
 
                 return Result.Success;
@@ -61,7 +67,7 @@ public class TimeoutFaultModelTests
             .Retry(maxAttempts: 2)
             .Build();
 
-        Result result = await graph.ToAsyncStateMachine().ExecuteAsync();
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync(ct);
 
         Assert.Multiple(() =>
         {
@@ -71,24 +77,26 @@ public class TimeoutFaultModelTests
     }
 
     [Test]
-    public async Task timeout_without_error_edge_still_fails_the_machine()
+    [CancelAfter(10_000)]
+    public async Task timeout_without_error_edge_still_fails_the_machine(CancellationToken ct)
     {
         Graph graph = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangForever, TimeoutBehavior.Fail)
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(30), HangUntilCancelled, TimeoutBehavior.Fail)
             .Build();
 
-        Result result = await graph.ToAsyncStateMachine().ExecuteAsync();
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync(ct);
         Assert.That(result, Is.EqualTo(Result.Failure));
     }
 
     [Test]
-    public async Task timeout_failure_carries_a_diagnostic_message()
+    [CancelAfter(10_000)]
+    public async Task timeout_failure_carries_a_diagnostic_message(CancellationToken ct)
     {
         AsyncTimeoutState state = new(
-            new AsyncRelayState(HangForever), TimeSpan.FromMilliseconds(30));
+            new AsyncRelayState(HangUntilCancelled), TimeSpan.FromMilliseconds(30));
 
-        Result result = await state.ExecuteAsync();
+        Result result = await state.ExecuteAsync(ct);
 
         Assert.Multiple(() =>
         {

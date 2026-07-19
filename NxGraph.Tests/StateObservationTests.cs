@@ -93,7 +93,9 @@ public class StateObservationTests
 
         await fsm.ExecuteAsync();
 
-        Assert.That(observer.ObservedStates, Is.EquivalentTo(Expected));
+        // Sequence-equal on purpose: the observer contract is the exact event order,
+        // not the event multiset.
+        Assert.That(observer.ObservedStates, Is.EqualTo(Expected));
     }
 
     [Test]

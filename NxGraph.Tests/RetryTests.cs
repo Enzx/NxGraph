@@ -118,6 +118,62 @@ public class RetryTests
         });
     }
 
+    // The end-to-end backoff tests below stay real-time by decision: a fake-clock seam for
+    // the async retry path was considered and rejected for now — the repo keeps no
+    // InternalsVisibleTo by policy (spec 004), and a public delay-scheduler hook is API
+    // surface growth a test convenience does not justify. Elapsed-time assertions are
+    // therefore lower-bound-only (Task.Delay never completes early; overshoot on a loaded
+    // runner is unbounded, so upper bounds would be pure flake).
+
+    [Test]
+    [CancelAfter(10_000)]
+    public async Task linear_backoff_is_applied_between_async_attempts(CancellationToken ct)
+    {
+        int executions = 0;
+        Graph graph = GraphBuilder
+            .StartWithAsync(_ => ++executions < 3 ? ResultHelpers.Failure : ResultHelpers.Success)
+            .Retry(maxAttempts: 3, backoff: TimeSpan.FromMilliseconds(40), backoffKind: BackoffKind.Linear)
+            .Build();
+
+        Stopwatch sw = Stopwatch.StartNew();
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync(ct);
+        sw.Stop();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(executions, Is.EqualTo(3));
+            // Two failed attempts → linear delays of 1×40 ms and 2×40 ms = 120 ms total;
+            // assert with the same 25% timer-skew margin the fixed-backoff test uses.
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(90),
+                "Linear backoff must scale the machine-level delay with the failed-attempt count.");
+        });
+    }
+
+    [Test]
+    [CancelAfter(10_000)]
+    public async Task exponential_backoff_is_applied_between_async_attempts(CancellationToken ct)
+    {
+        int executions = 0;
+        Graph graph = GraphBuilder
+            .StartWithAsync(_ => ++executions < 4 ? ResultHelpers.Failure : ResultHelpers.Success)
+            .Retry(maxAttempts: 4, backoff: TimeSpan.FromMilliseconds(20), backoffKind: BackoffKind.Exponential)
+            .Build();
+
+        Stopwatch sw = Stopwatch.StartNew();
+        Result result = await graph.ToAsyncStateMachine().ExecuteAsync(ct);
+        sw.Stop();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(executions, Is.EqualTo(4));
+            // Three failed attempts → exponential delays of 20, 40, 80 ms = 140 ms total.
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(105),
+                "Exponential backoff must double the machine-level delay per failed attempt.");
+        });
+    }
+
     [Test]
     public void sync_node_failing_twice_then_succeeding_completes()
     {
