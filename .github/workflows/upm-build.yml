@@ -18,10 +18,12 @@ jobs:
         mode: [ source, binary ]
 
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to commit SHAs (tag in the trailing comment) so a moved tag
+      # cannot silently change what runs.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.0.x
 
@@ -29,7 +31,7 @@ jobs:
         run: dotnet run --project NxGraph.Build -- stage-${{ matrix.mode }}
 
       - name: Upload staged UPM package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: upm-${{ matrix.mode }}
           path: upm/com.enzx.nxgraph/
