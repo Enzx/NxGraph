@@ -1186,7 +1186,7 @@ dotnet run --project NxGraph.Benchmarks -c Release
 
 ### Results
 
-> Runtime: .NET 8.0.26 (RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI) · BenchmarkDotNet v0.13.12 · ShortRun job · 2026-04-27
+> Runtime: .NET 8.0.27 (RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI) · BenchmarkDotNet v0.13.12 · ShortRun job · 2026-07-19. Indicative numbers from a dev machine — compare rows within this table, not across README revisions.
 
 ![Benchmark chart](docs/benchmarks.svg)
 
@@ -1194,32 +1194,34 @@ dotnet run --project NxGraph.Benchmarks -c Release
 
 | Scenario | Mean | Alloc |
 |---|---:|---:|
-| Single node (`RelayState.Success`) ★ | 199 ns | 0 B |
-| Single node + `NoopObserver` | 239 ns | 0 B |
-| Timeout wrapper (immediate success) | 330 ns | 0 B |
-| Chain × 10 nodes | 802 ns | 0 B |
-| Director-driven × 10 nodes | 856 ns | 0 B |
-| Chain × 50 nodes | 3,344 ns | 0 B |
+| Single node (`RelayState.Success`) ★ | 246 ns | 0 B |
+| Single node + `NoopObserver` | 301 ns | 0 B |
+| Timeout wrapper (immediate success) | 382 ns | 0 B |
+| Chain × 10 nodes | 1,107 ns | 0 B |
+| Director-driven × 10 nodes | 1,225 ns | 0 B |
+| Chain × 50 nodes | 4,851 ns | 0 B |
 
 **Sync `StateMachine`:**
 
 | Scenario | Mean | Alloc |
 |---|---:|---:|
-| Single node ★ | 24 ns | 0 B |
-| Single node + `SyncNoopObserver` | 27 ns | 0 B |
-| Chain × 10 nodes | 194 ns | 0 B |
-| Chain × 50 nodes | 979 ns | 0 B |
+| Single node ★ | 56 ns | 0 B |
+| Single node + `SyncNoopObserver` | 62 ns | 0 B |
+| Timeout wrapper (immediate success) | 69 ns | 0 B |
+| Chain × 10 nodes | 385 ns | 0 B |
+| Director-driven × 10 nodes | 467 ns | 0 B |
+| Chain × 50 nodes | 1,480 ns | 0 B |
 
 ★ baseline
 
 Key observations:
 
 - **Zero allocations**: both runtimes are fully alloc-free after graph construction.
-- **Sync is ~8× faster on a single node**: 24 ns vs 199 ns, reflecting the absence of async machinery and `Interlocked` operations.
-- **Observer overhead is constant** and runtime-dependent: +3 ns for sync, +40 ns for async, independent of chain length.
-- **Per-node cost falls with chain length**: async 199 ns for 1 node → 80 ns/node for 10 → 67 ns/node for 50.
-- **Sync per-node cost is consistent**: ~19 ns/node for both chain × 10 and chain × 50.
-- **Director nodes** add ~54 ns over a plain 10-node async chain.
+- **Sync is ~4× faster on a single node**: 56 ns vs 246 ns, reflecting the absence of async machinery and `Interlocked` operations.
+- **Observer overhead is constant** and runtime-dependent: +6 ns for sync, +55 ns for async, independent of chain length.
+- **Timeout wrapper overhead** mirrors the same split: +13 ns sync, +136 ns async over the bare single node.
+- **Per-node cost falls with chain length**: async 246 ns for 1 node → 111 ns/node for 10 → 97 ns/node for 50; sync 56 ns → 39 ns/node → 30 ns/node.
+- **Director nodes** add ~118 ns (async) / ~82 ns (sync) over the plain 10-node chain of the same runtime.
 
 ---
 
