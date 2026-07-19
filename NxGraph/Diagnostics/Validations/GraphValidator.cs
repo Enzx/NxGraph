@@ -1,4 +1,4 @@
-﻿using NxGraph.Blackboards;
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
@@ -273,7 +273,7 @@ public static class GraphValidator
     /// <c>Build()</c>). Null slots are skipped defensively — hand-constructed graphs can carry
     /// holes the builder never produces.
     /// </summary>
-    private static IReadOnlyList<NodeId> CollectAllNodeIds(Graph graph)
+    private static List<NodeId> CollectAllNodeIds(Graph graph)
     {
         List<NodeId> ids = new(graph.NodeCount);
         for (int i = 0; i < graph.NodeCount; i++)
