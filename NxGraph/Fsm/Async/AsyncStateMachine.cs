@@ -891,6 +891,15 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                 // observer, so nodes that gate report formatting on a wired callback
                 // (behavior composites) pay nothing on observer-less machines.
                 reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
+
+                // Sync states read both slots (State.Log prefers the sync one), so the sync
+                // slot is cleared too: a callback left by a sync machine that ran this shared
+                // graph earlier must neither shadow this machine's observer nor receive
+                // reports from this run.
+                if (reporter is State syncState)
+                {
+                    syncState.SyncLogReport = null;
+                }
             }
 
             LogicNode logic = (LogicNode)node;

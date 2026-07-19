@@ -28,13 +28,18 @@ public abstract class State : ILogic, ILogReporter, IBlackboardSettable
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => Bb = context;
 
     /// <summary>
-    /// Callback set by the sync runtime so the state can emit log messages.
+    /// Callback set by the sync runtimes so the state can emit log messages.
     /// Uses <see cref="Action{String}"/> instead of an async delegate.
+    /// Machine-owned while the state runs under any machine: every machine reassigns both
+    /// report slots per visit (its own from the observer, the other family's to null), so
+    /// machines sharing a graph each attribute reports to their own observer.
     /// </summary>
     public Action<string>? SyncLogReport { get; set; }
 
     /// <summary>
-    /// Async log report callback (used when the state is executed via the async <see cref="AsyncStateMachine"/>).
+    /// Async log report callback (wired when the state is executed via the async machines,
+    /// which resolve the state behind its <see cref="SyncLogicAdapter"/>). Machine-owned per
+    /// visit, like <see cref="SyncLogReport"/>.
     /// </summary>
     Func<string, CancellationToken, ValueTask>? ILogReporter.LogReport { get; set; }
 
@@ -84,10 +89,29 @@ public abstract class State : ILogic, ILogReporter, IBlackboardSettable
     }
 
 
+    /// <summary>
+    /// Emits a log message through the machine-wired report channel (observer
+    /// <c>OnLogReport</c>): the sync callback when a sync machine wired it, else the async
+    /// callback (the async machines wire that slot when this state runs behind the
+    /// sync-logic adapter). Under an async machine a genuinely asynchronous observer is
+    /// waited out synchronously, so delivery completes before <c>Log</c> returns on both
+    /// runtimes — the same contract as the behavior composites' report channel. The
+    /// callbacks are machine-wired <c>null</c> on observer-less machines, so <c>Log</c>
+    /// costs two null checks and nothing else there.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void Log(string message)
     {
-        SyncLogReport?.Invoke(message);
+        if (SyncLogReport is { } sync)
+        {
+            sync(message);
+            return;
+        }
+
+        if (((ILogReporter)this).LogReport is { } asyncReport)
+        {
+            ValueTaskSync.Await(asyncReport(message, CancellationToken.None));
+        }
     }
 
     protected virtual void OnEnter() { }

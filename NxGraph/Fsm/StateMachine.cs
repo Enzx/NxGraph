@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using NxGraph.Blackboards;
 using NxGraph.Compatibility;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
 
@@ -695,6 +696,12 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         if (stateForLog is not null)
         {
             stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
+
+            // Both slots are machine-owned per visit: State.Log (and the behavior-composite
+            // report bridge) falls back to the async slot when the sync one is null, so a
+            // callback left by an async machine that ran this shared graph earlier must not
+            // receive reports from this run.
+            ((ILogReporter)stateForLog).LogReport = null;
         }
 
         // Execute the node synchronously.
