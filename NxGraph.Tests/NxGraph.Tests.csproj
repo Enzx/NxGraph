@@ -8,8 +8,6 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
@@ -23,14 +21,29 @@
              measurement window. See the fixture header for the full rationale. -->
         <TieredCompilation>false</TieredCompilation>
         <TieredPgo>false</TieredPgo>
+
+        <!-- This assembly never ships, so source-path determinism buys nothing here — and it
+             would break the public-API baseline tests, which locate their approved.txt files
+             (and the netstandard2.1 build output) via [CallerFilePath]. Under the repo-root
+             props' CI gate, ContinuousIntegrationBuild=true would otherwise map those paths
+             to /_/... . Shipped assemblies keep full determinism. -->
+        <DeterministicSourcePaths>false</DeterministicSourcePaths>
+
+        <!-- Test-idiom analyzer exemptions (analyzers + TreatWarningsAsErrors stay on):
+             CA1707: underscore test names are this suite's naming convention.
+             CA1861: inline assertion arrays (Is.EqualTo(new[] { ... })) are the readable
+             test idiom; the repeated-call allocation concern does not apply to tests.
+             CA2201: fault-model tests deliberately throw ApplicationException as a
+             recognizable injected fault type. -->
+        <NoWarn>$(NoWarn);CA1707;CA1861;CA2201</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="8.0.1">
-          <PrivateAssets>all</PrivateAssets>
-          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="coverlet.msbuild" Version="6.0.4">
+        <!-- Coverage: coverlet.msbuild is the single coverage driver (the `/p:Threshold` gate
+             in NxGraph.Build's `test` target). The VSTest collector (coverlet.collector) was
+             removed deliberately — running both drivers at once is unsupported and hid which
+             one actually gated. See NxGraph.Build/README.md § Coverage. -->
+        <PackageReference Include="coverlet.msbuild" Version="8.0.1">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

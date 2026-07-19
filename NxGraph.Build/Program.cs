@@ -6,6 +6,11 @@ namespace NxGraph.Build;
 
 public static class Program
 {
+    // Resolved once in Main and reused by every RunDotNet invocation — DotNetLocator.Locate
+    // probes the filesystem/registry, which is wasteful per call and could even pick a
+    // different SDK mid-run if the environment changes.
+    private static DotNetLocator.Result? _dotnet;
+
     private static readonly string[] DirectoriesToCopy =
     [
         Path.Combine("Authoring"),
@@ -36,6 +41,7 @@ public static class Program
         var repoRoot = FindRepoRoot();
 
         var dotnet = DotNetLocator.Locate(preferMajor: 8);
+        _dotnet = dotnet;
 
         // Preflight: print which dotnet is being used and basic SDK info.
         // This helps diagnose Windows-specific failures where a process fails to start
@@ -96,10 +102,15 @@ public static class Program
             // Line-coverage floor per instrumented module (each test project scopes its own
             // Include filter in its csproj). Raise this as new features land with tests;
             // never lower it without a recorded decision.
+            //
+            // Coverage runs on the coverlet.msbuild driver alone (/p:CollectCoverage +
+            // /p:Threshold is the gate; lcov coverage.info is the report). The VSTest
+            // collector (--collect:"XPlat Code Coverage") was removed deliberately: running
+            // both drivers at once is unsupported by coverlet and obscured which one gated.
+            // See NxGraph.Build/README.md § Coverage.
             var threshold = OptionalEnv("COVERAGE_THRESHOLD") ?? "70";
             await RunDotNet(repoRoot,
                 $"test --no-build --configuration {config} --verbosity normal " +
-                $"--collect:\"XPlat Code Coverage\" " +
                 $"/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:Threshold={threshold} " +
                 $"/p:ThresholdType=line /p:ThresholdStat=minimum");
         });
@@ -157,18 +168,25 @@ public static class Program
             if (nupkgs.Length == 0)
                 throw new InvalidOperationException($"No .nupkg files found in {artifactsDir}");
 
+            // The API key must ride the command line: `dotnet nuget push` reads it from no
+            // environment variable, and a NuGet.Config `apikeys` entry would persist the
+            // secret to disk — worse. So the push invocations run with echo suppressed and a
+            // redacted command line is printed instead; GitHub CI additionally masks the
+            // secret, but local `publish` runs used to print it in cleartext.
+            string PushArgs(string pattern, string key) =>
+                $"nuget push \"{Path.Combine(artifactsDir, pattern)}\" " +
+                $"--api-key \"{key}\" --source \"{source}\" --skip-duplicate";
+
             Console.WriteLine("\n→ Pushing .nupkg...");
-            await RunDotNet(repoRoot,
-                $"nuget push \"{Path.Combine(artifactsDir, "*.nupkg")}\" " +
-                $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate");
+            await RunDotNet(repoRoot, PushArgs("*.nupkg", apiKey),
+                redactedArgs: PushArgs("*.nupkg", "***"));
 
             var snupkgs = Directory.GetFiles(artifactsDir, "*.snupkg");
             if (snupkgs.Length > 0)
             {
                 Console.WriteLine("\n→ Pushing .snupkg...");
-                await RunDotNet(repoRoot,
-                    $"nuget push \"{Path.Combine(artifactsDir, "*.snupkg")}\" " +
-                    $"--api-key \"{apiKey}\" --source \"{source}\" --skip-duplicate");
+                await RunDotNet(repoRoot, PushArgs("*.snupkg", apiKey),
+                    redactedArgs: PushArgs("*.snupkg", "***"));
             }
         });
 
@@ -205,12 +223,24 @@ public static class Program
         await RunTargetsAndExitAsync(args);
     }
 
-    private static async Task RunDotNet(string workingDirectory, string args)
+    /// <param name="workingDirectory">Directory to run in.</param>
+    /// <param name="args">The real argument string handed to dotnet.</param>
+    /// <param name="redactedArgs">When set, <paramref name="args"/> contains a secret: echo is
+    /// suppressed and this redacted rendering is printed (and used in failure messages)
+    /// instead, so the secret never reaches the console or an exception text.</param>
+    private static async Task RunDotNet(string workingDirectory, string args, string? redactedArgs = null)
     {
+        var printableArgs = redactedArgs ?? args;
         try
         {
-            var dotnet = DotNetLocator.Locate(preferMajor: 8);
-            await RunAsync(dotnet.ExecutablePath, args, workingDirectory: workingDirectory);
+            var dotnet = _dotnet ??= DotNetLocator.Locate(preferMajor: 8);
+            if (redactedArgs is not null)
+            {
+                Console.WriteLine($"{dotnet.ExecutablePath} {redactedArgs}");
+            }
+
+            await RunAsync(dotnet.ExecutablePath, args, workingDirectory: workingDirectory,
+                noEcho: redactedArgs is not null);
         }
         catch (SimpleExec.ExitCodeException e)
         {
@@ -218,9 +248,9 @@ public static class Program
             // unusual negative exit codes. Provide actionable hints.
             var dotnetPath = SafeResolveExecutablePath("dotnet");
             throw new InvalidOperationException(
-                $"dotnet {args} failed with exit code {e.ExitCode}. " +
+                $"dotnet {printableArgs} failed with exit code {e.ExitCode}. " +
                 $"WorkingDirectory='{workingDirectory}'. dotnet='{dotnetPath ?? "<not found>"}'. " +
-                "Try running the same command manually with higher verbosity: 'dotnet " + args + " -v diag'. " +
+                "Try running the same command manually with higher verbosity: 'dotnet " + printableArgs + " -v diag'. " +
                 "On Windows, negative exit codes often indicate the process failed to start (broken install/PATH) or was terminated by policy (AV/AppLocker).",
                 e);
         }

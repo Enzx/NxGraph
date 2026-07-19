@@ -304,7 +304,9 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             case ExecutionStatus.Resetting:
                 break;
             default:
-                throw new IndexOutOfRangeException(nameof(status));
+                // Unreachable enum-switch guard (CA2201: IndexOutOfRangeException is
+                // runtime-reserved, so this defensive default uses a plain invalid-op).
+                throw new InvalidOperationException($"Unexpected execution status '{status}'.");
         }
 
         TransitionTo(ExecutionStatus.Resetting);

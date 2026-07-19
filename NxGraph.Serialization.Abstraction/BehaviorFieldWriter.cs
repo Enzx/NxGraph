@@ -79,10 +79,7 @@ public sealed class BehaviorFieldWriter
     /// </summary>
     public void WriteBehaviors(string name, IReadOnlyList<object> entries)
     {
-        if (entries is null)
-        {
-            throw new ArgumentNullException(nameof(entries));
-        }
+        ArgumentNullException.ThrowIfNull(entries);
 
         if (_entryCodec is null)
         {

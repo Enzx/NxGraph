@@ -23,7 +23,7 @@ public class RepeatSerializationTests
 {
     public sealed class Hero
     {
-        public readonly List<string> Visits = [];
+        public List<string> Visits { get; } = [];
     }
 
     private sealed class GreetHero : IBehavior<Hero>, IAsyncBehavior<Hero>, ISerializableBehavior

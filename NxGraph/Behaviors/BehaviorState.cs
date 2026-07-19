@@ -157,6 +157,10 @@ internal static class BehaviorComposition
         return behaviors;
     }
 
+    // CA2208 suppressed for the two cold throw-helper factories below: ParamName names the
+    // *call sites'* `behaviors` parameter (every caller validates its own `behaviors` array);
+    // the analyzer's heuristic only sees the factory's own parameter list.
+#pragma warning disable CA2208
     internal static ArgumentException AgentEntryInUntyped(object entry, int index, string typedDsl)
     {
         return new ArgumentException(
@@ -184,6 +188,7 @@ internal static class BehaviorComposition
             $"'{entryAgent?.Name ?? "<unknown>"}' but this composite binds agent type " +
             $"'{compositeAgent.Name}'.", ParamName);
     }
+#pragma warning restore CA2208
 
     internal static bool SyncHasReporter(State state) =>
         state.SyncLogReport is not null || ((ILogReporter)state).LogReport is not null;

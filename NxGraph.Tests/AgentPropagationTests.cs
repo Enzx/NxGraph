@@ -8,7 +8,7 @@ namespace NxGraph.Tests;
 [Category("agent_propagation")]
 public class AgentPropagationTests
 {
-    private class DummyAgent
+    private sealed class DummyAgent
     {
         public bool Visited;
     }

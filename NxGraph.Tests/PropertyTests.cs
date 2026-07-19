@@ -120,7 +120,7 @@ public class PropertyTests
     }
 }
 
-internal class DummyState(string? data = null) : IAsyncLogic
+internal sealed class DummyState(string? data = null) : IAsyncLogic
 {
     public string Data { get; init; } = data ?? string.Empty;
    
@@ -131,7 +131,7 @@ internal class DummyState(string? data = null) : IAsyncLogic
     }
 }
 
-internal class DummyLogicTextCodec : ILogicCodec<string>
+internal sealed class DummyLogicTextCodec : ILogicCodec<string>
 {
 
     public string Serialize(IAsyncLogic asyncLogic) =>

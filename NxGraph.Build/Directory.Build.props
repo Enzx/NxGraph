@@ -1,10 +1,14 @@
-﻿<!-- Imported before Microsoft.Common.props — safe to set intermediate/output paths here.
+<!-- Imported before Microsoft.Common.props — safe to set intermediate/output paths here.
      This isolates build-tool output to .tools/ at the repository root so NxGraph.Build.exe,
-     Bullseye.dll, SimpleExec.dll, etc. never appear alongside the real project artifacts. -->
+     Bullseye.dll, SimpleExec.dll, etc. never appear alongside the real project artifacts.
+
+     MSBuild stops at the nearest Directory.Build.props, so the repo-root defaults
+     (analyzers, TreatWarningsAsErrors, metadata) are imported explicitly here — the root
+     file sets no output paths, so the .tools/ isolation below is unaffected. -->
 <Project>
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..'))" />
     <PropertyGroup>
         <BaseOutputPath>$(MSBuildThisFileDirectory)..\.tools\bin\</BaseOutputPath>
         <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\.tools\obj\</BaseIntermediateOutputPath>
     </PropertyGroup>
 </Project>
-

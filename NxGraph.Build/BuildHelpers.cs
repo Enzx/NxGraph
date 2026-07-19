@@ -242,13 +242,13 @@ public static partial class BuildHelpers
             {
                 (target, version) = refName switch
                 {
-                    _ when refName.StartsWith("serialization-abstraction/v") =>
+                    _ when refName.StartsWith("serialization-abstraction/v", StringComparison.Ordinal) =>
                         ("serialization-abstraction", refName["serialization-abstraction/v".Length..]),
-                    _ when refName.StartsWith("serialization/v") =>
+                    _ when refName.StartsWith("serialization/v", StringComparison.Ordinal) =>
                         ("serialization", refName["serialization/v".Length..]),
-                    _ when refName.StartsWith("nxgraph/v") =>
+                    _ when refName.StartsWith("nxgraph/v", StringComparison.Ordinal) =>
                         ("nxgraph", refName["nxgraph/v".Length..]),
-                    _ when refName.StartsWith("v") =>
+                    _ when refName.StartsWith('v') =>
                         ("all", refName[1..]),
                     _ => throw new InvalidOperationException($"Unsupported tag format '{refName}'.")
                 };
@@ -274,7 +274,7 @@ public static partial class BuildHelpers
             var refType = OptionalEnv("GITHUB_REF_TYPE");
             var refName = OptionalEnv("GITHUB_REF_NAME");
 
-            if (refType == "tag" && refName is not null && refName.StartsWith("upm/v"))
+            if (refType == "tag" && refName is not null && refName.StartsWith("upm/v", StringComparison.Ordinal))
                 version = refName["upm/v".Length..];
         }
 

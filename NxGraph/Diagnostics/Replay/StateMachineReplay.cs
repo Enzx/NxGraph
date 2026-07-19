@@ -1,4 +1,5 @@
-﻿using NxGraph.Graphs;
+﻿using NxGraph.Compatibility;
+using NxGraph.Graphs;
 
 namespace NxGraph.Diagnostics.Replay;
 
@@ -54,7 +55,7 @@ public class StateMachineReplay(ReadOnlySpan<ReplayEvent> events)
 
     public static ReplayEvent[] Deserialize(byte[] data)
     {
-        if (data is null) throw new ArgumentNullException(nameof(data));
+        Guard.NotNull(data, nameof(data));
 
         using MemoryStream ms = new(data);
         using BinaryReader reader = new(ms);

@@ -16,7 +16,7 @@ namespace NxGraph.Fsm;
 /// work receives the machine-bound routed <see cref="BlackboardContext"/>; the disjoint-keys
 /// contract of the async twin is not load-bearing here (works never overlap) but keeping it
 /// makes the graph portable to <c>.ToAllAsync</c>. Allocation-free per tick: the works array
-/// is construction-time state. Being <see cref="ILogic"/>, this node also runs under the
+/// is construction-time state. Being <see cref="Graphs.ILogic"/>, this node also runs under the
 /// async machine via the sync-logic adapter.
 /// </para>
 /// </summary>

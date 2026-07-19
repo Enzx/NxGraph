@@ -40,8 +40,10 @@ public readonly struct Result : IEquatable<Result>
         InProgress = 2,
 
         /// <inheritdoc cref="InProgress"/>
+#pragma warning disable CA1069 // Deliberate duplicate value: obsolete back-compat alias for InProgress.
         [Obsolete("Renamed to StatusCode.InProgress — 'Continue' read like a command rather than a status.")]
         Continue = 2,
+#pragma warning restore CA1069
     }
 
     // ── Static singletons ───────────────────────────────────────────────

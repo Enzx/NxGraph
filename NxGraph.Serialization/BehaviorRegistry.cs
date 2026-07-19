@@ -64,7 +64,7 @@ public sealed class BehaviorRegistry : IBehaviorRegistry
         }
 
         if (behaviorTypeName.StartsWith(SetValuePrefix, StringComparison.Ordinal) &&
-            behaviorTypeName.EndsWith("]", StringComparison.Ordinal))
+            behaviorTypeName.EndsWith(']'))
         {
             behavior = ReadSetValue(behaviorTypeName, fields);
             return true;
@@ -85,14 +85,14 @@ public sealed class BehaviorRegistry : IBehaviorRegistry
         }
 
         if (behaviorTypeName.StartsWith(RepeatPrefix, StringComparison.Ordinal) &&
-            behaviorTypeName.EndsWith("]", StringComparison.Ordinal))
+            behaviorTypeName.EndsWith(']'))
         {
             behavior = ReadTypedRepeat(behaviorTypeName, RepeatPrefix, nameof(ReadRepeatGeneric), fields);
             return true;
         }
 
         if (behaviorTypeName.StartsWith(AsyncRepeatPrefix, StringComparison.Ordinal) &&
-            behaviorTypeName.EndsWith("]", StringComparison.Ordinal))
+            behaviorTypeName.EndsWith(']'))
         {
             behavior = ReadTypedRepeat(behaviorTypeName, AsyncRepeatPrefix, nameof(ReadAsyncRepeatGeneric), fields);
             return true;

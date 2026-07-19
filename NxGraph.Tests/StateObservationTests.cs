@@ -9,7 +9,7 @@ namespace NxGraph.Tests;
 [Category("state_observation")]
 public class StateObservationTests
 {
-    private class FsmObserver : IAsyncStateMachineObserver
+    private sealed class FsmObserver : IAsyncStateMachineObserver
     {
         public readonly List<string> ObservedStates = [];
 

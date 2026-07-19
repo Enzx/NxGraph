@@ -16,8 +16,9 @@ public static class ResultHelpers
     public static readonly ValueTask<Result> Failure = new(Result.Failure);
     /// <summary>
     /// Represents a completed operation with no meaningful result (e.g. for lifecycle events).
+    /// A zero-initialized <see cref="ValueTask"/> is already the completed task.
     /// </summary>
-    public static readonly ValueTask CompletedTask = default;
+    public static readonly ValueTask CompletedTask;
 
     /// <summary>
     /// Represents an in-progress (not yet finished) result.

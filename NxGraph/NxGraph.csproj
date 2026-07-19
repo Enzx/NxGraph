@@ -1,20 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- Common properties (LangVersion/Nullable/analyzers/package metadata) come from the
+         repo-root Directory.Build.props. -->
     <PropertyGroup>
         <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
-        <LangVersion>latest</LangVersion>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!-- CS1591: XML docs are required only where they add value; missing-doc coverage is
+             tracked editorially, not as a build gate.
+             CA1000: static factories on generic types (SetValue&lt;T&gt;.Unbound,
+             BlackboardValue&lt;T&gt;.Bound, Repeat/AsyncRepeat&lt;TAgent&gt;.Unbound) are the
+             documented deserialization-rebind surface (specs 014/015); the type argument is
+             intrinsic to each factory, and the pattern recurs for every serializable behavior.
+             CA1051: the visible fields (machines' readonly Graph, generic state bases'
+             protected Agent) are deliberate hot-path surface guarded by the public-API
+             baseline; converting to properties is a breaking API change with no gain.
+             CA1716: observer interfaces use the domain-correct parameter names to/next
+             (OnTransition(from, to), StateMachineStatusChanged(..., next)); renaming would
+             break named-argument callers and the API baseline for a VB/F#-keyword concern
+             this library does not serve. -->
+        <NoWarn>$(NoWarn);CS1591;CA1000;CA1051;CA1716</NoWarn>
         <Title>NxGraph</Title>
-        <Authors>Moe Iraji</Authors>
         <Description>A lean, high-performance finite state machine (FSM) / stateflow library for .NET with a clean authoring DSL, strong validation, first-class observability, and export tools (Mermaid, tracing, replay). Designed for correctness on hot paths (allocation-free), production diagnostics, and pleasant authoring.</Description>
-        <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
-        <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
         <PackageTags>statemachine fsm stateflow graph performance zero-allocation unity</PackageTags>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
     </PropertyGroup>
     <ItemGroup>
@@ -25,7 +32,6 @@
     </ItemGroup>
     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
         <Compile Include="Shims\**\*.cs" />
-        
     </ItemGroup>
     <ItemGroup>
         <None Include="Docs\readme.md" Pack="true" PackagePath="Docs\" />

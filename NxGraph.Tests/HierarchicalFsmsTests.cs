@@ -11,7 +11,7 @@ namespace NxGraph.Tests;
 [TestFixture(Category = "NxFSM")]
 public class HierarchicalFsmTests
 {
-    private class HierarchicalDummyState : IAsyncLogic
+    private sealed class HierarchicalDummyState : IAsyncLogic
     {
         public HierarchicalDummyState()
         {
@@ -39,7 +39,7 @@ public class HierarchicalFsmTests
         }
     }
 
-    private class DummyLogicTextCodec(List<string> log) : ILogicCodec<string>
+    private sealed class DummyLogicTextCodec(List<string> log) : ILogicCodec<string>
     {
         public string Serialize(IAsyncLogic asyncLogic) =>
             JsonSerializer.Serialize((HierarchicalDummyState)asyncLogic);

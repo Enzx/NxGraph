@@ -47,13 +47,13 @@ public class AllStateTests
                 async (_, _) =>
                 {
                     first.SetResult();
-                    await second.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    await second.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
                     return Result.Success;
                 },
                 async (_, _) =>
                 {
                     second.SetResult();
-                    await first.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    await first.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
                     return Result.Success;
                 })
             .Build();
@@ -266,14 +266,14 @@ public class AllStateTests
                 async (bb, _) =>
                 {
                     leftStarted.SetResult();
-                    await rightStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    await rightStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
                     bb.Set(left, 21);
                     return Result.Success;
                 },
                 async (bb, _) =>
                 {
                     rightStarted.SetResult();
-                    await leftStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    await leftStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
                     bb.Set(right, 42);
                     return Result.Success;
                 })

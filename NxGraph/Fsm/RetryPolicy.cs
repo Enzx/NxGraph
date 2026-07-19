@@ -54,8 +54,8 @@ public readonly struct RetryPolicy
 
     public BackoffKind BackoffKind { get; }
 
-    /// <summary>No retry policy — a failing node fails on its first attempt.</summary>
-    public static readonly RetryPolicy None = default;
+    /// <summary>No retry policy — a failing node fails on its first attempt (the zero-initialized default).</summary>
+    public static readonly RetryPolicy None;
 
     /// <summary>
     /// The delay to wait before the next attempt, given how many attempts have already failed.

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -245,10 +246,10 @@ public class PublicApiSurfaceTests
             // Same ordering Enum.GetNames uses: ascending unsigned binary value.
             foreach (FieldInfo field in type
                          .GetFields(BindingFlags.Public | BindingFlags.Static)
-                         .OrderBy(f => unchecked((ulong)Convert.ToInt64(f.GetRawConstantValue())))
+                         .OrderBy(f => unchecked((ulong)Convert.ToInt64(f.GetRawConstantValue(), CultureInfo.InvariantCulture)))
                          .ThenBy(f => f.Name, StringComparer.Ordinal))
             {
-                yield return $"{field.Name} = {Convert.ToInt64(field.GetRawConstantValue())}";
+                yield return $"{field.Name} = {Convert.ToInt64(field.GetRawConstantValue(), CultureInfo.InvariantCulture)}";
             }
 
             yield break;

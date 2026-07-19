@@ -56,6 +56,12 @@ public sealed class Graph : INode, IGraph
     /// <param name="nodes">The array of nodes in the graph. Must be non-empty and start with the start node at index 0.</param>
     /// <param name="edges">The array of transitions (edges) in the graph. Must be non-empty and have the same length as the nodes array.</param>
     /// <param name="logic">The logic associated with the graph. If null, an empty logic is used.</param>
+    /// <param name="retryPolicies">Optional per-node retry policies indexed by <see cref="NodeId.Index"/>. Must match the nodes array length when provided; null when no node has a policy.</param>
+    /// <param name="outcomeCodes">Optional per-node terminal outcome codes indexed by <see cref="NodeId.Index"/>. Must match the nodes array length when provided; null when no node declares an outcome.</param>
+    /// <param name="outcomeNames">Optional display names for declared outcome codes, keyed by code.</param>
+    /// <param name="schema">Optional Graph-scoped blackboard schema declared for this graph (validated against machine-bound boards).</param>
+    /// <param name="globalSchema">Optional Global-scoped blackboard schema this graph requires from its host machine.</param>
+    /// <param name="nodeSchema">Optional Node-scoped blackboard schema for transient per-visit scratch (each machine owns its own board instance).</param>
     /// <param name="uids">Optional per-node stable UIDs indexed by <see cref="NodeId.Index"/> (<see cref="Guid.Empty"/> = unassigned). Must match the nodes array length when provided.</param>
     /// <exception cref="ArgumentException">Thrown when the nodes or edges arrays are empty, have unequal lengths, or the first node is not the start node.</exception>
     public Graph(NodeId id, INode[] nodes, Transition[] edges, IAsyncLogic? logic = null,

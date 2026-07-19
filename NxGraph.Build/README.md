@@ -24,13 +24,14 @@ Bullseye supports passing **multiple targets** in a single invocation. Shared de
 
 | Target | Depends on | Description |
 |---|---|---|
+| `info` | — | Diagnostic preflight: print repo root, resolved `dotnet` (and why), candidates, `dotnet --info` |
 | `clean` | — | Remove all staged UPM files (source & binary) |
 | `restore` | — | `dotnet restore` the solution |
 | `build` | `restore` | `dotnet build` the solution |
-| `test` | `build` | `dotnet test` with code-coverage collection |
+| `test` | `build` | `dotnet test` with code coverage + threshold gate (see [Coverage](#coverage)) |
 | **`ci`** | `test` | **Full CI pipeline** (restore → build → test) |
 | `pack` | `build` | Pack one or more NuGet packages |
-| `push` | `pack` | Push `.nupkg` + `.snupkg` to nuget.org |
+| `push` | `pack` | Push `.nupkg` + `.snupkg` to nuget.org (API key never echoed — see below) |
 | **`publish`** | `ci`, `push` | **Full release pipeline** (ci + pack + push) |
 | `stage-source` | — | Copy NxGraph source files into the UPM package |
 | `stage-binary` | — | Build NxGraph DLL and copy into the UPM package |
@@ -61,6 +62,32 @@ dotnet run --project NxGraph.Build -- ci
 
 This runs **restore → build → test** with code-coverage. Equivalent to what the
 `dotnet.yml` workflow does on every push/PR.
+
+## Coverage
+
+The `test` target runs coverage on **one** driver: **coverlet.msbuild**
+(`/p:CollectCoverage=true /p:Threshold=<n> /p:ThresholdType=line /p:ThresholdStat=minimum`,
+with `/p:CoverletOutputFormat=lcov` writing `coverage.info` next to each test csproj).
+Each test project scopes its instrumentation via an `<Include>` property in its csproj,
+and the threshold applies **per instrumented module**.
+
+Historically the invocation also passed the VSTest collector
+(`--collect:"XPlat Code Coverage"`, package `coverlet.collector`) at the same time.
+Running both drivers at once is unsupported by coverlet and obscured which one enforced
+the gate (the two packages had even drifted to different majors). The collector package
+and flag were removed; the msbuild driver is the gate, and a deliberately impossible
+`COVERAGE_THRESHOLD=99` run was used to verify the gate actually fails red.
+
+The gate is enforced in `ci` via `COVERAGE_THRESHOLD` (default 70). Raise it as coverage
+grows; never lower it without a recorded decision.
+
+### Push secret handling
+
+`push` hands the NuGet API key to `dotnet nuget push --api-key` with SimpleExec echo
+suppressed, printing a redacted command line (`--api-key "***"`) instead — the key never
+reaches the console or an exception message. The command-line route is deliberate:
+`dotnet nuget push` reads the key from no environment variable, and a `NuGet.Config`
+`apikeys` entry would persist the secret to disk.
 
 ### Build & test with a custom coverage threshold
 
@@ -127,6 +154,12 @@ VERSION=1.0.0 dotnet run --project NxGraph.Build -- ci stage-binary upm-patch-ve
 Bullseye runs all four targets (and their transitive dependencies) in a single process.
 This is what the `upm-release.yml` workflow runs — the remaining git-push and GitHub Release
 steps stay in YAML because they need authenticated git operations.
+
+**UPM release checklist:** the committed `upm/com.enzx.nxgraph/package.json` carries the
+**last released** version by policy (CI's `upm-patch-version` stamps the same value at
+release time). When cutting a UPM release, bump the manifest `version`, the CHANGELOG top
+entry, and the package README's install pin to the new version in the release-prep commit —
+three artifacts, one version.
 
 ### Clean staged UPM files
 

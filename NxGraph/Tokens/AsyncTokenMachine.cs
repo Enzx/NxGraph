@@ -276,7 +276,9 @@ public class AsyncTokenMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                 case ExecutionStatus.Cancelled:
                     break;
                 default:
-                    throw new IndexOutOfRangeException(nameof(status));
+                    // Unreachable enum-switch guard (CA2201: IndexOutOfRangeException is
+                    // runtime-reserved, so this defensive default uses a plain invalid-op).
+                    throw new InvalidOperationException($"Unexpected execution status '{status}'.");
             }
 
             if (!TryTransition(status, ExecutionStatus.Resetting, out ExecutionStatus previous))

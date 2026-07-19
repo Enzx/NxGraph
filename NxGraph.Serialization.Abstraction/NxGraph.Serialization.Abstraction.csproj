@@ -1,19 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- Common properties (LangVersion/Nullable/analyzers/package metadata) come from the
+         repo-root Directory.Build.props. -->
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!-- CS1591: XML docs are required only where they add value; missing-doc coverage is
+             tracked editorially, not as a build gate.
+             CA1720: BehaviorFieldKind members (String/Int32/Int64/Single/Double) and the
+             Integer/integer value slot deliberately carry type names — the field model's kinds
+             ARE the primitive types (spec 014 wire contract); renaming would break the wire
+             and the API baseline to dodge a naming lint. -->
+        <NoWarn>$(NoWarn);CS1591;CA1720</NoWarn>
         <Title>NxGraph.Serialization.Abstraction</Title>
-        <Authors>Moe Iraji</Authors>
         <Description>Serializer and codec abstractions for NxGraph — reference this package to implement custom graph serializers or node-logic codecs without depending on a concrete format.</Description>
-        <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
-        <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
         <PackageTags>statemachine fsm serialization abstractions</PackageTags>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>Docs/readme.md</PackageReadmeFile>
     </PropertyGroup>
 
