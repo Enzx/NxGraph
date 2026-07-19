@@ -448,46 +448,11 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                     "A stepped run is in progress. Finish it with StepAsync or Reset() before calling ExecuteAsync.");
             }
 
-            // If we're terminal, apply reset policy.
-            ExecutionStatus status = Status;
-            if (status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
-            {
-                switch (_restartPolicy)
-                {
-                    case RestartPolicy.Ignore:
-                        // Ignore further execution attempts until a manual Reset() occurs.
-                        // Keep the gate held so a concurrent caller cannot enter while this
-                        // ExecuteAsync is still on its way to OnRunAsync (which returns the
-                        // cached terminal result) and OnExitAsync (which releases the gate).
-                        return Result.InProgress;
-                    case RestartPolicy.Manual:
-                        throw new InvalidOperationException(
-                            $"AsyncStateMachine is in terminal state '{status}'. Call Reset() before executing again.");
-                    default:
-                        // Auto: tolerate unexpected terminal state by resetting on entry.
-                        // ResetCore (not Reset) because OnEnterAsync already holds the gate.
-                        await ResetCore(ct).ConfigureAwait(false);
-                        break;
-                }
-            }
-
-            // Re-stamp this machine's context onto the (potentially shared) graph before running.
-            ApplyExecutionContext();
-            StampPendingEntry();
-
-            // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
-            await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
-            _current = _initial;
-            _attempts = 0;
-            _nodeEntered = false;
-            _nodeBoard?.ResetToDefaults();
-            LastOutcome = 0;
-            if (_observer is not null)
-            {
-                await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
-            }
-
-            await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
+            // Ignore policy returns false: the init is skipped, but the gate is kept held so
+            // a concurrent caller cannot enter while this ExecuteAsync is still on its way to
+            // OnRunAsync (which returns the cached terminal result) and OnExitAsync (which
+            // releases the gate). Either way OnEnterAsync hands off with InProgress.
+            _ = await TryBeginRunAsync(stepped: false, ct).ConfigureAwait(false);
 
             return Result.InProgress;
         }
@@ -497,6 +462,66 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             Volatile.Write(ref _executeGate, 0);
             throw;
         }
+    }
+
+    /// <summary>
+    /// The run-start init shared by <see cref="OnEnterAsync"/> and the first
+    /// <see cref="StepAsync"/> of a stepped run: applies the restart policy to a terminal
+    /// machine, re-stamps the execution context, and moves the machine
+    /// Starting → (enter first node) → Running. Returns <c>false</c> for the
+    /// <see cref="RestartPolicy.Ignore"/> early-out — the callers translate that into their
+    /// distinct surface results (full-run: <see cref="Result.InProgress"/> with the gate held
+    /// so OnRunAsync returns the cached terminal result; stepped: the cached result
+    /// directly). Must run inside the caller's gate-repair try/catch: observer callbacks
+    /// fired here may throw, and which exceptions repair status and release the gate is
+    /// caller-specific behavior.
+    /// </summary>
+    private async ValueTask<bool> TryBeginRunAsync(bool stepped, CancellationToken ct)
+    {
+        // If we're terminal, apply reset policy.
+        ExecutionStatus status = Status;
+        if (status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+        {
+            switch (_restartPolicy)
+            {
+                case RestartPolicy.Ignore:
+                    // Ignore further execution attempts until a manual Reset() occurs.
+                    return false;
+                case RestartPolicy.Manual:
+                    throw new InvalidOperationException(
+                        $"AsyncStateMachine is in terminal state '{status}'. Call Reset() before " +
+                        $"{(stepped ? "stepping" : "executing")} again.");
+                default:
+                    // Auto: tolerate unexpected terminal state by resetting on entry.
+                    // ResetCore (not Reset) because the caller already holds the gate.
+                    await ResetCore(ct).ConfigureAwait(false);
+                    break;
+            }
+        }
+
+        // Re-stamp this machine's context onto the (potentially shared) graph before running.
+        ApplyExecutionContext();
+        StampPendingEntry();
+
+        // First entry or re-entry after Ready: Starting -> (enter first node) -> Running
+        await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
+        _current = _initial;
+        _attempts = 0;
+        _nodeEntered = false;
+        _nodeBoard?.ResetToDefaults();
+        LastOutcome = 0;
+        if (_observer is not null)
+        {
+            await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
+        }
+
+        await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
+        if (stepped)
+        {
+            _stepping = true;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -530,66 +555,101 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         try
         {
             Result result = await InternalRunAsync(ct).ConfigureAwait(false);
-            _terminalResult = result;
 
             // If we get here, loop has returned a terminal result already.
-            // Machine completion notification + optional auto-reset-to-Ready.
-            await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
-                .ConfigureAwait(false);
-
-            if (_restartPolicy == RestartPolicy.Auto)
-            {
-                // ResetCore (not Reset) because the gate is held by the surrounding ExecuteAsync.
-                await ResetCore(ct).ConfigureAwait(false);
-            }
+            await CompleteRunAsync(result, ct).ConfigureAwait(false);
 
             return result;
         }
         catch (OperationCanceledException)
         {
-            // Skip the terminal cascade when the run already reached a terminal status —
-            // e.g. an observer threw inside the Completed notification. Re-transitioning
-            // would fire OnStateMachineCompleted twice and flip a successful run to
-            // Cancelled/Failed. Mirrors sync StateMachine.Finalise's idempotence guard.
-            if (!IsTerminal)
-            {
-                // TransitionTo(Cancelled) already fires OnStateMachineCancelled via NotifyMachineStatusChangeAsync.
-                await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
-
-                _terminalResult = Result.Failure;
-
-                if (_restartPolicy == RestartPolicy.Auto)
-                {
-                    // CancellationToken.None: ct is already cancelled; passing it would make
-                    // any cancellable await inside the reset throw, stranding status at Resetting.
-                    await ResetCore(CancellationToken.None).ConfigureAwait(false);
-                }
-            }
-
+            // The `throw;` stays here (not in the handler) so the stack trace is unchanged.
+            await HandleRunCancelledAsync().ConfigureAwait(false);
             throw;
         }
         catch (Exception ex)
         {
-            // Same idempotence guard as the cancellation path above.
-            if (!IsTerminal)
-            {
-                // Unexpected error outside node execution (node failures are returned as Failure below)
-                if (_observer is not null)
-                    await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
-
-                // TransitionTo(Failed) already fires OnStateMachineCompleted(Failure) via NotifyMachineStatusChangeAsync.
-                await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
-
-                _terminalResult = Result.Failure;
-
-                if (_restartPolicy == RestartPolicy.Auto)
-                {
-                    // CancellationToken.None: ct may already be cancelled/faulted; reset must complete cleanly.
-                    await ResetCore(CancellationToken.None).ConfigureAwait(false);
-                }
-            }
-
+            await HandleRunFaultAsync(ex, ct).ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// The terminal cascade shared by <see cref="OnRunAsync"/> and <see cref="StepAsync"/>:
+    /// caches the terminal result, transitions to Completed/Failed (machine completion
+    /// notification), and applies the optional auto-reset-to-Ready. ResetCore (not Reset)
+    /// because the gate is held by the surrounding ExecuteAsync/StepAsync frame.
+    /// </summary>
+    private async ValueTask CompleteRunAsync(Result result, CancellationToken ct)
+    {
+        _terminalResult = result;
+
+        await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
+            .ConfigureAwait(false);
+
+        if (_restartPolicy == RestartPolicy.Auto)
+        {
+            await ResetCore(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Fault cascade for a cancellation escaping the run loop, shared by
+    /// <see cref="OnRunAsync"/> and <see cref="StepAsync"/> — the callers keep their own
+    /// <c>throw;</c> so the original stack trace is preserved. The <see cref="IsTerminal"/>
+    /// guard skips the cascade when the run already reached a terminal status — e.g. an
+    /// observer threw inside the Completed notification. Re-transitioning would fire
+    /// OnStateMachineCompleted twice and flip a successful run to Cancelled/Failed.
+    /// Mirrors sync StateMachine.Finalise's idempotence guard.
+    /// </summary>
+    private async ValueTask HandleRunCancelledAsync()
+    {
+        if (IsTerminal)
+        {
+            return;
+        }
+
+        // TransitionTo(Cancelled) already fires OnStateMachineCancelled via NotifyMachineStatusChangeAsync.
+        await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
+
+        _terminalResult = Result.Failure;
+
+        if (_restartPolicy == RestartPolicy.Auto)
+        {
+            // CancellationToken.None: ct is already cancelled; passing it would make
+            // any cancellable await inside the reset throw, stranding status at Resetting.
+            await ResetCore(CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Fault cascade for an unexpected exception escaping the run loop (node failures are
+    /// returned as <see cref="Result.Failure"/> from the step core, not thrown), shared by
+    /// <see cref="OnRunAsync"/> and <see cref="StepAsync"/> — the callers keep their own
+    /// <c>throw;</c> so the original stack trace is preserved. Same
+    /// <see cref="IsTerminal"/> idempotence guard as <see cref="HandleRunCancelledAsync"/>.
+    /// </summary>
+    private async ValueTask HandleRunFaultAsync(Exception ex, CancellationToken ct)
+    {
+        if (IsTerminal)
+        {
+            return;
+        }
+
+        if (_observer is not null)
+        {
+            await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
+        }
+
+        // TransitionTo(Failed) already fires OnStateMachineCompleted(Failure) via NotifyMachineStatusChangeAsync.
+        await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
+
+        _terminalResult = Result.Failure;
+
+        if (_restartPolicy == RestartPolicy.Auto)
+        {
+            // CancellationToken.None: ct may already be cancelled/faulted; reset must complete cleanly.
+            await ResetCore(CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -752,38 +812,11 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                 // which may throw; repair transient status so the machine stays usable.
                 try
                 {
-                    ExecutionStatus status = Status;
-                    if (status is ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+                    if (!await TryBeginRunAsync(stepped: true, ct).ConfigureAwait(false))
                     {
-                        switch (_restartPolicy)
-                        {
-                            case RestartPolicy.Ignore:
-                                return _terminalResult;
-                            case RestartPolicy.Manual:
-                                throw new InvalidOperationException(
-                                    $"AsyncStateMachine is in terminal state '{status}'. Call Reset() before stepping again.");
-                            default:
-                                await ResetCore(ct).ConfigureAwait(false);
-                                break;
-                        }
+                        // Ignore policy: the stepped surface returns the cached result directly.
+                        return _terminalResult;
                     }
-
-                    ApplyExecutionContext();
-                    StampPendingEntry();
-
-                    await TransitionTo(ExecutionStatus.Starting).ConfigureAwait(false);
-                    _current = _initial;
-                    _attempts = 0;
-                    _nodeEntered = false;
-                    _nodeBoard?.ResetToDefaults();
-                    LastOutcome = 0;
-                    if (_observer is not null)
-                    {
-                        await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
-                    }
-
-                    await TransitionTo(ExecutionStatus.Running).ConfigureAwait(false);
-                    _stepping = true;
                 }
                 catch
                 {
@@ -800,38 +833,13 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             catch (OperationCanceledException)
             {
                 _stepping = false;
-                // Idempotence guard: don't re-fire the terminal cascade when the status is
-                // already terminal (mirrors sync StateMachine.Finalise).
-                if (!IsTerminal)
-                {
-                    await TransitionTo(ExecutionStatus.Cancelled).ConfigureAwait(false);
-                    _terminalResult = Result.Failure;
-                    if (_restartPolicy == RestartPolicy.Auto)
-                    {
-                        await ResetCore(CancellationToken.None).ConfigureAwait(false);
-                    }
-                }
-
+                await HandleRunCancelledAsync().ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
             {
                 _stepping = false;
-                if (!IsTerminal)
-                {
-                    if (_observer is not null)
-                    {
-                        await _observer.OnStateFailed(_current, ex, ct).ConfigureAwait(false);
-                    }
-
-                    await TransitionTo(ExecutionStatus.Failed).ConfigureAwait(false);
-                    _terminalResult = Result.Failure;
-                    if (_restartPolicy == RestartPolicy.Auto)
-                    {
-                        await ResetCore(CancellationToken.None).ConfigureAwait(false);
-                    }
-                }
-
+                await HandleRunFaultAsync(ex, ct).ConfigureAwait(false);
                 throw;
             }
 
@@ -841,14 +849,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             }
 
             _stepping = false;
-            _terminalResult = result;
-            await TransitionTo(result == Result.Success ? ExecutionStatus.Completed : ExecutionStatus.Failed)
-                .ConfigureAwait(false);
-
-            if (_restartPolicy == RestartPolicy.Auto)
-            {
-                await ResetCore(ct).ConfigureAwait(false);
-            }
+            await CompleteRunAsync(result, ct).ConfigureAwait(false);
 
             return result;
         }
