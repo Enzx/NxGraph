@@ -56,6 +56,14 @@ public struct NodeId(int index) : IEquatable<NodeId>
     /// <summary>
     /// Represents the default NodeId with an index of -1 and a name of "Default".
     /// </summary>
+    /// <remarks>
+    /// Negative indexes form a reserved sentinel space: -1 is this terminal/none sentinel, and
+    /// -2 and below are serialization wire markers (the <c>*Marker</c> statics below, mirrored
+    /// on <see cref="LogicNode"/>) that name composite/structural node kinds on the payload.
+    /// They are never valid graph node indexes and no run loop routes to them. New markers are
+    /// reserved in the serialization layer (see the payload-version notes in
+    /// <c>NxGraph.Serialization</c>): each takes the next unused negative index.
+    /// </remarks>
     public static NodeId Default => new(-1) { Name = "Default" };
     public static NodeId StateMachineMarker => new(-2) { Name = "StateMachine" };
     public static NodeId SyncStateMachineMarker => new(-3) { Name = "SyncStateMachine" };
@@ -72,7 +80,11 @@ public struct NodeId(int index) : IEquatable<NodeId>
     public static NodeId AsyncBehaviorStateMarker => new(-14) { Name = "AsyncBehaviorState" };
 
     /// <summary>
-    /// Represents the start NodeId with an index of 0 and a name of "Start".
+    /// Represents the start NodeId with an index of 0 and an <b>empty</b> name
+    /// (<see cref="ToString"/> prints <c>(0)</c>). Display names are presentation data
+    /// assigned at authoring time (<c>SetName</c>, applied at <c>Build()</c>) — the start
+    /// node has no implicit "Start" name, so name-based lookups (<c>Goto</c>) and
+    /// duplicate-name lints never match it unless a name was explicitly set.
     /// </summary>
     public static NodeId Start => new(0);
 

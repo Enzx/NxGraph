@@ -601,14 +601,19 @@ public sealed partial class GraphBuilder
         return new StateToken(id, this);
     }
 
+    /// <summary>
+    /// Returns every node id known to the builder — the start node plus all added nodes —
+    /// with display names applied. A single-node graph returns its one-element list;
+    /// <c>null</c> only when no start node has been added yet.
+    /// </summary>
     public IReadOnlyList<NodeId>? GetAllNodeIds()
     {
-        if (_nodes.Count == 0 || _startNode == null)
+        if (_startNode == null)
         {
             return null;
         }
 
-        List<NodeId> ids = new(_nodes.Keys.Count) { ApplyName(_startNode.Id) };
+        List<NodeId> ids = new(_nodes.Count + 1) { ApplyName(_startNode.Id) };
         foreach (NodeId id in _nodes.Keys)
         {
             ids.Add(ApplyName(id));

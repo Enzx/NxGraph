@@ -1,5 +1,6 @@
 using NxGraph.Authoring;
 using NxGraph.Diagnostics.Export;
+using NxGraph.Fsm;
 using NxGraph.Graphs;
 
 namespace NxGraph.Tests;
@@ -148,6 +149,32 @@ public class MermaidGraphExporterTests
         string mmd = exporter.Export(graph, opts);
 
         Assert.That(mmd, Does.Contain("%% NxGraph → Mermaid export: Enemy AI FSM"));
+    }
+
+    [Test]
+    public void director_name_with_quotes_is_escaped_exactly_once()
+    {
+        // Regression: BuildNodeLabel escapes the label, and the director-rhombus branch used
+        // to escape it a second time — names containing '"' or '\' rendered mangled
+        // (\\\" instead of \") on If/Switch nodes only.
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new RelayState(() => Result.Success), isStart: true);
+        NodeId thenBranch = builder.AddNode(new RelayState(() => Result.Success)); // n1
+        NodeId elseBranch = builder.AddNode(new RelayState(() => Result.Success)); // n2
+        NodeId choice = builder.AddNode(new ChoiceState(() => true, thenBranch, elseBranch)); // n3
+        builder.SetName(choice, "say \"hi\"");
+        builder.AddTransition(start, choice);
+        Graph graph = builder.Build(throwOnError: false);
+
+        string mmd = new MermaidGraphExporter().Export(graph);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mmd, Does.Contain("n3{\"say \\\"hi\\\" [3]\"}"),
+                "The director label must carry each quote escaped exactly once.");
+            Assert.That(mmd, Does.Not.Contain(@"\\"),
+                "No double backslashes — the name has none, so any pair proves double-escaping.");
+        });
     }
 
     [Test]

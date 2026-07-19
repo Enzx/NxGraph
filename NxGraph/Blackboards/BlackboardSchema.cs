@@ -48,10 +48,26 @@ public sealed class BlackboardSchema
     /// <summary>All registered slots in registration order (index == ordinal).</summary>
     public IReadOnlyList<BlackboardKeyDescriptor> Keys => _descriptors;
 
-    /// <summary>Registers a slot whose default value is <c>default(T)</c>.</summary>
+    /// <summary>
+    /// Registers a slot whose default value is <c>default(T)</c> — for reference types that is
+    /// <see langword="null"/>, which is also the safe default for mutable types (see the
+    /// shared-instance warning on <see cref="Register{T}(string, T)"/>).
+    /// </summary>
     public BlackboardKey<T> Register<T>(string name) => Register<T>(name, default!);
 
-    /// <summary>Registers a slot with an explicit default value. Names must be unique per schema.</summary>
+    /// <summary>
+    /// Registers a slot with an explicit default value. Names must be unique per schema.
+    /// <para>
+    /// <b>Reference-type defaults are shared instances.</b> The schema's default template is
+    /// shallow-copied into every <see cref="Blackboard"/> created from it and on every
+    /// <see cref="Blackboard.ResetToDefaults"/> — copying the <i>reference</i>, not the object.
+    /// <c>Register("list", new List&lt;int&gt;())</c> therefore shares one mutable list across
+    /// all boards from this schema, and mutating it through any board (or after a reset) is
+    /// visible everywhere. Use immutable objects or <see langword="null"/> as reference-type
+    /// defaults; per-board mutable state belongs in the slot value written at run time
+    /// (<c>board.Set(key, new List&lt;int&gt;())</c>).
+    /// </para>
+    /// </summary>
     public BlackboardKey<T> Register<T>(string name, T defaultValue)
     {
         Guard.NotNull(name, nameof(name));

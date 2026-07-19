@@ -9,7 +9,11 @@ namespace NxGraph.Diagnostics.Validations;
 public static class GraphValidator
 {
     /// <summary>
-    /// Validate a graph: reachability (if AllNodes provided), broken transitions, self-loops, and terminal-path existence.
+    /// Validate a graph: reachability, broken transitions, self-loops, terminal-path existence,
+    /// unreachable nodes, and duplicate names. The node set for the unreachable/duplicate-name
+    /// checks is derived from the graph itself; supply
+    /// <see cref="GraphValidationOptions.AllNodes"/> only to validate against a different list
+    /// (e.g. a pre-build ID list from <c>GraphBuilder.GetAllNodeIds()</c>).
     /// Runs in O(N) over reachable nodes and does not allocate on the steady-state hot path.
     /// </summary>
     public static GraphValidationResult Validate(this Graph graph, GraphValidationOptions? options = null)
@@ -221,49 +225,66 @@ public static class GraphValidator
         // 4e) Event-entry lints (spec 013) — always on, mirroring the fork/join presence Info.
         ValidateEventEntries(graph, result);
 
-        // 5) If AllNodes are supplied, check for unreachable nodes and duplicate names
-        if (options.AllNodes is { Count: > 0 } all)
+        // 5) Unreachable-node and duplicate-name checks. A supplied AllNodes wins (back-compat
+        // for pre-build ID lists); otherwise the set is derived from the graph itself — a built
+        // Graph holds every node with its display name applied at Build(), so standalone
+        // Validate() is complete by default.
+        IReadOnlyList<NodeId> all = options.AllNodes is { Count: > 0 } supplied
+            ? supplied
+            : CollectAllNodeIds(graph);
+
+        // Unreachable detection
+        foreach (NodeId node in all)
         {
-            // Unreachable detection
-            foreach (NodeId node in all)
-            {
-                if (!visited.Contains(node.Index))
-                    result.Add(Severity.Warning, "Node is unreachable from Start.", node);
-            }
-
-            // Duplicate names (case-sensitive by default)
-            Dictionary<string, List<NodeId>> byName = new();
-            foreach (NodeId node in all)
-            {
-                string name = node.Name;
-                if (string.IsNullOrEmpty(name)) continue;
-                if (!byName.TryGetValue(name, out List<NodeId>? list))
-                    byName[name] = list = new List<NodeId>(2);
-                list.Add(node);
-            }
-
-            foreach (KeyValuePair<string, List<NodeId>> kvp in byName)
-            {
-                if (kvp.Value.Count <= 1)
-                {
-                    continue;
-                }
-
-                foreach (NodeId dup in kvp.Value)
-                    result.Add(Severity.Warning, $"Duplicate node name '{kvp.Key}'.", dup);
-            }
+            if (!visited.Contains(node.Index))
+                result.Add(Severity.Warning, "Node is unreachable from Start.", node);
         }
-        else
+
+        // Duplicate names (case-sensitive by default)
+        Dictionary<string, List<NodeId>> byName = new();
+        foreach (NodeId node in all)
         {
-            // Cannot check unreachable/duplicates without AllNodes
-            result.Add(Severity.Info, "Skipped unreachable/duplicate-name checks (AllNodes not provided).",
-                NodeId.Default);
+            string name = node.Name;
+            if (string.IsNullOrEmpty(name)) continue;
+            if (!byName.TryGetValue(name, out List<NodeId>? list))
+                byName[name] = list = new List<NodeId>(2);
+            list.Add(node);
+        }
+
+        foreach (KeyValuePair<string, List<NodeId>> kvp in byName)
+        {
+            if (kvp.Value.Count <= 1)
+            {
+                continue;
+            }
+
+            foreach (NodeId dup in kvp.Value)
+                result.Add(Severity.Warning, $"Duplicate node name '{kvp.Key}'.", dup);
         }
 
         // 6) Blackboard schema declarations: lint-only — binding stays permissive at runtime.
         ValidateBlackboardDeclarations(graph, result);
 
         return result;
+    }
+
+    /// <summary>
+    /// Derives the full node-id list from the graph's dense node array (names were applied at
+    /// <c>Build()</c>). Null slots are skipped defensively — hand-constructed graphs can carry
+    /// holes the builder never produces.
+    /// </summary>
+    private static IReadOnlyList<NodeId> CollectAllNodeIds(Graph graph)
+    {
+        List<NodeId> ids = new(graph.NodeCount);
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (graph.TryGetNodeByIndex(i, out INode? node) && node is not null)
+            {
+                ids.Add(node.Id);
+            }
+        }
+
+        return ids;
     }
 
     private static void ValidateUids(Graph graph, GraphValidationResult result)

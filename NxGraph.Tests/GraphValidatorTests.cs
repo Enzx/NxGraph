@@ -124,8 +124,10 @@ public class GraphValidatorTests
     }
 
     [Test]
-    public void MissingAllNodes_ShouldEmitInfo_AndStillValidateReachablePart()
+    public void MissingAllNodes_IsCompleteByDefault_AndEmitsNoSkipInfo()
     {
+        // The validator derives the node set from the graph itself when AllNodes is absent,
+        // so the old "Skipped unreachable/duplicate-name checks" Info no longer exists.
         Graph graph = BuildSimpleGraph(out _);
         GraphValidationResult res = graph.Validate();
 
@@ -134,10 +136,73 @@ public class GraphValidatorTests
             Assert.That(
                 res.Diagnostics.Any(d =>
                     d.Severity == Severity.Info && d.Message.Contains("Skipped unreachable/duplicate-name checks",
-                        StringComparison.OrdinalIgnoreCase)), Is.True,
-                "Expected an info diagnostic when AllNodes is not provided.");
+                        StringComparison.OrdinalIgnoreCase)), Is.False,
+                "The skip Info must not appear — the default path derives AllNodes from the graph.");
 
             Assert.That(res.HasErrors, Is.False, "Lack of AllNodes should not produce validation errors.");
+        });
+    }
+
+    [Test]
+    public void Validate_WithoutOptions_ReportsUnreachableNodes_AndDuplicateNames()
+    {
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId reached = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId unreachable = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        builder.SetName(reached, "A");
+        builder.SetName(unreachable, "A"); // duplicate name on the unreachable node
+        builder.AddTransition(start, reached);
+
+        Graph graph = builder.Build(throwOnError: false);
+
+        GraphValidationResult res = graph.Validate(); // no options at all
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                res.Diagnostics.Any(d =>
+                    d.Severity == Severity.Warning && d.Node.Index == unreachable.Index &&
+                    d.Message.Contains("unreachable", StringComparison.OrdinalIgnoreCase)), Is.True,
+                "Standalone Validate() must flag the unreachable node.");
+            Assert.That(
+                res.Diagnostics.Count(d =>
+                    d.Severity == Severity.Warning &&
+                    d.Message.Contains("Duplicate node name 'A'", StringComparison.Ordinal)), Is.EqualTo(2),
+                "Standalone Validate() must flag both holders of the duplicate name.");
+        });
+    }
+
+    [Test]
+    public void SuppliedAllNodes_OverridesTheDerivedSet()
+    {
+        // Back-compat contract: an explicitly supplied AllNodes list is honored verbatim —
+        // here it contains an id the graph does not know, which must surface as unreachable.
+        Graph graph = BuildSimpleGraph(out GraphBuilder builder);
+        List<NodeId> supplied = [..builder.GetAllNodeIds()!, new NodeId(99, "Phantom")];
+
+        GraphValidationResult res = graph.Validate(new GraphValidationOptions { AllNodes = supplied });
+
+        Assert.That(
+            res.Diagnostics.Any(d =>
+                d.Severity == Severity.Warning && d.Node.Index == 99 &&
+                d.Message.Contains("unreachable", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "A supplied AllNodes list must be used instead of the graph-derived set.");
+    }
+
+    [Test]
+    public void GetAllNodeIds_SingleNodeGraph_ReturnsStart()
+    {
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+
+        IReadOnlyList<NodeId>? ids = builder.GetAllNodeIds();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ids, Is.Not.Null, "A builder holding only the start node must not return null.");
+            Assert.That(ids, Has.Count.EqualTo(1));
+            Assert.That(ids![0].Index, Is.EqualTo(start.Index));
         });
     }
 
