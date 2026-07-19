@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using MessagePack;
@@ -145,6 +146,17 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 $"GraphDto: JSON payload version {dto.Version} is newer than serializer version {SerializationVersion.Version}.");
         }
 
+        // A version-stripped payload must not pass as current: GraphDto.Version defaults to 0
+        // (not the current version) precisely so a JSON payload with no "version" property is
+        // detectable here. The writer always emits one — only malformed or hand-crafted
+        // payloads reach this throw.
+        if (dto.Version <= 0)
+        {
+            throw new InvalidOperationException(
+                "GraphDto: JSON payload carries no version (or a non-positive one); a graph payload " +
+                "must declare the serializer version it was written with.");
+        }
+
         return FromDto(dto);
     }
 
@@ -176,10 +188,6 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         {
             throw new InvalidOperationException(
                 $"Subgraph nesting exceeded MaxSubGraphDepth ({MaxSubGraphDepth}) while serializing.");
-        }
-        if (_codec is NullLogicCodec)
-        {
-            throw new InvalidOperationException("No ILogicCodec configured in GraphSerializer.");
         }
 
         int transitionCount = graph.TransitionCount;
@@ -386,13 +394,24 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                                 "reconstruction recipe; the serializer recurses into its SubGraphs itself.");
                         }
 
-                        List<GraphDto> childDtos = [];
+                        List<Graph> containerChildren = [];
                         foreach (Graph childGraph in container.SubGraphs)
                         {
-                            childDtos.Add(ToDto(childGraph, depth + 1));
+                            containerChildren.Add(childGraph);
                         }
 
-                        containers.Add(new ContainerDto(index, childDtos.ToArray()));
+                        // DEBUG-only contract check: SubGraphs must enumerate in a stable,
+                        // deterministic order (wire order is reconstruction identity for
+                        // containers). Release builds skip the second enumeration.
+                        AssertStableSubGraphOrder(container, containerChildren);
+
+                        GraphDto[] childDtos = new GraphDto[containerChildren.Count];
+                        for (int c = 0; c < childDtos.Length; c++)
+                        {
+                            childDtos[c] = ToDto(containerChildren[c], depth + 1);
+                        }
+
+                        containers.Add(new ContainerDto(index, childDtos));
                         nodes[index] = _containerCodec switch
                         {
                             IContainerCodec<string> t => new NodeTextDto(index, node.Id.Name,
@@ -494,7 +513,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
             outcomeCodes, outcomeNames, composites.ToArray(), uids, forks.ToArray(), joins.ToArray(),
-            containers.ToArray(), eventEntries.ToArray(), behaviors.ToArray());
+            containers.ToArray(), eventEntries.ToArray(), behaviors.ToArray())
+        {
+            // The writer stamps the version explicitly: GraphDto.Version defaults to 0
+            // ("no version seen") so that version-stripped payloads are detectable on read.
+            Version = SerializationVersion.Version
+        };
     }
 
     /// <summary>
@@ -625,6 +649,17 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 $"GraphDto: payload version {dto.Version} is newer than serializer version {SerializationVersion.Version}.");
         }
 
+        // The floor is gated per level too: a nested JSON graph with its "version" stripped
+        // deserializes as 0 (GraphDto's default) and must be rejected here, not read as if
+        // it were current. MessagePack payloads always carry a positional version, so only
+        // crafted ones can reach this with a non-positive value.
+        if (dto.Version <= 0)
+        {
+            throw new InvalidOperationException(
+                "GraphDto: payload carries no version (or a non-positive one); a graph payload " +
+                "must declare the serializer version it was written with.");
+        }
+
         int nodesLength = dto.Nodes.Length;
         if (nodesLength == 0) throw new InvalidOperationException("GraphDto must contain at least one node.");
 
@@ -634,10 +669,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         // Owner indices of subgraph payloads, resolved up front: a node is only treated as a
         // nested-machine marker when a SubGraphDto actually claims it. This kills the in-band
         // collision where a codec legitimately emits the marker string for ordinary logic.
+        // Duplicate claims throw like every sibling section — the old silent HashSet dedup
+        // let the second payload overwrite the first in the rebuild pass.
         HashSet<int>? subGraphOwners = null;
         foreach (SubGraphDto subDto in dto.SubGraphs)
         {
-            (subGraphOwners ??= []).Add(subDto.OwnerIndex);
+            if (!(subGraphOwners ??= []).Add(subDto.OwnerIndex))
+                throw new InvalidOperationException(
+                    $"Subgraph DTO owner index {subDto.OwnerIndex} is duplicated in the payload.");
         }
 
         // Same claim-first defense for the v4 composite section: composite markers are only
@@ -729,6 +768,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             if (slotFilled[nodeDto.Index])
                 throw new InvalidOperationException(
                     $"Node DTO index {nodeDto.Index} is duplicated in the payload.");
+            // Canonical order: logic is installed at nodes[nodeDto.Index], but the rebuild
+            // passes below re-read node names positionally (dto.Nodes[ownerIndex]) — requiring
+            // Nodes[i].Index == i makes those positional lookups sound. The shipped writer
+            // always emits canonical order; only hand-edited or crafted payloads differ.
+            if (nodeDto.Index != index)
+                throw new InvalidOperationException(
+                    $"Node DTO at position {index} declares index {nodeDto.Index}; node entries must appear " +
+                    "in canonical order (Nodes[i].Index == i).");
 
             switch (nodeDto)
             {
@@ -884,7 +931,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Subgraph DTO owner index {subDto.OwnerIndex} does not reference a state-machine marker node.");
 
             Graph childGraph = FromDto(subDto.Graph, depth + 1);
-            ownerToSubGraph[subDto.OwnerIndex] = childGraph;
+            // Defense in depth: the claims pass above already rejects duplicate owners, so an
+            // overwrite here is unreachable — but the old indexer-assign silently dropped the
+            // first child, and this loop must never regress to that.
+            if (!ownerToSubGraph.TryAdd(subDto.OwnerIndex, childGraph))
+                throw new InvalidOperationException(
+                    $"Subgraph DTO owner index {subDto.OwnerIndex} is duplicated in the payload.");
         }
 
         for (int i = 0; i < nodesLength; i++)
@@ -1303,9 +1355,46 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     /// In-memory placeholder for container-claimed nodes between the node loop and the
     /// container rebuild pass (children rebuild first). Purely internal — unlike the
     /// composite markers it never rides the wire, because container claims are markerless.
+    /// Index -15 is the next free slot after <see cref="NodeId.AsyncBehaviorStateMarker"/>
+    /// (-14): NodeId equality is index-only, so the sentinel space must stay collision-free
+    /// even though this placeholder is only ever compared by reference.
     /// </summary>
     private static readonly LogicNode ContainerPlaceholderMarker =
-        new(new NodeId(-12, "ContainerPlaceholder"), new EmptyAsyncLogic());
+        new(new NodeId(-15, "ContainerPlaceholder"), new EmptyAsyncLogic());
+
+    /// <summary>
+    /// DEBUG-only check of the container ordering contract: <see cref="ISubGraphProvider.SubGraphs"/>
+    /// must yield an identical sequence on every enumeration — wire order is reconstruction
+    /// identity ("SubGraphs enumeration order = wire order = Deserialize children order"), and a
+    /// container backed by an unordered collection corrupts its rebuilt children silently.
+    /// Release builds compile the call out; the contract itself is documented on
+    /// <see cref="ISubGraphProvider"/> and <c>IContainerCodec&lt;TWire&gt;</c>.
+    /// </summary>
+    [Conditional("DEBUG")]
+    private static void AssertStableSubGraphOrder(ISubGraphProvider container, List<Graph> firstPass)
+    {
+        int position = 0;
+        foreach (Graph childGraph in container.SubGraphs)
+        {
+            if (position >= firstPass.Count || !ReferenceEquals(firstPass[position], childGraph))
+            {
+                throw new InvalidOperationException(
+                    $"Container '{container.GetType().Name}' yielded a different SubGraphs sequence on a " +
+                    "second enumeration. SubGraphs must enumerate in a stable, deterministic order — the " +
+                    "serializer's wire order and the agent/blackboard walks depend on it.");
+            }
+
+            position++;
+        }
+
+        if (position != firstPass.Count)
+        {
+            throw new InvalidOperationException(
+                $"Container '{container.GetType().Name}' yielded a different SubGraphs count on a second " +
+                "enumeration. SubGraphs must enumerate in a stable, deterministic order — the serializer's " +
+                "wire order and the agent/blackboard walks depend on it.");
+        }
+    }
 
     /// <summary>
     /// Maps a payload selector key back to the registered delegate. The registry restores

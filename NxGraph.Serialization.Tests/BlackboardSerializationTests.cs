@@ -307,6 +307,122 @@ public class BlackboardSerializationTests
     }
 
     [Test]
+    public async Task skip_restore_that_stages_nothing_leaves_live_values_untouched()
+    {
+        // The header matches but every payload entry mismatches (value type changed): under
+        // Skip the restore stages zero entries and must leave the board untouched — wiping
+        // live values to defaults while applying no payload data would be pure data loss,
+        // the same conclusion as a header mismatch.
+        BlackboardSchema saved = NewSchema();
+        BlackboardKey<int> savedScore = saved.Register<int>("score");
+        Blackboard source = new(saved);
+        source.Set(savedScore, 9);
+
+        BlackboardSchema live = NewSchema();
+        BlackboardKey<string> liveScore = live.Register<string>("score", "default");
+
+        await using (MemoryStream jsonStream = await SaveJson(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveScore, "live");
+            await _serializer.RestoreFromJsonAsync(target, jsonStream, BlackboardMismatchPolicy.Skip);
+            Assert.That(target.Get(liveScore), Is.EqualTo("live"),
+                "A JSON Skip restore that applies nothing must leave live values untouched.");
+        }
+
+        await using (MemoryStream binaryStream = await SaveBinary(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveScore, "live");
+            await _serializer.RestoreFromBinaryAsync(target, binaryStream, BlackboardMismatchPolicy.Skip);
+            Assert.That(target.Get(liveScore), Is.EqualTo("live"),
+                "A binary Skip restore that applies nothing must leave live values untouched.");
+        }
+    }
+
+    [Test]
+    public async Task entryless_payload_no_ops_under_skip_and_restores_defaults_under_strict()
+    {
+        // A legitimately entry-less payload (saved from a schema with zero keys). Codified
+        // rule: Skip mutates the target only when at least one entry stages, so it no-ops;
+        // Strict has nothing to mismatch and keeps the documented "defaults + payload"
+        // post-state — all defaults.
+        BlackboardSchema saved = NewSchema(); // zero keys registered
+        Blackboard source = new(saved);
+
+        BlackboardSchema live = NewSchema();
+        BlackboardKey<int> liveKey = live.Register<int>("value", 100);
+
+        await using (MemoryStream jsonSkip = await SaveJson(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveKey, 55);
+            await _serializer.RestoreFromJsonAsync(target, jsonSkip, BlackboardMismatchPolicy.Skip);
+            Assert.That(target.Get(liveKey), Is.EqualTo(55),
+                "Skip: an entry-less payload stages nothing and must not touch the board (JSON).");
+        }
+
+        await using (MemoryStream binarySkip = await SaveBinary(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveKey, 55);
+            await _serializer.RestoreFromBinaryAsync(target, binarySkip, BlackboardMismatchPolicy.Skip);
+            Assert.That(target.Get(liveKey), Is.EqualTo(55),
+                "Skip: an entry-less payload stages nothing and must not touch the board (binary).");
+        }
+
+        await using (MemoryStream jsonStrict = await SaveJson(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveKey, 55);
+            await _serializer.RestoreFromJsonAsync(target, jsonStrict);
+            Assert.That(target.Get(liveKey), Is.EqualTo(100),
+                "Strict: defaults + payload — an entry-less payload restores all defaults (JSON).");
+        }
+
+        await using (MemoryStream binaryStrict = await SaveBinary(_serializer, source))
+        {
+            Blackboard target = new(live);
+            target.Set(liveKey, 55);
+            await _serializer.RestoreFromBinaryAsync(target, binaryStrict);
+            Assert.That(target.Get(liveKey), Is.EqualTo(100),
+                "Strict: defaults + payload — an entry-less payload restores all defaults (binary).");
+        }
+    }
+
+    [Test]
+    public async Task skip_partial_match_still_resets_unmatched_live_keys_to_defaults()
+    {
+        // With at least one staged entry, Skip keeps the documented reset-then-apply
+        // semantics: post-state is defaults + the matching subset, so live values on keys
+        // the payload cannot restore land back on their registered defaults.
+        BlackboardSchema saved = NewSchema();
+        BlackboardKey<int> savedKept = saved.Register<int>("kept");
+        saved.Register<int>("removed");
+
+        Blackboard source = new(saved);
+        source.Set(savedKept, 5);
+
+        BlackboardSchema live = NewSchema();
+        BlackboardKey<int> liveKept = live.Register<int>("kept");
+        BlackboardKey<int> liveOther = live.Register<int>("other", 7);
+
+        await using MemoryStream stream = await SaveJson(_serializer, source);
+        Blackboard target = new(live);
+        target.Set(liveKept, 111);
+        target.Set(liveOther, 222);
+        await _serializer.RestoreFromJsonAsync(target, stream, BlackboardMismatchPolicy.Skip);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(target.Get(liveKept), Is.EqualTo(5), "The matching subset restores.");
+            Assert.That(target.Get(liveOther), Is.EqualTo(7),
+                "Keys outside the staged subset land on their defaults — reset-then-apply is " +
+                "unchanged once at least one entry stages.");
+        });
+    }
+
+    [Test]
     public void newer_payload_version_is_rejected()
     {
         BlackboardSchema schema = NewSchema();
