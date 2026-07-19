@@ -652,6 +652,8 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
         try
         {
+            ExecutionStatusValidation.ThrowIfUndefined(snapshot.Status);
+
             if (snapshot.Status is ExecutionStatus.Starting or ExecutionStatus.Transitioning
                 or ExecutionStatus.Resetting)
             {

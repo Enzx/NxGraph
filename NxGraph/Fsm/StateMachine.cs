@@ -387,14 +387,24 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             case ExecutionStatus.Running:
             case ExecutionStatus.Transitioning:
             case ExecutionStatus.Starting:
+                // The gate is deliberately left alone here: a mid-run RoundPerTick machine
+                // legitimately holds it between ticks.
                 throw new InvalidOperationException("Cannot reset while starting, running, or transitioning.");
             case ExecutionStatus.Created:
             case ExecutionStatus.Ready:
+                // Defensive gate release: under correct operation the gate is never held at
+                // these statuses, so this is belt-and-braces against an enter-path throw
+                // leaking it — Reset() must never report Success on a machine that would
+                // still refuse to execute.
+                _executeGate = false;
+                return Result.Success;
+            case ExecutionStatus.Resetting:
+                // Another reset is already in flight — be idempotent rather than firing
+                // duplicate notifications. Mirrors AsyncStateMachine.ResetCore.
                 return Result.Success;
             case ExecutionStatus.Completed:
             case ExecutionStatus.Failed:
             case ExecutionStatus.Cancelled:
-            case ExecutionStatus.Resetting:
                 break;
             default:
                 throw new IndexOutOfRangeException(nameof(status));
@@ -451,6 +461,8 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         {
             throw new InvalidOperationException("Cannot resume from inside node logic.");
         }
+
+        ExecutionStatusValidation.ThrowIfUndefined(snapshot.Status);
 
         if (snapshot.Status is ExecutionStatus.Starting or ExecutionStatus.Transitioning
             or ExecutionStatus.Resetting)
@@ -571,18 +583,47 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
         _executeGate = true;
 
-        // Re-stamp this machine's context onto the (potentially shared) graph before running.
-        ApplyExecutionContext();
-        StampPendingEntry();
+        // Everything after the gate acquisition can throw (ApplyExecutionContext's stamp-time
+        // validation, and observer callbacks firing from TransitionTo/OnStateEntered — observer
+        // exceptions bubble by design). State.Execute's enter-catch resets HasEntered but knows
+        // nothing about the gate, so the gate must be released here or the machine is
+        // permanently locked. Mirrors AsyncStateMachine.OnEnterAsync.
+        try
+        {
+            // Re-stamp this machine's context onto the (potentially shared) graph before running.
+            ApplyExecutionContext();
+            StampPendingEntry();
 
-        TransitionTo(ExecutionStatus.Starting);
-        _current = _initial;
-        _attempts = 0;
-        _nodeEntered = false;
-        _nodeBoard?.ResetToDefaults();
-        LastOutcome = 0;
-        _observer?.OnStateEntered(_current);
-        TransitionTo(ExecutionStatus.Running);
+            TransitionTo(ExecutionStatus.Starting);
+            _current = _initial;
+            _attempts = 0;
+            _nodeEntered = false;
+            _nodeBoard?.ResetToDefaults();
+            LastOutcome = 0;
+            _observer?.OnStateEntered(_current);
+            TransitionTo(ExecutionStatus.Running);
+        }
+        catch
+        {
+            RepairTransientStatus();
+            _executeGate = false;
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// If an observer threw while the machine was in a transient status (Starting/Resetting/
+    /// Transitioning), restore Ready without notifications so the machine stays usable —
+    /// Suspend/Reset reject transient statuses and a redundant re-transition would trip the
+    /// debug assert in <see cref="TransitionTo"/>.
+    /// </summary>
+    private void RepairTransientStatus()
+    {
+        ExecutionStatus status = _status;
+        if (status is ExecutionStatus.Starting or ExecutionStatus.Resetting or ExecutionStatus.Transitioning)
+        {
+            _status = ExecutionStatus.Ready;
+        }
     }
 
     protected override Result OnRun()
