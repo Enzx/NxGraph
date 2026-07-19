@@ -825,6 +825,14 @@ public class AsyncTokenMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         if (reporter is not null)
         {
             reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
+
+            // Sync states read both slots (State.Log prefers the sync one), so the sync slot
+            // is cleared too — a callback left by a sync machine that ran this shared graph
+            // earlier must neither shadow this machine's observer nor receive its reports.
+            if (reporter is State syncState)
+            {
+                syncState.SyncLogReport = null;
+            }
         }
 
         if (!t.NodeEntered)

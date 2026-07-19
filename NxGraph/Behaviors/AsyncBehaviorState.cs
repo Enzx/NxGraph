@@ -68,7 +68,7 @@ public sealed class AsyncBehaviorState : AsyncState, IBehaviorComposite, IBehavi
     {
         if (LogReport is { } report)
         {
-            BehaviorComposition.Await(report(message, _reportCt));
+            ValueTaskSync.Await(report(message, _reportCt));
         }
     }
 }
@@ -141,7 +141,7 @@ public sealed class AsyncBehaviorState<TAgent> : AsyncState<TAgent>, IBehaviorCo
     {
         if (LogReport is { } report)
         {
-            BehaviorComposition.Await(report(message, _reportCt));
+            ValueTaskSync.Await(report(message, _reportCt));
         }
     }
 }
