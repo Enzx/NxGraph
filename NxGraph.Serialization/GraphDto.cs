@@ -36,12 +36,14 @@ internal sealed class GraphDto
     }
 
     /// <summary>
-    /// Serialized payload version. Defaults to <see cref="SerializationVersion.Version"/> for
-    /// freshly-constructed DTOs so the JSON/MessagePack writers emit a version on the wire,
-    /// and is overwritten by the deserializer when reading an existing payload so callers can
-    /// detect version mismatches.
+    /// Serialized payload version. Defaults to <c>0</c> ("no version seen"): the writer stamps
+    /// <see cref="SerializationVersion.Version"/> explicitly when building a payload
+    /// (<c>GraphSerializer.ToDto</c>), and the readers overwrite it with the payload's value.
+    /// Defaulting to the current version instead would make a JSON payload with its
+    /// <c>version</c> property stripped indistinguishable from a current one and sail past the
+    /// read-path version gates; <c>0</c> makes it detectable and rejectable.
     /// </summary>
-    public int Version { get; set; } = SerializationVersion.Version;
+    public int Version { get; set; }
 
     public INodeDto[] Nodes { get; set; }
     public TransitionDto[] Transitions { get; set; }

@@ -87,7 +87,7 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
         // a payload missing "values" would otherwise surface as a NullReferenceException.
         if (dto.Values is null)
         {
-            throw new InvalidOperationException("Failed to parse Blackboard JSON.");
+            throw new InvalidOperationException("Blackboard JSON payload has no 'values' array.");
         }
 
         if (dto.Version > PayloadVersion)
@@ -109,7 +109,8 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
         {
             if (entry.Key is null)
             {
-                throw new InvalidOperationException("Failed to parse Blackboard JSON.");
+                throw new InvalidOperationException(
+                    "Blackboard JSON payload contains an entry with a null key.");
             }
 
             if (!TryMatchEntry(target, entry.Key, entry.Type, policy, out BlackboardKeyDescriptor? descriptor))
@@ -130,6 +131,17 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
             }
 
             staged.Add((descriptor!, value));
+        }
+
+        // Skip data safety: a restore that staged nothing must not zero the board. Either
+        // every payload entry was skipped (all unknown or type-changed) or the payload was
+        // legitimately entry-less — both mean "no data for this schema", the same conclusion
+        // as a header mismatch, so the target keeps its live values. Strict reaches this
+        // point with an empty staged set only for an entry-less payload (it throws on the
+        // first mismatch otherwise) and keeps the documented defaults + payload post-state.
+        if (policy == BlackboardMismatchPolicy.Skip && staged.Count == 0)
+        {
+            return;
         }
 
         // Deterministic post-state: defaults + payload. Keys absent from the payload land on
@@ -268,6 +280,13 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
             reader.Skip(); // forward compatibility: ignore future header elements
         }
 
+        // Skip data safety, mirroring the JSON path: zero staged entries — all skipped or an
+        // entry-less payload — leave the target untouched instead of zeroing it to defaults.
+        if (policy == BlackboardMismatchPolicy.Skip && staged.Count == 0)
+        {
+            return;
+        }
+
         target.ResetToDefaults();
         foreach ((BlackboardKeyDescriptor descriptor, object? value) in staged)
         {
@@ -280,6 +299,15 @@ public sealed class BlackboardSerializer : IBlackboardJsonSerializer, IBlackboar
     /// <summary>
     /// Verifies the payload header against the live schema. Returns <see langword="false"/>
     /// to skip the whole restore (Skip policy); throws under Strict.
+    /// <para>
+    /// Null-name wildcard (intended): the name check only fires when <b>both</b> sides are
+    /// named — a <see langword="null"/> schema name on either side matches anything, and scope
+    /// alone decides. Unnamed schemas are common (the name is optional presentation data), so
+    /// an unnamed board accepts payloads saved from named schemas and vice versa; tightening
+    /// this to a mismatch would make naming a previously unnamed schema break every existing
+    /// payload. Scope must always match exactly, and per-entry key/type verification still
+    /// applies either way.
+    /// </para>
     /// </summary>
     private static bool HeaderMatches(Blackboard target, string? payloadSchemaName, int payloadScope,
         BlackboardMismatchPolicy policy)

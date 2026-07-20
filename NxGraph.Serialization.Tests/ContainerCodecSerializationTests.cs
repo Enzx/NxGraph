@@ -474,4 +474,55 @@ public class ContainerCodecSerializationTests
         public string Serialize(ISubGraphProvider container) => "null";
         public IAsyncLogic Deserialize(string payload, IReadOnlyList<Graph> children) => null!;
     }
+
+#if DEBUG
+    /// <summary>
+    /// Deliberately violates the SubGraphs ordering contract: every enumeration alternates
+    /// between forward and reversed child order, so any two consecutive enumerations differ
+    /// (an unordered backing collection would misbehave the same way). Alternation — rather
+    /// than "reverse from the second enumeration on" — keeps the violation visible no matter
+    /// how many times validation walked SubGraphs before the serializer does.
+    /// </summary>
+    private sealed class UnstableOrderContainer(params Graph[] children) : IAsyncLogic, ISubGraphProvider
+    {
+        private int _enumerations;
+
+        public IEnumerable<Graph> SubGraphs
+        {
+            get
+            {
+                bool reverse = _enumerations++ % 2 == 1;
+                for (int i = 0; i < children.Length; i++)
+                {
+                    yield return children[reverse ? children.Length - 1 - i : i];
+                }
+            }
+        }
+
+        public ValueTask<Result> ExecuteAsync(CancellationToken ct = default) => ResultHelpers.Success;
+    }
+
+    [Test]
+    public void Unstable_subgraph_enumeration_order_is_caught_by_the_debug_check()
+    {
+        // DEBUG builds double-enumerate SubGraphs in the serializer's container path and fail
+        // loud on an unstable sequence — wire order is reconstruction identity, so an
+        // unordered backing collection would otherwise corrupt the rebuilt children silently.
+        // (Release builds compile the check out; this test only exists in DEBUG.)
+        RegistryCodec codec = new();
+        Graph c0 = GraphBuilder
+            .StartWithAsync(codec.Register("c0", new KeyedState("c0", () => Result.Success)))
+            .Build();
+        Graph c1 = GraphBuilder
+            .StartWithAsync(codec.Register("c1", new KeyedState("c1", () => Result.Success)))
+            .Build();
+        Graph parent = GraphBuilder
+            .StartWithAsync(new UnstableOrderContainer(c0, c1))
+            .Build();
+
+        InvalidOperationException? ex = Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await SerializerWith(codec).ToJsonAsync(parent, new MemoryStream()));
+        Assert.That(ex!.Message, Does.Contain("stable, deterministic order"));
+    }
+#endif
 }

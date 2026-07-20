@@ -20,7 +20,10 @@ public interface IContainerCodec;
 /// Order contract (normative): <see cref="ISubGraphProvider.SubGraphs"/> enumeration order
 /// = wire order = the <c>children</c> order passed to
 /// <see cref="Deserialize"/> — order is identity, exactly as region order is for
-/// <c>RegionMask</c> bits. The rebuilt container must surface the <b>new</b>
+/// <c>RegionMask</c> bits. This leans on the hard <see cref="ISubGraphProvider.SubGraphs"/>
+/// requirement that enumeration is stable and deterministic (identical sequence every time);
+/// a container backed by an unordered collection corrupts reconstruction silently, and the
+/// graph serializer verifies the requirement in DEBUG builds with a second enumeration. The rebuilt container must surface the <b>new</b>
 /// <see cref="Graph"/> instances via its own <c>SubGraphs</c> and keep
 /// <c>IBlackboardSettable</c> forwarding — those walks are what agent stamping and
 /// blackboard binding reach (the standing user-container contract). A container that hides

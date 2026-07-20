@@ -64,6 +64,13 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         {
             case > SerializationVersion.Version:
                 throw new InvalidOperationException($"GraphDto: version {version} is not supported.");
+            // The writer always emits a positive version (the field is positional), so a
+            // non-positive one is a crafted or corrupt payload. Rejecting it here also keeps
+            // the per-version minimum-count checks below exhaustive.
+            case <= 0:
+                throw new InvalidOperationException(
+                    "GraphDto: payload carries no version (or a non-positive one); a graph payload " +
+                    "must declare the serializer version it was written with.");
             case 1 when count < VersionOneHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionOneHeaderCount} elements, got {count}");
@@ -96,6 +103,10 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         SubGraphDto[] subGraphs =
             options.Resolver.GetFormatterWithVerify<SubGraphDto[]>().Deserialize(ref reader, options);
 
+        // Elements consumed so far; every conditional block below adds what it reads, and the
+        // drain loop at the end skips whatever the header declared beyond the known shape.
+        int consumed = VersionOneHeaderCount;
+
         // Version-1 payloads end after SubGraphs; retry policies and outcomes arrived with version 2.
         RetryPolicyDto[] retryPolicies = [];
         OutcomeCodeDto[] outcomeCodes = [];
@@ -108,6 +119,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
                 .Deserialize(ref reader, options);
             outcomeNames = options.Resolver.GetFormatterWithVerify<OutcomeNameDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionTwoHeaderCount;
         }
 
         // Pre-v4 payloads end after OutcomeNames; the composite section arrived with version 4.
@@ -116,6 +128,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         {
             composites = options.Resolver.GetFormatterWithVerify<CompositeDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionFourHeaderCount;
         }
 
         // Pre-v5 payloads end after Composites; the uid section arrived with version 5.
@@ -124,6 +137,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         {
             uids = options.Resolver.GetFormatterWithVerify<UidDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionFiveHeaderCount;
         }
 
         // Pre-v6 payloads end after Uids; forks, joins, and containers arrived with version 6.
@@ -138,6 +152,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
                 .Deserialize(ref reader, options);
             containers = options.Resolver.GetFormatterWithVerify<ContainerDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionSixHeaderCount;
         }
 
         // Pre-v7 payloads end after Containers; the event entry section arrived with version 7.
@@ -146,6 +161,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         {
             eventEntries = options.Resolver.GetFormatterWithVerify<EventEntryDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionSevenHeaderCount;
         }
 
         // Pre-v8 payloads end after EventEntries; the behavior section arrived with version 8.
@@ -154,6 +170,18 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         {
             behaviors = options.Resolver.GetFormatterWithVerify<BehaviorDto[]>()
                 .Deserialize(ref reader, options);
+            consumed = VersionEightHeaderCount;
+        }
+
+        // Drain any trailing elements beyond the known shape so the reader always ends
+        // positioned after this array — a nested read that under-consumes desyncs every
+        // subsequent read of its parent. The version gate rejects newer payloads, so extras
+        // only come from crafted or corrupt input today (BlackboardSerializer's per-entry and
+        // header drains are the same defense); this is also the prerequisite for any future
+        // "minor additions without a version bump" policy.
+        for (int extra = consumed; extra < count; extra++)
+        {
+            reader.Skip();
         }
 
         reader.Depth--;

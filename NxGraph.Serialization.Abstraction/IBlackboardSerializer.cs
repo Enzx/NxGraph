@@ -16,7 +16,15 @@ public enum BlackboardMismatchPolicy
     Strict = 0,
 
     /// <summary>
-    /// Skip entries that don't fit the schema (schema evolution). Corrupt values still throw.
+    /// Skip entries that don't fit the schema (schema evolution): the matching subset is
+    /// restored over defaults, mismatched entries are dropped. Corrupt values still throw.
+    /// <para>
+    /// Data safety: a restore that would apply <b>zero</b> entries — mismatched header, every
+    /// entry skipped, or an entry-less payload — leaves the target board completely untouched
+    /// (live values preserved). Skip never resets a board to defaults without restoring at
+    /// least one value; the documented "defaults + payload" post-state applies only once at
+    /// least one payload entry matches the live schema.
+    /// </para>
     /// </summary>
     Skip = 1,
 }
