@@ -42,3 +42,36 @@ public enum ExecutionStatus : byte
     /// </summary>
     Ready // reset done; equivalent to Created, but AFTER the first run
 }
+
+/// <summary>
+/// Shared lifecycle-hardening checks for <see cref="ExecutionStatus"/> values that enter a
+/// machine from the outside (deserialized snapshots), used by every machine's <c>Resume</c>.
+/// </summary>
+internal static class ExecutionStatusValidation
+{
+    /// <summary>
+    /// Rejects status values that are not defined <see cref="ExecutionStatus"/> members, so a
+    /// corrupted or hand-crafted snapshot fails loudly instead of writing an undefined value
+    /// into a machine's status field. Implemented as a plain switch over the defined members —
+    /// not <see cref="Enum.IsDefined(Type, object)"/>, which boxes on netstandard2.1.
+    /// </summary>
+    internal static void ThrowIfUndefined(ExecutionStatus status)
+    {
+        switch (status)
+        {
+            case ExecutionStatus.Created:
+            case ExecutionStatus.Starting:
+            case ExecutionStatus.Running:
+            case ExecutionStatus.Transitioning:
+            case ExecutionStatus.Completed:
+            case ExecutionStatus.Failed:
+            case ExecutionStatus.Cancelled:
+            case ExecutionStatus.Resetting:
+            case ExecutionStatus.Ready:
+                return;
+            default:
+                throw new InvalidOperationException(
+                    $"Snapshot status value {(int)status} is not a defined ExecutionStatus");
+        }
+    }
+}

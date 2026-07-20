@@ -218,6 +218,22 @@ public class TokenSnapshotTests
     }
 
     [Test]
+    public void resume_rejects_undefined_status_value([Values] bool sync)
+    {
+        // A corrupted or hand-crafted snapshot must not write an undefined value into the
+        // machine's status field — every later status switch would misbehave silently.
+        // One parameterized test for both token runtimes: they share the snapshot contract.
+        Graph graph = GraphBuilder.StartWith(() => Result.Success).Build();
+        TokenMachineSnapshot bogus = new((ExecutionStatus)99, false, 0, [], []);
+
+        InvalidOperationException? ex = sync
+            ? Assert.Throws<InvalidOperationException>(() => graph.ToTokenMachine().Resume(bogus))
+            : Assert.Throws<InvalidOperationException>(() => graph.ToAsyncTokenMachine().Resume(bogus));
+
+        Assert.That(ex!.Message, Does.Contain("Snapshot status value 99 is not a defined ExecutionStatus"));
+    }
+
+    [Test]
     public void suspend_from_inside_node_logic_is_rejected()
     {
         TokenMachine? machineRef = null;

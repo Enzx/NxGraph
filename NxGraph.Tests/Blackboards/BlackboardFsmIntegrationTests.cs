@@ -597,6 +597,65 @@ public class BlackboardFsmIntegrationTests
             Is.True, "Expected a Warning about the conflicting child schema.");
     }
 
+    // ── Lifecycle hardening: stamp-time throws at run start ──────────────
+
+    [Test]
+    public void sync_stamp_time_throw_at_run_start_does_not_leak_the_execute_gate()
+    {
+        // A run-start throw can also happen before any status transition: OnEnter's
+        // ApplyExecutionContext re-stamps the machine's boards onto the graph, and a nested
+        // child validating a conflicting Graph-scoped schema throws with the status still
+        // Created. The run-start catch must release the execute gate (and Reset() clears it
+        // defensively on the Created/Ready path) so a corrected rebind can execute —
+        // previously the machine was permanently locked, every Execute() throwing
+        // "already executing" and Reset() returning Success without unlocking.
+        BlackboardSchema childSchema = new("child");
+        childSchema.Register<int>("x");
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success)
+            .WithSchema(childSchema)
+            .Build();
+
+        // The parent declares no Graph schema of its own, so a bound board is validated only
+        // by the nested child during the stamping walk.
+        Graph parent = GraphBuilder
+            .StartWith(() => Result.Success)
+            .SubGraph(ParallelStepMode.RunToJoin, child)
+            .Build();
+
+        StateMachine machine = parent.ToStateMachine();
+
+        BlackboardSchema wrongSchema = new("wrong");
+        wrongSchema.Register<int>("y");
+        // The bind-time stamp already walks into the child and hits the conflict; the board
+        // stays in the machine's context (bound before the walk), so run start re-throws.
+        Assert.Throws<InvalidOperationException>(() => machine.SetBlackboard(new Blackboard(wrongSchema)));
+
+        InvalidOperationException? ex = Assert.Throws<InvalidOperationException>(() => machine.Execute());
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("does not match"),
+                "The run-start throw is the schema conflict, not a leaked-gate 'already executing'.");
+            Assert.That(machine.Status, Is.EqualTo(ExecutionStatus.Created),
+                "The throw happened before any status transition.");
+        });
+
+        Assert.That(machine.Reset(), Is.EqualTo(Result.Success),
+            "Reset() on the Created/Ready path reports Success (and defensively clears the gate).");
+
+        // Correct the binding: a board with the child's declared schema stamps cleanly...
+        machine.SetBlackboard(new Blackboard(childSchema));
+
+        // ...and the machine executes to completion — the gate was not leaked.
+        Result result = Result.InProgress;
+        while (result == Result.InProgress)
+        {
+            result = machine.Execute();
+        }
+
+        Assert.That(result, Is.EqualTo(Result.Success));
+    }
+
     private sealed class RawLogic : IAsyncLogic
     {
         public ValueTask<Result> ExecuteAsync(CancellationToken ct = default) => ResultHelpers.Success;

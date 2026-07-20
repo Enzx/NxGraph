@@ -86,7 +86,7 @@ public interface IAsyncStateMachineObserver
         return default;
     }
 
-    ValueTask OnLogReport(NodeId nodeId, string message, CancellationToken ct)
+    ValueTask OnLogReport(NodeId nodeId, string message, CancellationToken ct = default)
     {
         return default;
     }

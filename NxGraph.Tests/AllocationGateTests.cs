@@ -729,6 +729,44 @@ public class AllocationGateTests
         AssertZeroAlloc(token.ToStateMachine(new NoopSyncObserver()));
     }
 
+    // ── Cross-runtime log-report bridge: State.Log under the async machine ──
+
+    /// <summary>A sync state that calls Log every run — the bridge's hot path.</summary>
+    private sealed class GateLoggingState : State
+    {
+        protected override Result OnRun()
+        {
+            Log("gate-log");
+            return Result.Success;
+        }
+    }
+
+    [Test]
+    public async Task async_sync_state_log_without_observer_is_allocation_free()
+    {
+        // Observer-less async machine: both report slots are wired null, so Log must cost
+        // exactly its two null checks.
+        Graph graph = GraphBuilder
+            .StartWith(new GateLoggingState())
+            .To(() => Result.Success)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public async Task async_sync_state_log_with_observer_is_allocation_free()
+    {
+        // Bridged delivery: Log falls back to the machine-wired async callback and waits it
+        // out on the completed-successfully fast path — no task materialization.
+        Graph graph = GraphBuilder
+            .StartWith(new GateLoggingState())
+            .To(() => Result.Success)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine(new NoopAsyncObserver()));
+    }
+
     // ── Event entry points (spec 013): typed raise + run ────────────────
 
     private readonly record struct GatePing(int Value);

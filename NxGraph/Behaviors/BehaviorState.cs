@@ -204,18 +204,7 @@ internal static class BehaviorComposition
 
         if (((ILogReporter)state).LogReport is { } asyncReport)
         {
-            Await(asyncReport(message, CancellationToken.None));
+            ValueTaskSync.Await(asyncReport(message, CancellationToken.None));
         }
-    }
-
-    internal static void Await(ValueTask task)
-    {
-        if (task.IsCompletedSuccessfully)
-        {
-            task.GetAwaiter().GetResult();
-            return;
-        }
-
-        task.AsTask().GetAwaiter().GetResult();
     }
 }

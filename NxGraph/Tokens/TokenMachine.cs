@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using NxGraph.Blackboards;
 using NxGraph.Compatibility;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -294,14 +295,24 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             case ExecutionStatus.Running:
             case ExecutionStatus.Transitioning:
             case ExecutionStatus.Starting:
+                // The gate is deliberately left alone here: a mid-run RoundPerTick machine
+                // legitimately holds it between ticks.
                 throw new InvalidOperationException("Cannot reset while starting, running, or transitioning.");
             case ExecutionStatus.Created:
             case ExecutionStatus.Ready:
+                // Defensive gate release: under correct operation the gate is never held at
+                // these statuses, so this is belt-and-braces against an enter-path throw
+                // leaking it — Reset() must never report Success on a machine that would
+                // still refuse to execute.
+                _executeGate = false;
+                return Result.Success;
+            case ExecutionStatus.Resetting:
+                // Another reset is already in flight — be idempotent rather than firing
+                // duplicate notifications. Mirrors AsyncTokenMachine.ResetCore.
                 return Result.Success;
             case ExecutionStatus.Completed:
             case ExecutionStatus.Failed:
             case ExecutionStatus.Cancelled:
-            case ExecutionStatus.Resetting:
                 break;
             default:
                 throw new IndexOutOfRangeException(nameof(status));
@@ -397,6 +408,8 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         {
             throw new InvalidOperationException("Cannot resume from inside node logic.");
         }
+
+        ExecutionStatusValidation.ThrowIfUndefined(snapshot.Status);
 
         if (snapshot.Status is ExecutionStatus.Starting or ExecutionStatus.Transitioning
             or ExecutionStatus.Resetting)
@@ -514,13 +527,28 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
         _executeGate = true;
 
-        // Re-stamp this machine's context onto the (potentially shared) graph before running.
-        ApplyExecutionContext();
+        // Everything after the gate acquisition can throw (ApplyExecutionContext's stamp-time
+        // validation, and observer callbacks firing from TransitionTo/OnTokenSpawned — observer
+        // exceptions bubble by design). State.Execute's enter-catch resets HasEntered but knows
+        // nothing about the gate, so the gate must be released here or the machine is
+        // permanently locked. Whatever ClearRunState/SpawnRootToken already did is left as-is —
+        // the next run start calls ClearRunState() again. Mirrors AsyncTokenMachine.OnEnterAsync.
+        try
+        {
+            // Re-stamp this machine's context onto the (potentially shared) graph before running.
+            ApplyExecutionContext();
 
-        TransitionTo(ExecutionStatus.Starting);
-        ClearRunState();
-        SpawnRootToken();
-        TransitionTo(ExecutionStatus.Running);
+            TransitionTo(ExecutionStatus.Starting);
+            ClearRunState();
+            SpawnRootToken();
+            TransitionTo(ExecutionStatus.Running);
+        }
+        catch
+        {
+            RepairTransientStatus();
+            _executeGate = false;
+            throw;
+        }
     }
 
     private void SpawnRootToken()
@@ -528,6 +556,15 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         Token root = Alloc();
         _observer?.OnTokenSpawned(root.Id, -1, Graph.StartNode.Id);
         ArriveAt(root, Graph.StartNode.Id.Index, 0);
+    }
+
+    private void RepairTransientStatus()
+    {
+        ExecutionStatus status = _status;
+        if (status is ExecutionStatus.Starting or ExecutionStatus.Resetting or ExecutionStatus.Transitioning)
+        {
+            _status = ExecutionStatus.Ready;
+        }
     }
 
     protected override Result OnRun()
@@ -688,6 +725,12 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         if (stateForLog is not null)
         {
             stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
+
+            // Both slots are machine-owned per visit: State.Log (and the behavior-composite
+            // report bridge) falls back to the async slot when the sync one is null, so a
+            // callback left by an async machine that ran this shared graph earlier must not
+            // receive reports from this run.
+            ((ILogReporter)stateForLog).LogReport = null;
         }
 
         ILogic syncLogic = logicNode.Logic!;

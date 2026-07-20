@@ -124,6 +124,19 @@ public class SyncSuspendResumeTests
     }
 
     [Test]
+    public void resume_rejects_undefined_status_value()
+    {
+        // A corrupted or hand-crafted snapshot must not write an undefined value into the
+        // machine's status field — every later status switch would misbehave silently.
+        Graph graph = GraphBuilder.StartWith(() => Result.Success).Build();
+        StateMachine machine = graph.ToStateMachine();
+
+        StateMachineSnapshot bogus = new(0, (ExecutionStatus)99, 0, false, false, 0);
+        InvalidOperationException? ex = Assert.Throws<InvalidOperationException>(() => machine.Resume(bogus));
+        Assert.That(ex!.Message, Does.Contain("Snapshot status value 99 is not a defined ExecutionStatus"));
+    }
+
+    [Test]
     public void suspend_of_an_idle_machine_roundtrips_through_execute()
     {
         List<int> executed = [];
