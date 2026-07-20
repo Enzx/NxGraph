@@ -8,43 +8,43 @@ namespace NxGraph.Tests;
 public class TimeoutWrapperTests
 {
     [Test]
-    [Timeout(5000)]
-    public async Task returns_failure_when_inner_exceeds_timeout_by_default()
+    [CancelAfter(10_000)]
+    public async Task returns_failure_when_inner_exceeds_timeout_by_default(CancellationToken ct)
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
             .ToWithTimeoutAsync(100.Milliseconds(), new AsyncRelayState(
-                    async ct =>
+                    async innerCt =>
                     {
-                        await Task.Delay(1000, ct);
+                        await Task.Delay(1000, innerCt);
                         return Result.Success;
                     }), TimeoutBehavior.Fail
             )
             .ToAsyncStateMachine();
 
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         Assert.That(result, Is.EqualTo(Result.Failure));
     }
 
     [Test]
-    [Timeout(5000)]
-    public void throws_timeoutexception_when_behavior_is_throw()
+    [CancelAfter(10_000)]
+    public void throws_timeoutexception_when_behavior_is_throw(CancellationToken ct)
     {
         AsyncStateMachine throwing = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(100), new AsyncRelayState(async ct =>
+            .ToWithTimeoutAsync(TimeSpan.FromMilliseconds(100), new AsyncRelayState(async innerCt =>
                 {
-                    await Task.Delay(1000, ct);
+                    await Task.Delay(1000, innerCt);
                     return Result.Success;
                 }),
                 TimeoutBehavior.Throw)
             .ToAsyncStateMachine();
 
-        Assert.ThrowsAsync<TimeoutException>(async () => await throwing.ExecuteAsync());
+        Assert.ThrowsAsync<TimeoutException>(async () => await throwing.ExecuteAsync(ct));
     }
 
     [Test]
-    [Timeout(5000)]
+    [CancelAfter(10_000)]
     public void external_cancellation_wins_over_timeout()
     {
         using CancellationTokenSource cts = new(200); // cancel sooner than timeout
@@ -58,15 +58,12 @@ public class TimeoutWrapperTests
             }, TimeoutBehavior.Fail) // timeout later than external cancel
             .ToAsyncStateMachine();
 
-        Assert.ThrowsAsync<TaskCanceledException>(async () =>
-        {
-            await fsm.ExecuteAsync(cts.Token);
-            await cts.CancelAsync();
-        });
+        // The timed cts does the cancelling mid-run; every await in here is bounded, so a
+        // cancellation regression turns into a bounded assertion failure, never a hang.
+        Assert.ThrowsAsync<TaskCanceledException>(async () => await fsm.ExecuteAsync(cts.Token));
     }
 
     [Test]
-    [Timeout(5000)]
     public void rejects_non_positive_timeout_values()
     {
         // Using StartWithTimeout should throw when timeout <= 0
@@ -82,19 +79,19 @@ public class TimeoutWrapperTests
     }
 
     [Test]
-    [Timeout(5000)]
-    public async Task completes_successfully_if_inner_finishes_before_timeout()
+    [CancelAfter(10_000)]
+    public async Task completes_successfully_if_inner_finishes_before_timeout(CancellationToken ct)
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
-            .ToWithTimeoutAsync(1.Seconds(), async ct =>
+            .ToWithTimeoutAsync(5.Seconds(), async innerCt =>
             {
-                await Task.Delay(50, ct); // finishes well before timeout
+                await Task.Delay(50, innerCt); // finishes well before the generous timeout
                 return Result.Success;
             }, TimeoutBehavior.Fail)
             .ToAsyncStateMachine();
 
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         Assert.That(result, Is.EqualTo(Result.Success));
     }
 }

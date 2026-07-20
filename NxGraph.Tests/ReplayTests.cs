@@ -12,7 +12,7 @@ using System.IO;
 [Category("replay")]
 public class ReplayTests
 {
-    private class EventSequenceVerifier
+    private sealed class EventSequenceVerifier
     {
         public readonly List<string> RecordedEvents = [];
 
@@ -159,7 +159,7 @@ public class ReplayTests
         int startedIdx = verifier.RecordedEvents.IndexOf("FSM:Started");
         int entered0Idx = verifier.RecordedEvents.FindIndex(e => e == "Entered: (0)");
         int exited0Idx = verifier.RecordedEvents.FindIndex(e => e == "Exited: (0)");
-        int transitionIdx = verifier.RecordedEvents.FindIndex(e => e.StartsWith("Transitioned from"));
+        int transitionIdx = verifier.RecordedEvents.FindIndex(e => e.StartsWith("Transitioned from", StringComparison.Ordinal));
         int entered1Idx = verifier.RecordedEvents.FindIndex(e => e == "Entered: (1)");
 
         Assert.Multiple(() =>
@@ -249,7 +249,7 @@ public class ReplayTests
         newReplay.ReplayAll(verifier.ProcessEvent);
 
         // Check all expected transitions were replayed
-        Assert.That(verifier.RecordedEvents.Count(e => e.StartsWith("Transitioned")), Is.EqualTo(3));
+        Assert.That(verifier.RecordedEvents.Count(e => e.StartsWith("Transitioned", StringComparison.Ordinal)), Is.EqualTo(3));
     }
 
 
@@ -285,14 +285,14 @@ public class ReplayTests
         Assert.Multiple(() =>
         {
             // Verify log messages were captured in replay
-            Assert.That(verifier.RecordedEvents.Count(e => e.StartsWith("Log:")), Is.EqualTo(2));
+            Assert.That(verifier.RecordedEvents.Count(e => e.StartsWith("Log:", StringComparison.Ordinal)), Is.EqualTo(2));
             Assert.That(verifier.RecordedEvents, Does.Contain("Log: (0) - Test log message 1"));
             Assert.That(verifier.RecordedEvents, Does.Contain("Log: (0) - Test log message 2"));
         });
     }
 
 // Test state that logs messages
-    private class LoggingTestState(params string[] messages) : AsyncState
+    private sealed class LoggingTestState(params string[] messages) : AsyncState
     {
         protected override async ValueTask<Result> OnRunAsync(CancellationToken ct)
         {

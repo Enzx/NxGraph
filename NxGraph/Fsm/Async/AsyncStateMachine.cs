@@ -406,7 +406,9 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                 case ExecutionStatus.Cancelled:
                     break;
                 default:
-                    throw new IndexOutOfRangeException(nameof(status));
+                    // Unreachable enum-switch guard (CA2201: IndexOutOfRangeException is
+                    // runtime-reserved, so this defensive default uses a plain invalid-op).
+                    throw new InvalidOperationException($"Unexpected execution status '{status}'.");
             }
 
             // Own the transition to Resetting from whatever terminal state we observed.
@@ -700,10 +702,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     /// </summary>
     public void Resume(StateMachineSnapshot snapshot)
     {
-        if (snapshot is null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
+        Guard.NotNull(snapshot, nameof(snapshot));
 
         if (Interlocked.Exchange(ref _executeGate, 1) == 1)
         {
@@ -780,10 +779,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     /// </summary>
     public void ResumeDeep(StateMachineDeepSnapshot snapshot)
     {
-        if (snapshot is null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
+        Guard.NotNull(snapshot, nameof(snapshot));
 
         Resume(snapshot.Self);
         DeepSnapshots.ResumeComposites(Graph, snapshot.Composites);

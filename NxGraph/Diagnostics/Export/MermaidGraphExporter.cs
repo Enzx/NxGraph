@@ -37,8 +37,9 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
         // Header
         string title = opts.Title ?? graph.Id.ToString();
-        sb.AppendLine($"%% NxGraph → Mermaid export: {EscapeComment(title)}");
-        sb.AppendLine($"flowchart {dir}");
+        // Append chains instead of interpolation: culture-neutral by construction (CA1305).
+        sb.Append("%% NxGraph → Mermaid export: ").AppendLine(EscapeComment(title));
+        sb.Append("flowchart ").AppendLine(dir);
 
         // Nodes
         for (int i = 0; i < graph.NodeCount; i++)

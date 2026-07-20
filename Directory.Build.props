@@ -1,0 +1,51 @@
+<!-- Repo-wide build defaults. Every project in the solution (tests, examples, benchmarks,
+     and the NxGraph.Build tool via its own Directory.Build.props import chain) inherits
+     these. Per-project files keep only what genuinely differs: TargetFramework(s), package
+     Title/Description/Tags/readme, and IsPackable/IsTestProject flags.
+
+     TFM decision (recorded): TargetFrameworks stay per-project. The core library
+     multi-targets net8.0 + netstandard2.1 because the Unity (UPM) package stages the
+     netstandard2.1 build of NxGraph.dll; the serialization packages stay net8.0-only —
+     no netstandard2.1 consumer story exists for them (the UPM package ships only the
+     core), so widening them would cost polyfills for nothing. Revisit only if a
+     netstandard consumer of the serialization surface appears. -->
+<Project>
+
+    <PropertyGroup>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <!-- Code analysis: .NET analyzers at the recommended severity profile, and every
+             warning (compiler + analyzer) is an error so the build can never go soft again.
+             Suppressions must be targeted NoWarn entries with a justifying comment. -->
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <!-- Shared NuGet package metadata. Only the packable projects (NxGraph,
+         NxGraph.Serialization, NxGraph.Serialization.Abstraction) pack, but these values are
+         harmless on IsPackable=false projects and centralizing them prevents drift. -->
+    <PropertyGroup>
+        <Authors>Moe Iraji</Authors>
+        <PackageProjectUrl>https://github.com/Enzx/NxGraph</PackageProjectUrl>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/Enzx/NxGraph</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+
+    <!-- Determinism + SourceLink, gated on a CI environment variable (GitHub Actions sets
+         both CI and GITHUB_ACTIONS to 'true'). Local incremental builds keep local paths for
+         debuggability; any CI build (not just `pack` via NxGraph.Build) is deterministic
+         with repository metadata embedded. NxGraph.Build's PackArgs still passes these
+         explicitly so local pack/publish runs produce release-grade packages too. -->
+    <PropertyGroup Condition="'$(CI)' == 'true' or '$(GITHUB_ACTIONS)' == 'true'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <Deterministic>true</Deterministic>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>portable</DebugType>
+    </PropertyGroup>
+
+</Project>

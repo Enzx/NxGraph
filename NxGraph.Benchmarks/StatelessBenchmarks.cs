@@ -1,13 +1,21 @@
-﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Stateless;
 
 namespace NxGraph.Benchmarks;
 
+/// <summary>
+/// Comparison baselines against the Stateless library, harness-matched to the NxGraph
+/// suites: no <c>[IterationSetup]</c> (BenchmarkDotNet documents it as ruining ns-scale
+/// precision, and the NxGraph classes measure setup-free thanks to
+/// <c>RestartPolicy.Auto</c> re-execution), so each benchmark resets its state variable
+/// inside the measured body — the same place NxGraph pays its per-run reset.
+/// </summary>
 [MemoryDiagnoser]
 [HideColumns("Job", "Median", "StdDev", "StdErr", "Error", "RatioSD")]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
+[CsvExporter]
 public class StatelessBenchmarks
 {
     private const int TriggerNext = 1;
@@ -56,13 +64,18 @@ public class StatelessBenchmarks
                 .Permit(TriggerNext, i + 1);
         }
 
+        // Timeout analog matched to NxGraph's AsyncTimeoutState: arm a cancellation timer
+        // for the deadline, run the (immediately completing) work under its token, and
+        // reclaim the timer when the work finishes. The previous version scheduled a real
+        // uncancelled Task.Delay(1000) per invocation — an orphaned live timer NxGraph
+        // never pays, which made the comparison row measure a different operation.
         _timeoutWrapper = new StateMachine<int, int>(() => _stateTimeoutWrapper, s => _stateTimeoutWrapper = s);
         _timeoutWrapper.Configure(0)
             .OnEntryAsync(async _ =>
             {
-                Task work = Task.CompletedTask;
-                Task timeout = Task.Delay(1000); // 1 second timeout
-                await Task.WhenAny(work, timeout); // work completes first; just measuring wrapper cost
+                using CancellationTokenSource cts = new();
+                cts.CancelAfter(TimeSpan.FromSeconds(1));
+                await WorkUnderToken(cts.Token); // completes immediately; timer reclaimed by Dispose
             })
             .Permit(TriggerNext, 1);
 
@@ -75,40 +88,10 @@ public class StatelessBenchmarks
         }
     }
 
-    [IterationSetup(Target = nameof(SingleTransition))]
-    public void ResetSingle()
+    private static Task WorkUnderToken(CancellationToken ct)
     {
-        _stateSingle = 0;
-    }
-
-    [IterationSetup(Target = nameof(Chain10))]
-    public void Reset10()
-    {
-        _stateChain10 = 0;
-    }
-
-    [IterationSetup(Target = nameof(Chain50))]
-    public void Reset50()
-    {
-        _stateChain50 = 0;
-    }
-
-    [IterationSetup(Target = nameof(Chain10_WithObserver))]
-    public void ResetObserver()
-    {
-        _stateWithObserver = 0;
-    }
-
-    [IterationSetup(Target = nameof(WithTimeoutWrapper))]
-    public void ResetTimeout()
-    {
-        _stateTimeoutWrapper = 0;
-    }
-
-    [IterationSetup(Target = nameof(DirectorLinear10))]
-    public void ResetDirector()
-    {
-        _stateDirector = 0;
+        ct.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
     }
 
     // ---- Benchmarks ----
@@ -117,6 +100,7 @@ public class StatelessBenchmarks
     [Benchmark(Baseline = true, Description = "Single transition 0 -> 1 (async)")]
     public async Task<int> SingleTransition()
     {
+        _stateSingle = 0;
         await _single.FireAsync(TriggerNext);
         return _stateSingle;
     }
@@ -125,6 +109,7 @@ public class StatelessBenchmarks
     [Benchmark(Description = "Chain of 10 transitions (async)")]
     public async Task<int> Chain10()
     {
+        _stateChain10 = 0;
         for (int i = 0; i < 10; i++)
         {
             await _chain10.FireAsync(TriggerNext);
@@ -137,6 +122,7 @@ public class StatelessBenchmarks
     [Benchmark(Description = "Chain of 50 transitions (async)")]
     public async Task<int> Chain50()
     {
+        _stateChain50 = 0;
         for (int i = 0; i < 50; i++)
         {
             await _chain50.FireAsync(TriggerNext);
@@ -147,8 +133,9 @@ public class StatelessBenchmarks
 
     [BenchmarkCategory("WithObserver")]
     [Benchmark(Description = "Chain10 + async no-op OnEntry (observer-like)")]
-    public async Task<int> Chain10_WithObserver()
+    public async Task<int> Chain10WithObserver()
     {
+        _stateWithObserver = 0;
         for (int i = 0; i < 10; i++)
         {
             await _withObserver.FireAsync(TriggerNext);
@@ -161,6 +148,7 @@ public class StatelessBenchmarks
     [Benchmark(Description = "Timeout-style wrapper around immediate success (async)")]
     public async Task<int> WithTimeoutWrapper()
     {
+        _stateTimeoutWrapper = 0;
         await _timeoutWrapper.FireAsync(TriggerNext);
         return _stateTimeoutWrapper;
     }
@@ -169,6 +157,7 @@ public class StatelessBenchmarks
     [Benchmark(Description = "Director-driven 10-step flow (async-fired)")]
     public async Task<int> DirectorLinear10()
     {
+        _stateDirector = 0;
         //emulate a director sequencing nodes
         for (int i = 0; i < 10; i++)
         {

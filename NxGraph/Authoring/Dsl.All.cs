@@ -70,7 +70,7 @@ public static partial class Dsl
     /// <c>Failure</c>. Wall-clock overlap is an async-only mechanic; the join semantics are the
     /// same, including no early abort: all works always run, even after an early <c>Failure</c>,
     /// so a graph moved between runtimes sees the same board effects. The node is plain
-    /// <see cref="Fsm.ILogic"/> and also runs under the async machine via the sync-logic adapter.
+    /// <see cref="Graphs.ILogic"/> and also runs under the async machine via the sync-logic adapter.
     /// <para>
     /// The disjoint-keys contract of the async twin is not load-bearing here (works never
     /// overlap), but keeping each work on its own keys makes the graph portable to

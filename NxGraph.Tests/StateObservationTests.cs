@@ -9,7 +9,7 @@ namespace NxGraph.Tests;
 [Category("state_observation")]
 public class StateObservationTests
 {
-    private class FsmObserver : IAsyncStateMachineObserver
+    private sealed class FsmObserver : IAsyncStateMachineObserver
     {
         public readonly List<string> ObservedStates = [];
 
@@ -93,7 +93,9 @@ public class StateObservationTests
 
         await fsm.ExecuteAsync();
 
-        Assert.That(observer.ObservedStates, Is.EquivalentTo(Expected));
+        // Sequence-equal on purpose: the observer contract is the exact event order,
+        // not the event multiset.
+        Assert.That(observer.ObservedStates, Is.EqualTo(Expected));
     }
 
     [Test]

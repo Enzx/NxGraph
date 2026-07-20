@@ -18,7 +18,8 @@ All notable changes to this package will be documented in this file.
 - Source staging now includes the `Tokens` folder (the source-mode package could not compile without it after the token runtime landed).
 - Staging documentation now describes the actual mechanism (`dotnet run --project NxGraph.Build -- stage-source|stage-binary`); the previously referenced `scripts/build-upm.ps1` no longer exists.
 - Source staging now includes the `Blackboards` and `Shims` folders (the source-mode package could not compile without them).
-- Refreshed the staged binary (`Runtime/Plugins/NxGraph.dll`) — the previously committed DLL was a stale 1.0.0 build predating failure edges, suspend/resume, parallel composites, and blackboards.
+- Staged binaries are no longer committed to `main` (`Runtime/**` build outputs are git-ignored); each release rebuilds and stages `Runtime/Plugins/NxGraph.dll` in CI, retiring the previously committed stale 1.0.0 build that predated failure edges, suspend/resume, parallel composites, and blackboards.
+- Versioning policy: the committed `package.json` always carries the **last released** version; the release workflow (`upm-patch-version`) stamps the same value at release time. Bumping the manifest is part of the release checklist (see `NxGraph.Build/README.md`).
 - Aligned the assembly definition name (`NxGraph.Unity.Runtime`) with its file name.
 - Install instructions now point at the released `upm` branch/tags instead of the main-branch package folder.
 

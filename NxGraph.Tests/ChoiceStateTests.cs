@@ -9,8 +9,8 @@ namespace NxGraph.Tests;
 public class ChoiceStateTests
 {
     [Test]
-    [Timeout(5000)]
-    public async Task choice_state_should_follow_true_branch()
+    [CancelAfter(10_000)]
+    public async Task choice_state_should_follow_true_branch(CancellationToken ct)
     {
         const bool flag = true;
 
@@ -20,7 +20,7 @@ public class ChoiceStateTests
             .ElseAsync(_ => ResultHelpers.Failure)
             .ToAsyncStateMachine();
 
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         Assert.That(result, Is.EqualTo(Result.Success));
     }
 
@@ -41,7 +41,6 @@ public class ChoiceStateTests
     }
 
     [Test]
-    [Timeout(5000)]
     public void start_if_graph_is_executable_by_the_sync_runtime()
     {
         // Regression: Start().If(predicate) used to wrap the sync predicate in an

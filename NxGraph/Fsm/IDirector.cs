@@ -22,7 +22,7 @@ public interface IDirector
     /// <remarks>
     /// The default returns an empty sequence so existing user implementations compile
     /// unchanged — but those custom directors will be opaque to the validator and the
-    /// exporter. Built-in <see cref="ChoiceState"/> and <see cref="SwitchState"/>
+    /// exporter. Built-in <see cref="ChoiceState"/> and <see cref="SwitchState{TKey}"/>
     /// override this to surface their known targets.
     /// </remarks>
     IEnumerable<NodeId> EnumerateStaticTargets() => System.Array.Empty<NodeId>();

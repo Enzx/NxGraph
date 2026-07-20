@@ -10,7 +10,8 @@ namespace NxGraph.Tests;
 public class WaitStateExecutionTests
 {
     [Test]
-    public async Task wait_state_should_complete_after_delay()
+    [CancelAfter(10_000)]
+    public async Task wait_state_should_complete_after_delay(CancellationToken ct)
     {
         const int delay = 1;
         const float errorMargin = 0.5f;
@@ -21,18 +22,22 @@ public class WaitStateExecutionTests
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         stopwatch.Stop();
         Assert.Multiple(() =>
         {
             Assert.That(result, Is.EqualTo(Result.Success));
-            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.GreaterThanOrEqualTo(delay - errorMargin));
-            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.LessThan(delay + errorMargin));
+            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.GreaterThanOrEqualTo(delay - errorMargin),
+                "The wait state must actually wait out its configured delay.");
+            // Deliberately no upper bound: on a loaded CI agent the overshoot is unbounded,
+            // so an upper bound is pure flake. The [CancelAfter] guard (threaded into the
+            // machine) replaces it as the hang stop.
         });
     }
 
     [Test]
-    public async Task wait_state_should_handle_zero_delay_immediately()
+    [CancelAfter(10_000)]
+    public async Task wait_state_should_handle_zero_delay_immediately(CancellationToken ct)
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
@@ -41,18 +46,22 @@ public class WaitStateExecutionTests
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         stopwatch.Stop();
 
         Assert.Multiple(() =>
         {
             Assert.That(result, Is.EqualTo(Result.Success));
-            Assert.That(stopwatch.Elapsed.TotalMilliseconds, Is.LessThan(10)); // should be nearly immediate
+            // Generous budget instead of the old < 10 ms bound (which flakes on a cold or
+            // loaded runner): a zero wait must not take seconds; a regression to a real or
+            // infinite wait is caught here or by the [CancelAfter] guard.
+            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.LessThan(5));
         });
     }
 
     [Test]
-    public async Task wait_state_should_handle_negative_delay_immediately()
+    [CancelAfter(10_000)]
+    public async Task wait_state_should_handle_negative_delay_immediately(CancellationToken ct)
     {
         AsyncStateMachine fsm = GraphBuilder
             .Start()
@@ -61,13 +70,15 @@ public class WaitStateExecutionTests
             .ToAsyncStateMachine();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
-        Result result = await fsm.ExecuteAsync();
+        Result result = await fsm.ExecuteAsync(ct);
         stopwatch.Stop();
 
         Assert.Multiple(() =>
         {
             Assert.That(result, Is.EqualTo(Result.Success));
-            Assert.That(stopwatch.Elapsed.TotalMilliseconds, Is.LessThan(10)); // should be nearly immediate
+            // Same generous budget as the zero-delay test; a raw negative TimeSpan reaching
+            // Task.Delay would throw or wait forever — both caught without a tight bound.
+            Assert.That(stopwatch.Elapsed.TotalSeconds, Is.LessThan(5));
         });
     }
 

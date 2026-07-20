@@ -14,13 +14,24 @@ namespace NxGraph.Tests;
 /// Measurements use <see cref="GC.GetAllocatedBytesForCurrentThread"/>; all node logic
 /// completes synchronously, so awaits never leave the measuring thread. The gate only
 /// holds for Release builds (Debug async methods heap-allocate their state machines),
-/// so the fixture self-ignores in Debug.
+/// so the fixture self-ignores in Debug. That means the 0 B guarantee rides entirely on
+/// the CI Release leg: NxGraph.Build's <c>ci</c> target defaults CONFIGURATION=Release,
+/// so the gate does run in CI today — keep that true if the CI configuration ever changes.
+/// </para>
+/// <para>
+/// JIT behavior is pinned for this test project (<c>TieredCompilation=false</c> and
+/// <c>TieredPgo=false</c> in NxGraph.Tests.csproj), so every method compiles straight to
+/// its final optimized form and no background re-tier / OSR transition can land inside a
+/// measurement window. Pinning was chosen over raising the warmup count because tier-up
+/// completes asynchronously — no fixed warmup count can guarantee it has finished on a
+/// loaded runner, which is exactly the nondeterminism this gate must not have.
 /// </para>
 /// </summary>
 [TestFixture]
 [NonParallelizable]
 public class AllocationGateTests
 {
+    private const int WarmupRuns = 50;
     private const int Iterations = 200;
 
     private sealed class NoopAsyncObserver : IAsyncStateMachineObserver
@@ -41,40 +52,53 @@ public class AllocationGateTests
 #endif
     }
 
-    private static async Task AssertZeroAllocAsync(AsyncStateMachine machine)
+    // All cases funnel through the two delegate cores below so the warmup/iterate/measure
+    // protocol exists exactly once; per-shape entry points only adapt the run action.
+
+    private static Task AssertZeroAllocAsync(AsyncStateMachine machine)
     {
-        for (int i = 0; i < 50; i++)
+        return AssertZeroAllocAsync(async () => { await machine.ExecuteAsync(); }, "Async hot path");
+    }
+
+    private static async Task AssertZeroAllocAsync(Func<ValueTask> runOnce, string label)
+    {
+        for (int i = 0; i < WarmupRuns; i++)
         {
-            await machine.ExecuteAsync();
+            await runOnce();
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < Iterations; i++)
         {
-            await machine.ExecuteAsync();
+            await runOnce();
         }
 
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.That(allocated, Is.Zero,
-            $"Async hot path allocated {allocated} B over {Iterations} runs.");
+            $"{label} allocated {allocated} B over {Iterations} runs.");
     }
 
     private static void AssertZeroAlloc(StateMachine machine)
     {
-        for (int i = 0; i < 50; i++)
+        AssertZeroAlloc(() => RunToCompletion(machine), "Sync hot path");
+    }
+
+    private static void AssertZeroAlloc(Action runOnce, string label)
+    {
+        for (int i = 0; i < WarmupRuns; i++)
         {
-            RunToCompletion(machine);
+            runOnce();
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < Iterations; i++)
         {
-            RunToCompletion(machine);
+            runOnce();
         }
 
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.That(allocated, Is.Zero,
-            $"Sync hot path allocated {allocated} B over {Iterations} runs.");
+            $"{label} allocated {allocated} B over {Iterations} runs.");
     }
 
     private static void RunToCompletion(StateMachine machine)
@@ -125,21 +149,7 @@ public class AllocationGateTests
             .Goto("Top")
             .Build();
 
-        AsyncStateMachine machine = graph.ToAsyncStateMachine();
-
-        for (int i = 0; i < 50; i++)
-        {
-            await machine.ExecuteAsync();
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            await machine.ExecuteAsync();
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero, $"Goto loop allocated {allocated} B over {Iterations} runs.");
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
     }
 
     [Test]
@@ -192,23 +202,12 @@ public class AllocationGateTests
     {
         AsyncStateMachine machine = AsyncChain(10).ToAsyncStateMachine();
 
-        for (int i = 0; i < 50; i++)
+        await AssertZeroAllocAsync(async () =>
         {
-            while ((await machine.StepAsync()) == Result.InProgress)
+            while (await machine.StepAsync() == Result.InProgress)
             {
             }
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            while ((await machine.StepAsync()) == Result.InProgress)
-            {
-            }
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero, $"Stepped execution allocated {allocated} B over {Iterations} runs.");
+        }, "Stepped execution");
     }
 
     [Test]
@@ -533,6 +532,68 @@ public class AllocationGateTests
             .WithBlackboard(local));
     }
 
+    // ── Directors: Switch dispatch and non-blackboard Choice ────────────
+
+    [Test]
+    public async Task async_switch_dispatch_is_allocation_free()
+    {
+        int lap = 0;
+        Graph graph = GraphBuilder
+            .Start()
+            .Switch(() => ++lap % 3) // rotate: case 1, case 2, default
+            .CaseAsync(1, _ => ResultHelpers.Success)
+            .CaseAsync(2, _ => ResultHelpers.Success)
+            .DefaultAsync(_ => ResultHelpers.Success)
+            .End()
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_switch_dispatch_is_allocation_free()
+    {
+        int lap = 0;
+        Graph graph = GraphBuilder
+            .Start()
+            .Switch(() => ++lap % 3) // rotate: case 1, case 2, default
+            .Case(1, () => Result.Success)
+            .Case(2, () => Result.Success)
+            .Default(() => Result.Success)
+            .End()
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public async Task async_choice_without_blackboard_is_allocation_free()
+    {
+        bool flag = false;
+        Graph graph = GraphBuilder
+            .Start()
+            .If(() => flag = !flag) // exercise both branches over the run set
+            .ThenAsync(_ => ResultHelpers.Success)
+            .ElseAsync(_ => ResultHelpers.Success)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_choice_without_blackboard_is_allocation_free()
+    {
+        bool flag = false;
+        Graph graph = GraphBuilder
+            .Start()
+            .If(() => flag = !flag) // exercise both branches over the run set
+            .Then(() => Result.Success)
+            .Else(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
     // ── Blackboards: Node scope (per-transition reset included) ─────────
 
     private static Graph NodeScopeChain(bool sync)
@@ -690,6 +751,19 @@ public class AllocationGateTests
     }
 
     [Test]
+    public async Task async_to_with_timeout_happy_path_is_allocation_free()
+    {
+        // Inner completes before the deadline; the wrapper's pooled CTS (rent → CancelAfter →
+        // TryReset → return) must keep the happy path at 0 B steady-state.
+        Graph graph = GraphBuilder
+            .Start()
+            .ToWithTimeoutAsync(TimeSpan.FromSeconds(5), _ => ResultHelpers.Success)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
     public void sync_to_all_join_is_allocation_free()
     {
         // The async AsyncAllState allocates per execution by design (task materialization
@@ -799,20 +873,9 @@ public class AllocationGateTests
         (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: false);
         AsyncStateMachine machine = graph.ToAsyncStateMachine().WithBlackboard(board);
 
-        for (int i = 0; i < 50; i++)
-        {
-            await machine.ExecuteAsync(new GatePing(i));
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            await machine.ExecuteAsync(new GatePing(i));
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero,
-            $"Typed event raise allocated {allocated} B over {Iterations} runs.");
+        int payload = 0;
+        await AssertZeroAllocAsync(async () => { await machine.ExecuteAsync(new GatePing(payload++)); },
+            "Typed event raise");
     }
 
     [Test]
@@ -821,20 +884,9 @@ public class AllocationGateTests
         (Graph graph, Blackboard board, BlackboardKey<GatePing> _) = EventGraph(sync: true);
         StateMachine machine = graph.ToStateMachine().WithBlackboard(board);
 
-        for (int i = 0; i < 50; i++)
-        {
-            RaiseToCompletion(machine, new GatePing(i));
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            RaiseToCompletion(machine, new GatePing(i));
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero,
-            $"Sync typed event raise allocated {allocated} B over {Iterations} runs.");
+        int payload = 0;
+        AssertZeroAlloc(() => RaiseToCompletion(machine, new GatePing(payload++)),
+            "Sync typed event raise");
     }
 
     private static void RaiseToCompletion<TEvent>(StateMachine machine, TEvent evt)
@@ -851,38 +903,12 @@ public class AllocationGateTests
     private static void AssertZeroAllocTokens(NxGraph.Tokens.TokenMachine machine)
     {
         machine.SetStepMode(ParallelStepMode.RunToJoin);
-        for (int i = 0; i < 50; i++)
-        {
-            machine.Execute();
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            machine.Execute();
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero,
-            $"Sync token hot path allocated {allocated} B over {Iterations} runs.");
+        AssertZeroAlloc(() => machine.Execute(), "Sync token hot path");
     }
 
-    private static async Task AssertZeroAllocTokensAsync(NxGraph.Tokens.AsyncTokenMachine machine)
+    private static Task AssertZeroAllocTokensAsync(NxGraph.Tokens.AsyncTokenMachine machine)
     {
-        for (int i = 0; i < 50; i++)
-        {
-            await machine.ExecuteAsync();
-        }
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
-        {
-            await machine.ExecuteAsync();
-        }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.That(allocated, Is.Zero,
-            $"Async token hot path allocated {allocated} B over {Iterations} runs.");
+        return AssertZeroAllocAsync(async () => { await machine.ExecuteAsync(); }, "Async token hot path");
     }
 
     /// <summary>load → fork(a, b) → join(All 2) → finish, sync logic throughout.</summary>
@@ -911,41 +937,76 @@ public class AllocationGateTests
     [Test]
     public void sync_token_any_merge_is_allocation_free()
     {
+        AssertZeroAllocTokens(TokenAnyMerge().ToTokenMachine());
+    }
+
+    [Test]
+    public async Task async_token_any_merge_is_allocation_free()
+    {
+        await AssertZeroAllocTokensAsync(TokenAnyMerge().ToAsyncTokenMachine());
+    }
+
+    /// <summary>load → fork(a, b) → merge(Any) with a shared tail, sync logic throughout.</summary>
+    private static Graph TokenAnyMerge()
+    {
         NxGraph.Tokens.JoinState merge = new(NxGraph.Tokens.JoinPolicy.Any);
-        Graph graph = GraphBuilder.StartWith(() => Result.Success)
+        return GraphBuilder.StartWith(() => Result.Success)
             .ForkTo(
                 b => b.To(() => Result.Success).To(merge).To(() => Result.Success),
                 b => b.To(() => Result.Success).To(merge))
             .Build();
-
-        AssertZeroAllocTokens(graph.ToTokenMachine());
     }
 
     [Test]
     public void sync_token_retry_without_backoff_is_allocation_free()
     {
         int calls = 0;
+        AssertZeroAllocTokens(TokenRetryDiamond(() => ++calls % 2 == 0).ToTokenMachine());
+    }
+
+    [Test]
+    public async Task async_token_retry_without_backoff_is_allocation_free()
+    {
+        // No backoff on purpose: a zero backoff never reaches Task.Delay, so the async
+        // per-token retry loop must stay 0 B like the sync one.
+        int calls = 0;
+        await AssertZeroAllocTokensAsync(TokenRetryDiamond(() => ++calls % 2 == 0).ToAsyncTokenMachine());
+    }
+
+    /// <summary>Fork with one flaky branch retried in place (no backoff) joining an All(2).</summary>
+    private static Graph TokenRetryDiamond(Func<bool> succeeds)
+    {
         NxGraph.Tokens.JoinState join = new(NxGraph.Tokens.JoinPolicy.All(2));
-        Graph graph = GraphBuilder.StartWith(() => Result.Success)
+        return GraphBuilder.StartWith(() => Result.Success)
             .ForkTo(
-                b => b.To(() => ++calls % 2 == 0 ? Result.Success : Result.Failure)
+                b => b.To(() => succeeds() ? Result.Success : Result.Failure)
                     .Retry(2)
                     .To(join),
                 b => b.To(() => Result.Success).To(join))
             .Build();
-
-        AssertZeroAllocTokens(graph.ToTokenMachine());
     }
 
     [Test]
     public void sync_token_node_scope_scratch_is_allocation_free()
+    {
+        AssertZeroAllocTokens(TokenNodeScopeScratch().ToTokenMachine());
+    }
+
+    [Test]
+    public async Task async_token_node_scope_scratch_is_allocation_free()
+    {
+        await AssertZeroAllocTokensAsync(TokenNodeScopeScratch().ToAsyncTokenMachine());
+    }
+
+    /// <summary>Fork whose branches write per-token Node-scoped scratch before an All(2) join.</summary>
+    private static Graph TokenNodeScopeScratch()
     {
         BlackboardSchema nodeSchema = new("token-scratch", BlackboardScope.Node);
         BlackboardKey<int> counter = nodeSchema.Register("counter", 0);
 
         NxGraph.Tokens.JoinState join = new(NxGraph.Tokens.JoinPolicy.All(2));
         StateToken start = GraphBuilder.StartWith(() => Result.Success);
-        Graph graph = start.ForkTo(
+        return start.ForkTo(
                 b => b.To(bb =>
                 {
                     bb.Set(counter, bb.Get(counter) + 1);
@@ -957,14 +1018,18 @@ public class AllocationGateTests
                     return Result.Success;
                 }).To(join))
             .Builder.WithSchema(nodeSchema).Build();
-
-        AssertZeroAllocTokens(graph.ToTokenMachine());
     }
 
     [Test]
     public async Task async_token_with_observer_is_allocation_free()
     {
         await AssertZeroAllocTokensAsync(TokenDiamond().ToAsyncTokenMachine(new NoopAsyncTokenObserver()));
+    }
+
+    [Test]
+    public void sync_token_with_observer_is_allocation_free()
+    {
+        AssertZeroAllocTokens(TokenDiamond().ToTokenMachine(new NoopSyncTokenObserver()));
     }
 
     // ── Behaviors: sequence run loop + binding resolution (spec 014) ────
@@ -1046,6 +1111,8 @@ public class AllocationGateTests
 
         AssertZeroAlloc(graph.ToStateMachine().WithBlackboard(board));
     }
+
+    private sealed class NoopSyncTokenObserver : NxGraph.Tokens.ITokenMachineObserver;
 
     private sealed class NoopAsyncTokenObserver : NxGraph.Tokens.IAsyncTokenMachineObserver
     {

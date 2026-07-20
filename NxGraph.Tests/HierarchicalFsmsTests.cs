@@ -11,46 +11,69 @@ namespace NxGraph.Tests;
 [TestFixture(Category = "NxFSM")]
 public class HierarchicalFsmTests
 {
-    private class HierarchicalDummyState(string? data = null) : IAsyncLogic
+    private sealed class HierarchicalDummyState : IAsyncLogic
     {
-        public string Data { get; init; } = data ?? string.Empty;
+        public HierarchicalDummyState()
+        {
+        }
 
+        public HierarchicalDummyState(string data, List<string> log)
+        {
+            Data = data;
+            _log = log;
+        }
+
+        public string Data { get; init; } = string.Empty;
+
+        // Instance state threaded in by the test, never serialized (private field): the
+        // suite must stay free of shared mutable statics so no fixture blocks a future
+        // parallel run. The serialization round-trip re-attaches it via the codec.
+        private List<string>? _log;
+
+        internal void AttachLog(List<string> log) => _log = log;
 
         public ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
         {
-            ExecutionLog.Add(Data);
+            _log?.Add(Data);
             return ResultHelpers.Success;
         }
     }
 
-    private class DummyLogicTextCodec : ILogicCodec<string>
+    private sealed class DummyLogicTextCodec(List<string> log) : ILogicCodec<string>
     {
         public string Serialize(IAsyncLogic asyncLogic) =>
             JsonSerializer.Serialize((HierarchicalDummyState)asyncLogic);
 
-        public IAsyncLogic Deserialize(string data) =>
-            JsonSerializer.Deserialize<HierarchicalDummyState>(data)
-            ?? new HierarchicalDummyState();
+        public IAsyncLogic Deserialize(string data)
+        {
+            HierarchicalDummyState state = JsonSerializer.Deserialize<HierarchicalDummyState>(data)
+                                           ?? new HierarchicalDummyState();
+            state.AttachLog(log);
+            return state;
+        }
     }
 
-    private static readonly List<string> ExecutionLog = [];
+    // Note: the suite runs sequentially by standing decision (no [assembly: Parallelizable]);
+    // see the note in NxGraph.Tests.csproj. Fixture instance state like this list still must
+    // not be static, so a single fixture can never re-couple otherwise independent tests.
+    private readonly List<string> _executionLog = [];
     private static readonly List<string> ExpectedLog = ["parent start", "child start", "child end", "parent end"];
 
     [SetUp]
-    public void SetUp() => ExecutionLog.Clear();
+    public void SetUp() => _executionLog.Clear();
 
 
     [Test]
     public async Task Executes_HierarchicalFsm_InExpected_Order()
     {
         Graph childGraph = GraphBuilder
-            .StartWithAsync(new HierarchicalDummyState("child start"))
-            .ToAsync(new HierarchicalDummyState("child end")).Build();
+            .StartWithAsync(new HierarchicalDummyState("child start", _executionLog))
+            .ToAsync(new HierarchicalDummyState("child end", _executionLog)).Build();
         AsyncStateMachine childFsm = childGraph.ToAsyncStateMachine();
         Graph parentGraph = GraphBuilder
-            .StartWithAsync(new HierarchicalDummyState("parent start"))
+            .StartWithAsync(new HierarchicalDummyState("parent start", _executionLog))
             .ToAsync(childFsm)
-            .ToAsync(new HierarchicalDummyState("parent end"))
+            .ToAsync(new HierarchicalDummyState("parent end", _executionLog))
             .Build();
         AsyncStateMachine parentFsm = parentGraph.ToAsyncStateMachine();
         await parentFsm.ExecuteAsync();
@@ -67,7 +90,8 @@ public class HierarchicalFsmTests
             Assert.That(((HierarchicalDummyState)childGraph.StartNode.AsyncLogic).Data, Is.EqualTo("child start"));
             Assert.That(((HierarchicalDummyState)childGraph.GetNodeByIndex(1).AsyncLogic).Data,
                 Is.EqualTo("child end"));
-            Assert.That(ExecutionLog, Is.EquivalentTo(ExpectedLog));
+            // Sequence-equal on purpose: this test's whole point is the execution order.
+            Assert.That(_executionLog, Is.EqualTo(ExpectedLog));
         }
     }
 
@@ -138,17 +162,17 @@ public class HierarchicalFsmTests
     public async Task Serializes_And_Deserializes_HierarchicalFsm_Correctly()
     {
         Graph childGraph = GraphBuilder
-            .StartWithAsync(new HierarchicalDummyState("child start"))
-            .ToAsync(new HierarchicalDummyState("child end")).Build();
+            .StartWithAsync(new HierarchicalDummyState("child start", _executionLog))
+            .ToAsync(new HierarchicalDummyState("child end", _executionLog)).Build();
         AsyncStateMachine childFsm = childGraph.ToAsyncStateMachine();
         Graph parentGraph = GraphBuilder
-            .StartWithAsync(new HierarchicalDummyState("parent start"))
+            .StartWithAsync(new HierarchicalDummyState("parent start", _executionLog))
             .ToAsync(childFsm)
-            .ToAsync(new HierarchicalDummyState("parent end"))
+            .ToAsync(new HierarchicalDummyState("parent end", _executionLog))
             .Build();
         AsyncStateMachine parentFsm = parentGraph.ToAsyncStateMachine();
         await parentFsm.ExecuteAsync();
-        GraphSerializer serializer = new(new DummyLogicTextCodec());
+        GraphSerializer serializer = new(new DummyLogicTextCodec(_executionLog));
         await using MemoryStream stream = new();
         await serializer.ToJsonAsync(parentGraph, stream);
         string json = System.Text.Encoding.UTF8.GetString(stream.ToArray());
@@ -157,8 +181,9 @@ public class HierarchicalFsmTests
         Graph roundTripped = await serializer.FromJsonAsync(stream);
         AsyncStateMachine roundTrippedFsm = roundTripped.ToAsyncStateMachine();
 
-        ExecutionLog.Clear();
+        _executionLog.Clear();
         await roundTrippedFsm.ExecuteAsync();
-        Assert.That(ExecutionLog, Is.EquivalentTo(ExpectedLog));
+        // Sequence-equal on purpose: the round-tripped graph must preserve execution order.
+        Assert.That(_executionLog, Is.EqualTo(ExpectedLog));
     }
 }

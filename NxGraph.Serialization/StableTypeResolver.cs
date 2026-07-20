@@ -26,7 +26,7 @@ internal static class StableTypeResolver
             return null;
         }
 
-        if (!name.EndsWith("]", StringComparison.Ordinal))
+        if (!name.EndsWith(']'))
         {
             return ResolveSimple(name);
         }

@@ -1,11 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- Common properties (LangVersion/Nullable/analyzers) come from the repo-root
+         Directory.Build.props, imported via this project's own Directory.Build.props
+         (which also isolates output to .tools/). -->
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net8.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
@@ -15,4 +15,3 @@
     </ItemGroup>
 
 </Project>
-

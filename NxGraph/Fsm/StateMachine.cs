@@ -408,7 +408,9 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             case ExecutionStatus.Cancelled:
                 break;
             default:
-                throw new IndexOutOfRangeException(nameof(status));
+                // Unreachable enum-switch guard (CA2201: IndexOutOfRangeException is
+                // runtime-reserved, so this defensive default uses a plain invalid-op).
+                throw new InvalidOperationException($"Unexpected execution status '{status}'.");
         }
 
         TransitionTo(ExecutionStatus.Resetting);
@@ -453,10 +455,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     /// </summary>
     public void Resume(StateMachineSnapshot snapshot)
     {
-        if (snapshot is null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
+        Guard.NotNull(snapshot, nameof(snapshot));
 
         if (_reentranceGuard)
         {
@@ -530,10 +529,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     /// </summary>
     public void ResumeDeep(StateMachineDeepSnapshot snapshot)
     {
-        if (snapshot is null)
-        {
-            throw new ArgumentNullException(nameof(snapshot));
-        }
+        Guard.NotNull(snapshot, nameof(snapshot));
 
         Resume(snapshot.Self);
         DeepSnapshots.ResumeComposites(Graph, snapshot.Composites);

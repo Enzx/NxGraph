@@ -12,9 +12,9 @@ public class DummyLogicBinaryCodec : ILogicBinaryCodec
                ?? throw new InvalidOperationException("Failed to deserialize DummyState from bytes.");
     }
 
-    public ReadOnlyMemory<byte> Serialize(IAsyncLogic data)
+    public ReadOnlyMemory<byte> Serialize(IAsyncLogic asyncLogic)
     {
-        string json = System.Text.Json.JsonSerializer.Serialize((DummyState)data);
+        string json = System.Text.Json.JsonSerializer.Serialize((DummyState)asyncLogic);
         return Encoding.UTF8.GetBytes(json);
     }
 }
