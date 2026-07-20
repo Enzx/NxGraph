@@ -37,12 +37,19 @@ public class LogicNode : INode
     /// Optional action invoked by the run loops when the machine enters this node —
     /// once per visit, before the node's first execution (retries do not re-fire it).
     /// Cached at build time; a null check plus a cached-delegate invoke costs nothing.
+    /// <para>
+    /// Exception: on token-runtime join nodes, Enter fires per token <i>arrival</i> (parked
+    /// arrivals included) while Exit fires only on the arrival that fires the join — see
+    /// <c>NxGraph.Tokens.JoinState</c> for the pairing rules.
+    /// </para>
     /// </summary>
     public Action? EnterAction { get; }
 
     /// <summary>
     /// Optional action invoked by the run loops when the machine leaves this node —
-    /// once per visit, after its final execution, regardless of outcome.
+    /// once per visit, after its final execution, regardless of outcome. On token-runtime
+    /// join nodes it fires once per join firing, so it does not pair 1:1 with
+    /// <see cref="EnterAction"/> there (see <c>NxGraph.Tokens.JoinState</c>).
     /// </summary>
     public Action? ExitAction { get; }
 

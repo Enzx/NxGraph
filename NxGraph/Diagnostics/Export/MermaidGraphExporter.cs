@@ -73,7 +73,9 @@ public sealed class MermaidGraphExporter : IGraphExporter
                 if (ln.AsyncLogic is IDirector || ln.Logic is IDirector
                     || ln.AsyncLogic is IAsyncDirector || ln.Logic is IAsyncDirector)
                 {
-                    label = $"{{\"{EscapeLabel(label)}\"}}";
+                    // BuildNodeLabel already escaped the label — escaping again here mangled
+                    // quotes/backslashes in director names (rendered \\\" instead of \").
+                    label = $"{{\"{label}\"}}";
                     sb.Append("  ").Append(nodeId).Append(label).AppendLine();
                     continue;
                 }

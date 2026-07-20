@@ -9,6 +9,14 @@ namespace NxGraph.Fsm;
 /// The blackboard-context overload receives the machine-bound routed context (see
 /// <see cref="BlackboardContext"/>) instead of relying on closure capture, so one graph
 /// template can serve N machines with distinct boards.
+/// <para>
+/// Unlike the async relay, the <c>onEnter</c>/<c>onExit</c> hooks here are
+/// <see cref="Action"/>-typed and cannot short-circuit: <see cref="State.Execute"/> always
+/// proceeds from <c>OnEnter</c> to <c>OnRun</c> (the sync <c>OnEnter</c> is <c>void</c>),
+/// so <c>run</c> executes on every visit. The async relay's enter-gating contract
+/// (<c>onEnter</c> returning a completed result skips <c>run</c>/<c>onExit</c>) has no sync
+/// equivalent — sync enter-gating belongs in <c>run</c> itself.
+/// </para>
 /// </summary>
 public sealed class RelayState : State
 {
@@ -70,6 +78,10 @@ public sealed class RelayState : State
 /// <summary>
 /// Synchronous counterpart of <see cref="AsyncRelayState{TAgent}"/>. The combined overload
 /// hands the delegate both the stamped agent and the routed blackboard context.
+/// <para>
+/// The <c>onEnter</c>/<c>onExit</c> hooks are <see cref="Action{TAgent}"/>-typed and cannot
+/// short-circuit — <c>run</c> executes on every visit (see <see cref="RelayState"/>).
+/// </para>
 /// </summary>
 /// <typeparam name="TAgent">The type of agent available during execution.</typeparam>
 public sealed class RelayState<TAgent> : State<TAgent>

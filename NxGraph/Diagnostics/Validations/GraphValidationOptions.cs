@@ -5,7 +5,10 @@ namespace NxGraph.Diagnostics.Validations;
 public sealed class GraphValidationOptions(IReadOnlyList<NodeId>? allNodes = null)
 {
     /// <summary>
-    /// Optional: supply the full set of nodes known to the graph (e.g., from GraphBuilder) to enable unreachable/duplicate-name checks.
+    /// Optional override for the node set used by the unreachable/duplicate-name checks.
+    /// When absent (the default), the validator derives the full set from the graph itself,
+    /// so a standalone <c>Validate()</c> is complete. Supply a list only to validate against
+    /// a different set — e.g. a pre-build ID list from <c>GraphBuilder.GetAllNodeIds()</c>.
     /// </summary>
     public IReadOnlyList<NodeId>? AllNodes { get; set; } = allNodes;
 

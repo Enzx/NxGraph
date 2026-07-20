@@ -14,6 +14,14 @@ namespace NxGraph.Tokens;
 /// is authored by routing several chains to the <i>same</i> <see cref="JoinState"/> instance
 /// (<c>.To(join)</c> dedupes by reference into one node).
 /// </para>
+/// <para>
+/// <b>Enter/exit hook pairing:</b> on a join, the node's <c>EnterAction</c> (DSL
+/// <c>.OnEnter</c>) fires on <b>every</b> token arrival — parked arrivals included — while
+/// <c>ExitAction</c> (<c>.OnExit</c>) fires only once per firing, on the arrival that
+/// satisfies the policy. With <c>JoinPolicy.All(n)</c> a firing therefore sees n enter
+/// invocations and one exit; enter/exit counts pair up only for
+/// <see cref="JoinPolicy.Any"/>. Both token machines behave identically.
+/// </para>
 /// </summary>
 public sealed class JoinState : ILogic, IAsyncLogic
 {

@@ -23,9 +23,10 @@ public partial class GraphBuilder
     {
         Graph graph = InternalBuild();
 
+        // The validator derives the full node set from the built graph itself, so no
+        // AllNodes list is passed — unreachable/duplicate-name checks run regardless.
         GraphValidationOptions options = new()
         {
-            AllNodes = GetAllNodeIds(),
             WarnOnSelfLoop = true,
             StrictNoTerminalPath = false
         };

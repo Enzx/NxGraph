@@ -150,6 +150,37 @@ public class BlackboardTests
     }
 
     [Test]
+    public void reference_type_defaults_are_shared_instances_across_boards()
+    {
+        // Pins the documented (and deliberate) shallow-copy contract on Register<T>: the
+        // schema's default template copies references, not objects, so a mutable
+        // reference-type default is one shared instance across every board and every
+        // ResetToDefaults(). Reference-type defaults should be immutable or null;
+        // per-board mutable state belongs in a value written at run time.
+        BlackboardSchema schema = new("shared-defaults");
+        BlackboardKey<List<int>> list = schema.Register("list", new List<int>());
+
+        Blackboard first = new(schema);
+        Blackboard second = new(schema);
+
+        first.Get(list).Add(42);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.Get(list), Is.EqualTo(new[] { 42 }),
+                "Both boards see the same default instance.");
+            Assert.That(first.Get(list), Is.SameAs(second.Get(list)),
+                "The default is one shared object, not a per-board copy.");
+        });
+
+        first.Set(list, [7]);
+        first.ResetToDefaults();
+
+        Assert.That(first.Get(list), Is.SameAs(second.Get(list)),
+            "ResetToDefaults restores the shared instance — mutations made through it persist.");
+    }
+
+    [Test]
     public void descriptors_box_read_write_and_reset()
     {
         BlackboardSchema schema = new();

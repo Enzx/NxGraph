@@ -20,6 +20,12 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter, IBlackboardSettabl
 
     /// <summary>
     /// Executes the state asynchronously, entering and exiting the state as needed.
+    /// <para>
+    /// Lifecycle contract: when <see cref="OnEnterAsync"/> returns a completed result
+    /// (<see cref="Result.Success"/> or <see cref="Result.Failure"/>), that result is returned
+    /// immediately — <see cref="OnRunAsync"/> and <see cref="OnExitAsync"/> are skipped
+    /// (enter-gating). Only <see cref="Result.InProgress"/> proceeds to the run/exit pair.
+    /// </para>
     /// </summary>
     /// <param name="ct">The cancellation token to observe while executing the state.</param>
     /// <returns>A <see cref="ValueTask{Result}"/> representing the<see cref="Result"/> of the state execution.</returns>
@@ -48,6 +54,12 @@ public abstract class AsyncState : IAsyncLogic, ILogReporter, IBlackboardSettabl
         }
     }
 
+    /// <summary>
+    /// Enter hook. Return <see cref="Result.InProgress"/> (the default) to proceed to
+    /// <see cref="OnRunAsync"/>; a completed result short-circuits the state — it is
+    /// reported as the state's result and <see cref="OnRunAsync"/>/<see cref="OnExitAsync"/>
+    /// do not run.
+    /// </summary>
     protected virtual ValueTask<Result> OnEnterAsync(CancellationToken ct)
     {
         return ResultHelpers.InProgress;

@@ -9,6 +9,14 @@ namespace NxGraph.Fsm.Async;
 /// returns <see cref="Result.Failure"/> or throws <see cref="TimeoutException"/>,
 /// depending on <see cref="TimeoutBehavior"/>.
 /// </summary>
+/// <remarks>
+/// Pooling characteristic: timeout executions rent their <see cref="CancellationTokenSource"/>
+/// from one process-wide pool shared by all <see cref="AsyncTimeoutState"/> instances. The
+/// pool grows to the peak number of <i>concurrent</i> timeout executions the process has seen
+/// and never shrinks — deliberate: steady-state runs allocate no CTSes, and a CTS is small, so
+/// a burst leaves behind at most burst-width retained instances rather than churn. Processes
+/// with rare, very wide bursts pay that retained memory for the process lifetime.
+/// </remarks>
 public class AsyncTimeoutState : IAsyncLogic
 {
     private readonly IAsyncLogic _inner;
@@ -88,6 +96,12 @@ public class AsyncTimeoutState : IAsyncLogic
     }
 
 
+    /// <summary>
+    /// Process-wide CTS pool. Unbounded by design: it holds at most peak-concurrency
+    /// instances (each Return matches a Rent), and bounding it would add counter traffic to
+    /// every rent/return to trim what is already a small, self-limiting footprint. See the
+    /// class-level remarks.
+    /// </summary>
     private static class CtsPool
     {
         private static readonly ConcurrentBag<CancellationTokenSource> Bag = [];
