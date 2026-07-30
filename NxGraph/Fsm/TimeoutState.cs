@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using NxGraph.Blackboards;
 using NxGraph.Compatibility;
 using NxGraph.Graphs;
 
@@ -19,8 +20,13 @@ namespace NxGraph.Fsm;
 /// the deadline cannot interrupt a node mid-execution — it is detected <b>between</b> ticks,
 /// after the inner logic returns. No CTS, no timers, no allocation on the happy path.
 /// </para>
+/// <para>
+/// Like the async twin, the wrapper is transparent to machine wiring: the blackboard context
+/// stamped on it is forwarded to the wrapped state (<see cref="IBlackboardSettable"/>), and
+/// agent stamping and log-report wiring resolve through it via <see cref="ILogicWrapper"/>.
+/// </para>
 /// </summary>
-public sealed class TimeoutState : ILogic
+public sealed class TimeoutState : ILogic, IBlackboardSettable, ILogicWrapper
 {
     private readonly ILogic _inner;
     private readonly TimeoutBehavior _behavior;
@@ -53,6 +59,21 @@ public sealed class TimeoutState : ILogic
         _timeoutTimestampTicks = (long)(timeout.TotalSeconds * Stopwatch.Frequency);
         _clock = clock;
         _timeoutMessage = $"Node timed out after {timeout}.";
+    }
+
+    object ILogicWrapper.WrappedLogic => _inner;
+
+    /// <summary>
+    /// Forwards the machine-stamped blackboard context to the wrapped state, so a
+    /// blackboard-using state keeps its board context when decorated with a timeout.
+    /// Forward-only: the wrapper holds no board state of its own.
+    /// </summary>
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        if (_inner is IBlackboardSettable settable)
+        {
+            settable.SetBlackboards(in context);
+        }
     }
 
     public Result Execute()

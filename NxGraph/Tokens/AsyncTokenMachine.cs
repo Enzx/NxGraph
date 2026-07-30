@@ -132,7 +132,11 @@ public class AsyncTokenMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             _joins[i] = logicNode.Logic as JoinState ?? logicNode.AsyncLogic as JoinState;
             anyJoin |= _joins[i] is not null;
             _settables[i] = logicNode.AsyncLogic as IBlackboardSettable ?? logicNode.Logic as IBlackboardSettable;
-            _reporters[i] = logicNode.AsyncLogic as ILogReporter ?? logicNode.Logic as ILogReporter;
+            // Decorator logic (timeout wrappers) hides the reporter it wraps — resolve
+            // through the seam so the machine wires the wrapped state's own report slots.
+            _reporters[i] = logicNode.AsyncLogic as ILogReporter
+                            ?? logicNode.Logic as ILogReporter
+                            ?? LogicWrappers.ResolveThroughWrappers<ILogReporter>(logicNode);
         }
 
         _joinArrivals = anyJoin ? new int[graph.NodeCount] : null;

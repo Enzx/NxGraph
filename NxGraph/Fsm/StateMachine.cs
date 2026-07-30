@@ -328,7 +328,11 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         {
             if (graph.TryGetNodeByIndex(i, out INode? node) && node is LogicNode logicNode)
             {
-                table[i] = logicNode.Logic as State;
+                // Decorator logic (timeout wrappers) hides the state it wraps — resolve
+                // through the seam so the machine wires (and clears) the wrapped state's own
+                // report slots, exactly as it would for the bare state.
+                table[i] = logicNode.Logic as State
+                           ?? LogicWrappers.ResolveThroughWrappers<State>(logicNode);
             }
         }
 
