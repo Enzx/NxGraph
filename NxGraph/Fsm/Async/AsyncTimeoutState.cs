@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using NxGraph.Blackboards;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm.Async;
@@ -8,6 +9,12 @@ namespace NxGraph.Fsm.Async;
 /// If the inner node does not complete within the timeout, the wrapper either
 /// returns <see cref="Result.Failure"/> or throws <see cref="TimeoutException"/>,
 /// depending on <see cref="TimeoutBehavior"/>.
+/// <para>
+/// The wrapper is transparent to machine wiring: the blackboard context stamped on it is
+/// forwarded to the wrapped state (<see cref="IBlackboardSettable"/>), and agent stamping and
+/// log-report wiring resolve through it via <see cref="ILogicWrapper"/> — a timeout around a
+/// blackboard-using, logging, or agent-taking state behaves exactly like the bare state.
+/// </para>
 /// </summary>
 /// <remarks>
 /// Pooling characteristic: timeout executions rent their <see cref="CancellationTokenSource"/>
@@ -17,7 +24,7 @@ namespace NxGraph.Fsm.Async;
 /// a burst leaves behind at most burst-width retained instances rather than churn. Processes
 /// with rare, very wide bursts pay that retained memory for the process lifetime.
 /// </remarks>
-public class AsyncTimeoutState : IAsyncLogic
+public class AsyncTimeoutState : IAsyncLogic, IBlackboardSettable, ILogicWrapper
 {
     private readonly IAsyncLogic _inner;
     private readonly TimeSpan _timeout;
@@ -36,6 +43,20 @@ public class AsyncTimeoutState : IAsyncLogic
         _timeout = timeout;
         _behavior = behavior;
         _timeoutMessage = $"Node timed out after {timeout}.";
+    }
+
+    object ILogicWrapper.WrappedLogic => _inner;
+
+    /// <summary>
+    /// Forwards the machine-stamped blackboard context to the wrapped state, so a
+    /// blackboard-using state keeps its board context when decorated with a timeout.
+    /// Forward-only: the wrapper holds no board state of its own.
+    /// </summary>
+    void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
+    {
+        IBlackboardSettable? settable =
+            _inner as IBlackboardSettable ?? (_inner as SyncLogicAdapter)?.Logic as IBlackboardSettable;
+        settable?.SetBlackboards(in context);
     }
 
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)

@@ -336,7 +336,24 @@ public sealed class Graph : INode, IGraph
                 ?? logicNode.Logic as ISubGraphProvider;
             if (provider is null)
             {
-                continue;
+                // Decorator logic (ILogicWrapper — e.g. the timeout wrappers) hides what it
+                // wraps from this walk. Agent stamping is generic in the agent type, so a
+                // non-generic wrapper cannot forward it itself — reach through the layers so
+                // an agent-taking state keeps its agent when decorated, and a decorated
+                // composite still surfaces its children.
+                if (LogicWrappers.ResolveThroughWrappers<IAgentSettable<TAgent>>(logicNode)
+                    is { } wrappedSettable)
+                {
+                    wrappedSettable.SetAgent(agent);
+                    found = true;
+                    continue;
+                }
+
+                provider = LogicWrappers.ResolveThroughWrappers<ISubGraphProvider>(logicNode);
+                if (provider is null)
+                {
+                    continue;
+                }
             }
 
             foreach (Graph nested in provider.SubGraphs)

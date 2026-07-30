@@ -333,7 +333,12 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         {
             if (graph.TryGetNodeByIndex(i, out INode? node) && node is LogicNode logicNode)
             {
-                table[i] = logicNode.AsyncLogic as ILogReporter ?? logicNode.Logic as ILogReporter;
+                // Decorator logic (timeout wrappers) hides the reporter it wraps — resolve
+                // through the seam so the machine wires (and clears) the wrapped state's own
+                // report slots, exactly as it would for the bare state.
+                table[i] = logicNode.AsyncLogic as ILogReporter
+                           ?? logicNode.Logic as ILogReporter
+                           ?? LogicWrappers.ResolveThroughWrappers<ILogReporter>(logicNode);
             }
         }
 
@@ -932,6 +937,8 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                             LastOutcome = OutcomeOf(_current);
                             return Result.Success;
                         }
+
+                        next = CanonicalId(next);
                     }
                     // Sync directors (ChoiceState/SwitchState behind a SyncLogicAdapter) route
                     // here too — mirroring the sync runtime's `Logic is IDirector` check, and
@@ -944,6 +951,8 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                             LastOutcome = OutcomeOf(_current);
                             return Result.Success;
                         }
+
+                        next = CanonicalId(next);
                     }
                     else
                     {
@@ -1056,6 +1065,17 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             }
         }
     }
+
+    /// <summary>
+    /// Replaces a director-selected id with the graph's own id for that index. Directors
+    /// (choice/switch/event dispatch) hold targets captured at authoring time, before
+    /// <c>Build()</c> applied display names, so routing on them directly would hand observers
+    /// a nameless id for the node the director jumps to — while ordinary edge destinations
+    /// (renamed at <c>Build()</c>) observe under their built ids. Identity is the index, so
+    /// this changes nothing about routing. An index the graph does not know passes through
+    /// untouched and fails on the next step with the existing "node not found" error.
+    /// </summary>
+    private NodeId CanonicalId(NodeId id) => Graph.TryGetNode(id, out INode? node) ? node!.Id : id;
 
     private async ValueTask LogReportCallback(string message, CancellationToken ct)
     {

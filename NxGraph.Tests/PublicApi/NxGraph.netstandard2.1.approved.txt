@@ -639,7 +639,7 @@ sealed class NxGraph.Fsm.Async.AsyncSwitchState`1 : NxGraph.Blackboards.IBlackbo
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
   method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.NodeId] SelectNextAsync(System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
-class NxGraph.Fsm.Async.AsyncTimeoutState : NxGraph.Graphs.IAsyncLogic
+class NxGraph.Fsm.Async.AsyncTimeoutState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.IAsyncLogic, NxGraph.Graphs.ILogicWrapper
   ctor System.Void .ctor(NxGraph.Graphs.IAsyncLogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] ExecuteAsync(System.Threading.CancellationToken)
 static class NxGraph.Fsm.Async.AsyncWait
@@ -884,7 +884,7 @@ sealed class NxGraph.Fsm.SwitchState`1 : NxGraph.Blackboards.IBlackboardSettable
 enum NxGraph.Fsm.TimeoutBehavior : System.IComparable, System.IConvertible, System.IFormattable
   Fail = 0
   Throw = 1
-sealed class NxGraph.Fsm.TimeoutState : NxGraph.Graphs.ILogic
+sealed class NxGraph.Fsm.TimeoutState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Graphs.ILogic, NxGraph.Graphs.ILogicWrapper
   ctor System.Void .ctor(NxGraph.Graphs.ILogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior)
   ctor System.Void .ctor(NxGraph.Graphs.ILogic, System.TimeSpan, NxGraph.Fsm.TimeoutBehavior, System.Func`1[System.Int64])
   method NxGraph.Result Execute()
@@ -933,6 +933,8 @@ interface NxGraph.Graphs.IGraph
   property System.Int32 TransitionCount { get; }
 interface NxGraph.Graphs.ILogic
   method NxGraph.Result Execute()
+interface NxGraph.Graphs.ILogicWrapper
+  property System.Object WrappedLogic { get; }
 interface NxGraph.Graphs.INode
   property NxGraph.Graphs.IAsyncLogic AsyncLogic { get; }
   property NxGraph.Graphs.ILogic Logic { get; }

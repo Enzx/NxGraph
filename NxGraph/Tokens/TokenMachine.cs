@@ -163,7 +163,10 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             _joins[i] = logicNode.Logic as JoinState ?? logicNode.AsyncLogic as JoinState;
             anyJoin |= _joins[i] is not null;
             _settables[i] = logicNode.AsyncLogic as IBlackboardSettable ?? logicNode.Logic as IBlackboardSettable;
-            _logReportStates[i] = logicNode.Logic as State;
+            // Decorator logic (timeout wrappers) hides the state it wraps — resolve through
+            // the seam so the machine wires the wrapped state's own report slots.
+            _logReportStates[i] = logicNode.Logic as State
+                                  ?? LogicWrappers.ResolveThroughWrappers<State>(logicNode);
         }
 
         _joinArrivals = anyJoin ? new int[graph.NodeCount] : null;
@@ -765,6 +768,11 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                         RetireToken(t, logicNode.Id, TokenRetireReason.Completed);
                         return;
                     }
+
+                    // Director targets are captured at authoring time, before Build() applied
+                    // display names — canonicalize so OnTransition reports the built id, like
+                    // edge destinations do. Arrival events already resolve via IdOf.
+                    next = CanonicalId(next);
                 }
                 else
                 {
@@ -987,6 +995,13 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     }
 
     private NodeId IdOf(int index) => Graph.GetNodeByIndex(index).Id;
+
+    /// <summary>
+    /// Replaces a director-selected id with the graph's own id for that index (see the FSM
+    /// machines' twin). Unknown indexes pass through untouched and fail at arrival exactly
+    /// as they do today.
+    /// </summary>
+    private NodeId CanonicalId(NodeId id) => Graph.TryGetNode(id, out INode? node) ? node!.Id : id;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void LogReportCallback(string message)
