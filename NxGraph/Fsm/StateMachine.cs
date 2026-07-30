@@ -778,6 +778,8 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                         LastOutcome = OutcomeOf(_current);
                         return Result.Success;
                     }
+
+                    next = CanonicalId(next);
                 }
                 else
                 {
@@ -865,6 +867,16 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                 throw new InvalidOperationException("Unknown node result.");
         }
     }
+
+    /// <summary>
+    /// Replaces a director-selected id with the graph's own id for that index — the sync twin
+    /// of <see cref="AsyncStateMachine"/>'s canonicalization. Directors hold targets captured
+    /// at authoring time, before <c>Build()</c> applied display names, so routing on them
+    /// directly would hand observers a nameless id for the node the director jumps to.
+    /// Identity is the index; unknown indexes pass through and fail on the next tick with the
+    /// existing "node not found" error.
+    /// </summary>
+    private NodeId CanonicalId(NodeId id) => Graph.TryGetNode(id, out INode? node) ? node!.Id : id;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void LogReportCallback(string message)

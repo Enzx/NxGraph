@@ -765,6 +765,11 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                         RetireToken(t, logicNode.Id, TokenRetireReason.Completed);
                         return;
                     }
+
+                    // Director targets are captured at authoring time, before Build() applied
+                    // display names — canonicalize so OnTransition reports the built id, like
+                    // edge destinations do. Arrival events already resolve via IdOf.
+                    next = CanonicalId(next);
                 }
                 else
                 {
@@ -987,6 +992,13 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     }
 
     private NodeId IdOf(int index) => Graph.GetNodeByIndex(index).Id;
+
+    /// <summary>
+    /// Replaces a director-selected id with the graph's own id for that index (see the FSM
+    /// machines' twin). Unknown indexes pass through untouched and fail at arrival exactly
+    /// as they do today.
+    /// </summary>
+    private NodeId CanonicalId(NodeId id) => Graph.TryGetNode(id, out INode? node) ? node!.Id : id;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void LogReportCallback(string message)
