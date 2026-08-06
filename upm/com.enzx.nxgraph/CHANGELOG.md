@@ -2,6 +2,16 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Runtime (staged NxGraph core)
+- **Data-built branching**: `ChoiceState(conditions, ConditionMatch.All|Any, trueTarget, falseTarget)` and `SwitchState<T>(key, literal cases, defaultTarget)` decide from data instead of a closure, so a branching graph rides the serialization payload with zero serializer options and survives suspend/resume. Conditions live in `NxGraph.Conditions` (`ICondition`, `KeyEquals<T>`, `IsTrue`, `Not`), reuse the behavior model's `BehaviorContext`, and reuse none of the fault model — a false condition is a decision, never a node failure. Author with `.If(condition)`, `.If(ConditionMatch.Any, …)`, and `.Switch(blackboardKey).Case(value, …).Default(…).End()`.
+- Mermaid export labels data-built arms (`true` / `false`, the case literal, `otherwise`), and the validator warns on a choice whose arms are the same node and on a switch with no default target.
+- Serialization payload version 10: sparse choice and switch sections, with an `ISerializableCondition` / `ConditionRegistry` pair mirroring the behavior registry. Version 9 payloads read branch-free.
+
+### Breaking
+- The delegate-backed director states were renamed: `ChoiceState` → `RelayChoiceState`, `SwitchState<TKey>` → `RelaySwitchState<TKey>`, `AsyncChoiceState` → `AsyncRelayChoiceState`, `AsyncSwitchState<TKey>` → `AsyncRelaySwitchState<TKey>`. Behavior and constructors are unchanged, and the `.If(predicate)` / `.Switch(selector)` DSL paths still build them. **No obsolete forwarding aliases exist**: the old names are reused in the same release for the new data-built states, so an alias would silently compile old code into a state that means something else. Update the type names; the compiler error is the migration instruction.
+
 ## [2.1.0-alpha]
 
 ### Runtime (staged NxGraph core)

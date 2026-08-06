@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -6,6 +8,7 @@ using MessagePack;
 using MessagePack.Resolvers;
 using NxGraph.Behaviors;
 using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -29,6 +32,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
     private readonly IRegionSelectorRegistry? _selectorRegistry;
     private readonly IContainerCodec? _containerCodec;
     private readonly IBehaviorRegistry _behaviorRegistry;
+    private readonly IConditionRegistry _conditionRegistry;
     private readonly MessagePackSerializerOptions _options;
 
     private readonly JsonSerializerOptions _jsonOptions;
@@ -46,6 +50,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         // The default registry carries the standard behavior set built in, so standard-set
         // graphs round-trip with zero options configured (payload version 8).
         _behaviorRegistry = options?.BehaviorRegistry ?? new BehaviorRegistry();
+        // Same posture for the condition standard set (payload version 10): a data-built
+        // branching graph round-trips with zero options configured.
+        _conditionRegistry = options?.ConditionRegistry ?? new ConditionRegistry();
 
         // Wire-type coherence: the container codec's payload rides in the same node DTO slot
         // as the logic codec's, so their wire types must match. Fail at setup, not save time.
@@ -208,6 +215,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         List<ContainerDto> containers = [];
         List<EventEntryDto> eventEntries = [];
         List<BehaviorDto> behaviors = [];
+        List<ChoiceDto> choices = [];
+        List<SwitchDto> switches = [];
         INodeDto[] nodes = new INodeDto[nodeCount];
         for (int index = 0; index < nodeCount; index++)
         {
@@ -260,6 +269,29 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         eventEntries.Add(new EventEntryDto(index, defaultTarget, entries));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.EventEntryStateMarker.Id.Name);
+                        break;
+                    }
+
+                    // Data-built branches (payload version 10): the decision is data, so it
+                    // rides — a condition list plus its match mode for a choice, a key name
+                    // plus literal cases for a switch. Detected via the non-generic
+                    // IChoiceNode/ISwitchNode surfaces (the IBehaviorComposite precedent), so
+                    // closed SwitchState<T> types need no reflection here. The delegate-backed
+                    // Relay* twins implement neither and fall through to the logic codec, which
+                    // is exactly right: their decision is a closure.
+                    if ((logicNode.Logic as IChoiceNode ?? logicNode.AsyncLogic as IChoiceNode) is { } choice)
+                    {
+                        choices.Add(BuildChoiceDto(index, node.Id, choice));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.ChoiceStateMarker.Id.Name);
+                        break;
+                    }
+
+                    if ((logicNode.Logic as ISwitchNode ?? logicNode.AsyncLogic as ISwitchNode) is { } switchNode)
+                    {
+                        switches.Add(BuildSwitchDto(index, node.Id, switchNode));
+                        nodes[index] = new NodeTextDto(index, node.Id.Name,
+                            LogicNode.SwitchStateMarker.Id.Name);
                         break;
                     }
 
@@ -513,7 +545,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         return new GraphDto(nodes, transitions, subGraphs.ToArray(), graph.Id.Index, graph.Id.Name, retryPolicies,
             outcomeCodes, outcomeNames, composites.ToArray(), uids, forks.ToArray(), joins.ToArray(),
-            containers.ToArray(), eventEntries.ToArray(), behaviors.ToArray())
+            containers.ToArray(), eventEntries.ToArray(), behaviors.ToArray(), choices.ToArray(),
+            switches.ToArray())
         {
             // The writer stamps the version explicitly: GraphDto.Version defaults to 0
             // ("no version seen") so that version-stripped payloads are detectable on read.
@@ -543,6 +576,110 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             ? BlackboardSerializer.StableTypeName(agentType)
             : null;
         return new BehaviorDto(index, composite.IsSync, agentTypeName, entryDtos);
+    }
+
+    /// <summary>
+    /// Serializes one data-built choice node's decision (payload version 10): the match mode
+    /// and the condition list, through the per-session condition entry codec. The two arms ride
+    /// as node indexes, with -1 for a terminal <see cref="NodeId.Default"/> arm — the
+    /// <see cref="EventEntryDto"/> encoding.
+    /// </summary>
+    private ChoiceDto BuildChoiceDto(int index, NodeId nodeId, IChoiceNode choice)
+    {
+        IReadOnlyList<ICondition> conditions = choice.Conditions;
+        ConditionEntryCodec codec = new(_conditionRegistry, $"Node '{nodeId}'");
+        ConditionEntry[] entries = new ConditionEntry[conditions.Count];
+        for (int i = 0; i < entries.Length; i++)
+        {
+            entries[i] = codec.WriteEntry(conditions[i]);
+        }
+
+        return new ChoiceDto(index, (byte)choice.Match, entries, TargetIndex(choice.TrueTarget),
+            TargetIndex(choice.FalseTarget));
+    }
+
+    /// <summary>
+    /// Serializes one data-built switch node (payload version 10). The typed key rides as its
+    /// registered name plus the runtime-stable value type name; case values ride as field-model
+    /// literals (see <see cref="SwitchLiteral"/>), which is where a <c>T</c> outside the field
+    /// model fails, naming this node.
+    /// </summary>
+    private static SwitchDto BuildSwitchDto(int index, NodeId nodeId, ISwitchNode switchNode)
+    {
+        Type valueType = switchNode.ValueType;
+        SwitchCaseDto[] cases = new SwitchCaseDto[switchNode.CaseCount];
+        for (int i = 0; i < cases.Length; i++)
+        {
+            cases[i] = new SwitchCaseDto(SwitchLiteral.Write(valueType, switchNode.CaseValueAt(i), nodeId),
+                TargetIndex(switchNode.CaseTargetAt(i)));
+        }
+
+        return new SwitchDto(index, switchNode.KeyName, BlackboardSerializer.StableTypeName(valueType), cases,
+            TargetIndex(switchNode.DefaultTarget));
+    }
+
+    /// <summary>A branch arm's wire index: -1 encodes <see cref="NodeId.Default"/> (terminal).</summary>
+    private static int TargetIndex(NodeId target) => target == NodeId.Default ? -1 : target.Index;
+
+    /// <summary>
+    /// Per-payload-session condition entry codec (payload version 10) — the exact twin of
+    /// <see cref="BehaviorEntryCodec"/>: write dispatch is
+    /// <see cref="ISerializableCondition.Write"/> first and
+    /// <see cref="IConditionRegistry.TryWrite"/> second, read dispatch is the registry only,
+    /// and the codec is wired into every writer/reader it creates so nested entry lists
+    /// (<c>Not</c>) encode under exactly the top-level rules. The read side caps entry nesting
+    /// at the same depth as behaviors — the codec-neutral backstop for the JSON path.
+    /// </summary>
+    private sealed class ConditionEntryCodec(IConditionRegistry registry, string owner) : IConditionEntryCodec
+    {
+        private int _readDepth;
+
+        public ConditionEntry WriteEntry(object condition)
+        {
+            BehaviorFieldWriter writer = new(entryCodec: null, conditionCodec: this);
+            if (condition is ISerializableCondition serializable)
+            {
+                serializable.Write(writer);
+            }
+            else if (!registry.TryWrite(condition, writer))
+            {
+                throw new NotSupportedException(
+                    $"{owner} contains condition '{condition.GetType().Name}', which is neither an " +
+                    "ISerializableCondition nor known to the condition registry. Implement " +
+                    "ISerializableCondition on it and register a reconstruction factory on " +
+                    "GraphSerializerOptions.ConditionRegistry.");
+            }
+
+            return new ConditionEntry(BlackboardSerializer.StableTypeName(condition.GetType()), writer.ToFields());
+        }
+
+        public object ReadEntry(ConditionEntry entry)
+        {
+            if (string.IsNullOrEmpty(entry.ConditionTypeName))
+                throw new InvalidOperationException(
+                    $"{owner} has an entry with a missing condition type name.");
+            if (_readDepth >= BehaviorDtoFormatter.MaxBehaviorNestingDepth)
+                throw new InvalidOperationException(
+                    $"{owner}: nested condition entries exceed the maximum nesting depth " +
+                    $"({BehaviorDtoFormatter.MaxBehaviorNestingDepth}).");
+
+            _readDepth++;
+            try
+            {
+                BehaviorFieldReader reader = new(entry.Fields, entryCodec: null, conditionCodec: this);
+                if (!registry.TryRead(entry.ConditionTypeName, reader, out object? condition) || condition is null)
+                    throw new NotSupportedException(
+                        $"{owner} names condition type '{entry.ConditionTypeName}', which the condition " +
+                        "registry cannot reconstruct. Register a factory for it on " +
+                        "GraphSerializerOptions.ConditionRegistry.");
+
+                return condition;
+            }
+            finally
+            {
+                _readDepth--;
+            }
+        }
     }
 
     /// <summary>
@@ -743,6 +880,26 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Behavior DTO owner index {behaviorDto.OwnerIndex} is duplicated in the payload.");
         }
 
+        // Claim-first for the v10 branch sections: the "ChoiceState"/"SwitchState" markers are
+        // only honored when the matching section claims the node index.
+        Dictionary<int, ChoiceDto>? choiceOwners = null;
+        foreach (ChoiceDto choiceDto in dto.Choices)
+        {
+            choiceOwners ??= new Dictionary<int, ChoiceDto>();
+            if (!choiceOwners.TryAdd(choiceDto.OwnerIndex, choiceDto))
+                throw new InvalidOperationException(
+                    $"Choice DTO owner index {choiceDto.OwnerIndex} is duplicated in the payload.");
+        }
+
+        Dictionary<int, SwitchDto>? switchOwners = null;
+        foreach (SwitchDto switchDto in dto.Switches)
+        {
+            switchOwners ??= new Dictionary<int, SwitchDto>();
+            if (!switchOwners.TryAdd(switchDto.OwnerIndex, switchDto))
+                throw new InvalidOperationException(
+                    $"Switch DTO owner index {switchDto.OwnerIndex} is duplicated in the payload.");
+        }
+
         // A node index may be claimed by at most one section. Before markerless container
         // claims this was implicit via marker matching; now it must be explicit — an
         // overlapping claim is a corrupt or crafted payload, not something to route by luck.
@@ -755,6 +912,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             AddClaims(ref claimedBy, containerOwners?.Keys, "Containers");
             AddClaims(ref claimedBy, eventEntryOwners?.Keys, "EventEntries");
             AddClaims(ref claimedBy, behaviorOwners?.Keys, "Behaviors");
+            AddClaims(ref claimedBy, choiceOwners?.Keys, "Choices");
+            AddClaims(ref claimedBy, switchOwners?.Keys, "Switches");
         }
 
         INode[] nodes = new INode[nodesLength];
@@ -857,6 +1016,23 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                                 $"Behavior DTO for node {nodeDto.Index} is {(behaviorClaim.IsSync ? "sync" : "async")} " +
                                 $"but the node is marked '{textDto.Logic}'.");
                         nodes[nodeDto.Index] = expectedMarker;
+                        break;
+                    }
+
+                    // Branch markers (v10): honored only when the matching branch section
+                    // claims this node index — an unclaimed marker string is ordinary codec
+                    // payload, exactly as for every sibling section.
+                    if (textDto.Logic == LogicNode.ChoiceStateMarker.Id.Name &&
+                        choiceOwners is not null && choiceOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.ChoiceStateMarker;
+                        break;
+                    }
+
+                    if (textDto.Logic == LogicNode.SwitchStateMarker.Id.Name &&
+                        switchOwners is not null && switchOwners.ContainsKey(nodeDto.Index))
+                    {
+                        nodes[nodeDto.Index] = LogicNode.SwitchStateMarker;
                         break;
                     }
 
@@ -1221,6 +1397,76 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 new NodeId(behaviorDto.OwnerIndex, behaviorNodeName), BuildBehaviorComposite(behaviorDto, entries));
         }
 
+        // Rebuild data-built branches (v10) through the public constructors so their validation
+        // (non-empty condition list, duplicate case values) re-runs on load. Conditions
+        // reconstruct through the condition registry; a KeyEquals key and the switch's tested
+        // key rebuild name-bound and resolve against the machine's bound schemas at evaluation.
+        // Arm ids rebuild as bare indexes, like fork branches and event entry targets.
+        foreach (ChoiceDto choiceDto in dto.Choices)
+        {
+            if (choiceDto.OwnerIndex < 0 || choiceDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Choice DTO owner index {choiceDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (!ReferenceEquals(nodes[choiceDto.OwnerIndex], LogicNode.ChoiceStateMarker))
+                throw new InvalidOperationException(
+                    $"Choice DTO owner index {choiceDto.OwnerIndex} does not reference a choice marker node.");
+            if (choiceDto.Conditions.Length == 0)
+                throw new InvalidOperationException(
+                    $"Choice DTO for node {choiceDto.OwnerIndex} must carry at least one condition.");
+            if (choiceDto.Match > (byte)ConditionMatch.Any)
+                throw new InvalidOperationException(
+                    $"Choice DTO for node {choiceDto.OwnerIndex} has unknown match mode {choiceDto.Match}.");
+
+            NodeId trueTarget = RebuildTarget(choiceDto.TrueTarget, nodesLength,
+                $"Choice DTO for node {choiceDto.OwnerIndex}", "true target");
+            NodeId falseTarget = RebuildTarget(choiceDto.FalseTarget, nodesLength,
+                $"Choice DTO for node {choiceDto.OwnerIndex}", "false target");
+
+            ConditionEntryCodec conditionCodec = new(_conditionRegistry,
+                $"Choice DTO for node {choiceDto.OwnerIndex}");
+            ICondition[] conditions = new ICondition[choiceDto.Conditions.Length];
+            for (int c = 0; c < conditions.Length; c++)
+            {
+                object entry = conditionCodec.ReadEntry(choiceDto.Conditions[c]);
+                conditions[c] = entry as ICondition ?? throw new InvalidOperationException(
+                    $"Choice DTO for node {choiceDto.OwnerIndex}: reconstructed condition " +
+                    $"'{entry.GetType().Name}' does not implement ICondition.");
+            }
+
+            nodes[choiceDto.OwnerIndex] = new LogicNode(
+                new NodeId(choiceDto.OwnerIndex, NodeName(dto, choiceDto.OwnerIndex)),
+                (IAsyncLogic)new ChoiceState(conditions, (ConditionMatch)choiceDto.Match, trueTarget, falseTarget));
+        }
+
+        foreach (SwitchDto switchDto in dto.Switches)
+        {
+            if (switchDto.OwnerIndex < 0 || switchDto.OwnerIndex >= nodesLength)
+                throw new InvalidOperationException(
+                    $"Switch DTO owner index {switchDto.OwnerIndex} is out of range (0..{nodesLength - 1}).");
+            if (!ReferenceEquals(nodes[switchDto.OwnerIndex], LogicNode.SwitchStateMarker))
+                throw new InvalidOperationException(
+                    $"Switch DTO owner index {switchDto.OwnerIndex} does not reference a switch marker node.");
+            if (switchDto.Cases.Length == 0)
+                throw new InvalidOperationException(
+                    $"Switch DTO for node {switchDto.OwnerIndex} must carry at least one case.");
+            if (string.IsNullOrEmpty(switchDto.KeyName))
+                throw new InvalidOperationException(
+                    $"Switch DTO for node {switchDto.OwnerIndex} carries no key name.");
+
+            NodeId switchDefault = RebuildTarget(switchDto.DefaultTarget, nodesLength,
+                $"Switch DTO for node {switchDto.OwnerIndex}", "default target");
+            NodeId[] caseTargets = new NodeId[switchDto.Cases.Length];
+            for (int c = 0; c < caseTargets.Length; c++)
+            {
+                caseTargets[c] = RebuildTarget(switchDto.Cases[c].TargetIndex, nodesLength,
+                    $"Switch DTO for node {switchDto.OwnerIndex}", $"case {c} target");
+            }
+
+            nodes[switchDto.OwnerIndex] = new LogicNode(
+                new NodeId(switchDto.OwnerIndex, NodeName(dto, switchDto.OwnerIndex)),
+                BuildSwitchState(switchDto, caseTargets, switchDefault));
+        }
+
         // Rebuild container-codec nodes (v6): children first (in wire order = SubGraphs
         // enumeration order), then the node's ordinary logic payload routes to the container
         // codec, which owns the reconstruction recipe.
@@ -1469,6 +1715,72 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         }
 
         return typed;
+    }
+
+    /// <summary>
+    /// Rebuilds one branch arm's node id from its wire index, with -1 decoding back to
+    /// <see cref="NodeId.Default"/> (a terminal arm). Ids rebuild as bare indexes — equality is
+    /// index-only and names resolve through the graph at runtime, so reading
+    /// <c>nodes[target].Id</c> here would only risk capturing a not-yet-rebuilt sentinel.
+    /// </summary>
+    private static NodeId RebuildTarget(int target, int nodesLength, string owner, string what)
+    {
+        if (target < -1 || target >= nodesLength)
+            throw new InvalidOperationException(
+                $"{owner} has {what} {target} out of range (-1..{nodesLength - 1}).");
+
+        return target == -1 ? NodeId.Default : new NodeId(target);
+    }
+
+    /// <summary>The display name a payload carries for one node index.</summary>
+    private static string NodeName(GraphDto dto, int index) => dto.Nodes[index] switch
+    {
+        NodeTextDto nt => nt.Name,
+        NodeBinaryDto nb => nb.Name,
+        _ => $"Node_{index}"
+    };
+
+    /// <summary>
+    /// Rebuilds one data-built switch, closing <c>SwitchState&lt;T&gt;</c> over the payload's
+    /// runtime-stable value type name and reconstructing through the public <c>Unbound</c>
+    /// factory, so duplicate-case validation re-runs on load (the
+    /// <c>BehaviorRegistry.ReadSetValue</c> recipe).
+    /// </summary>
+    private static IAsyncLogic BuildSwitchState(SwitchDto switchDto, NodeId[] caseTargets, NodeId defaultTarget)
+    {
+        if (!StableTypeResolver.TryResolve(switchDto.ValueTypeName, out Type valueType))
+            throw new InvalidOperationException(
+                $"Switch DTO for node {switchDto.OwnerIndex} names value type " +
+                $"'{switchDto.ValueTypeName}', which cannot be resolved — ensure the assembly declaring it " +
+                "is loaded.");
+
+        MethodInfo builder = typeof(GraphSerializer)
+            .GetMethod(nameof(BuildSwitchStateGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(valueType);
+        try
+        {
+            return (IAsyncLogic)builder.Invoke(null, [switchDto, caseTargets, defaultTarget])!;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            // Surface the state's own construction error (duplicate case values, an empty
+            // list) rather than the reflection wrapper, stack trace intact.
+            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            throw; // unreachable — Throw() always rethrows
+        }
+    }
+
+    private static SwitchState<T> BuildSwitchStateGeneric<T>(SwitchDto switchDto, NodeId[] caseTargets,
+        NodeId defaultTarget)
+    {
+        string owner = $"Switch DTO for node {switchDto.OwnerIndex}";
+        SwitchCase<T>[] cases = new SwitchCase<T>[switchDto.Cases.Length];
+        for (int i = 0; i < cases.Length; i++)
+        {
+            cases[i] = new SwitchCase<T>(SwitchLiteral.Read<T>(switchDto.Cases[i].Literal, owner), caseTargets[i]);
+        }
+
+        return SwitchState<T>.Unbound(switchDto.KeyName, cases, defaultTarget);
     }
 
     /// <summary>

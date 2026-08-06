@@ -143,6 +143,22 @@ public class LogicNode : INode
     /// </summary>
     public static readonly LogicNode AsyncBehaviorStateMarker =
         new(NodeId.AsyncBehaviorStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for data-built <c>ChoiceState</c> owner nodes during (de)serialization (wire
+    /// marker string "ChoiceState", payload version 10). One marker for both runtimes — the
+    /// data-built branch is one class implementing both logic and both director interfaces.
+    /// </summary>
+    public static readonly LogicNode ChoiceStateMarker =
+        new(NodeId.ChoiceStateMarker, new EmptyAsyncLogic());
+
+    /// <summary>
+    /// Sentinel for data-built <c>SwitchState&lt;T&gt;</c> owner nodes during
+    /// (de)serialization (wire marker string "SwitchState", payload version 10). One marker
+    /// for both runtimes and every closed <c>T</c> — the DTO's value type name discriminates.
+    /// </summary>
+    public static readonly LogicNode SwitchStateMarker =
+        new(NodeId.SwitchStateMarker, new EmptyAsyncLogic());
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using NxGraph.Authoring;
 using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -589,6 +590,88 @@ public class AllocationGateTests
             .If(() => flag = !flag) // exercise both branches over the run set
             .Then(() => Result.Success)
             .Else(() => Result.Success)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    // ── Data-built branching (spec 023): condition walk + case scan ─────
+    //
+    // Selection is an array walk over one stack-allocated context (plus one typed Get for the
+    // switch), so both new states must dispatch at 0 B under both runtimes. The tested key is
+    // Node-scoped on purpose: the board is machine-owned, so the gate measures the branch
+    // rather than board-binding plumbing.
+
+    private static (BlackboardSchema schema, BlackboardKey<int> tier) BranchFixture(string name)
+    {
+        BlackboardSchema schema = new(name, BlackboardScope.Node);
+        BlackboardKey<int> tier = schema.Register("tier", 2);
+        return (schema, tier);
+    }
+
+    [Test]
+    public async Task async_data_choice_branch_is_allocation_free()
+    {
+        (BlackboardSchema schema, BlackboardKey<int> tier) = BranchFixture("gate-choice");
+
+        Graph graph = GraphBuilder
+            .Start()
+            .If(ConditionMatch.All, new KeyEquals<int>(tier, 2), new Not(new IsTrue(false)))
+            .ThenAsync(_ => ResultHelpers.Success)
+            .ElseAsync(_ => ResultHelpers.Success)
+            .WithSchema(schema)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_data_choice_branch_is_allocation_free()
+    {
+        (BlackboardSchema schema, BlackboardKey<int> tier) = BranchFixture("gate-choice");
+
+        Graph graph = GraphBuilder
+            .Start()
+            .If(ConditionMatch.All, new KeyEquals<int>(tier, 2), new Not(new IsTrue(false)))
+            .Then(() => Result.Success)
+            .Else(() => Result.Success)
+            .WithSchema(schema)
+            .Build();
+
+        AssertZeroAlloc(graph.ToStateMachine());
+    }
+
+    [Test]
+    public async Task async_data_switch_dispatch_is_allocation_free()
+    {
+        (BlackboardSchema schema, BlackboardKey<int> tier) = BranchFixture("gate-switch");
+
+        Graph graph = GraphBuilder
+            .Start()
+            .Switch(tier)
+            .CaseAsync(1, _ => ResultHelpers.Success)
+            .CaseAsync(2, _ => ResultHelpers.Success)
+            .DefaultAsync(_ => ResultHelpers.Success)
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        await AssertZeroAllocAsync(graph.ToAsyncStateMachine());
+    }
+
+    [Test]
+    public void sync_data_switch_dispatch_is_allocation_free()
+    {
+        (BlackboardSchema schema, BlackboardKey<int> tier) = BranchFixture("gate-switch");
+
+        Graph graph = GraphBuilder
+            .Start()
+            .Switch(tier)
+            .Case(1, () => Result.Success)
+            .Case(2, () => Result.Success)
+            .Default(() => Result.Success)
+            .End()
+            .WithSchema(schema)
             .Build();
 
         AssertZeroAlloc(graph.ToStateMachine());

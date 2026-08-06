@@ -79,6 +79,12 @@ public struct NodeId(int index) : IEquatable<NodeId>
     public static NodeId BehaviorStateMarker => new(-13) { Name = "BehaviorState" };
     public static NodeId AsyncBehaviorStateMarker => new(-14) { Name = "AsyncBehaviorState" };
 
+    // -15 is taken: NxGraph.Serialization's internal ContainerPlaceholderMarker reserves it for
+    // the markerless container claim (an in-memory-only sentinel that never rides the wire).
+    // The sequence skips it so the sentinel space stays collision-free.
+    public static NodeId ChoiceStateMarker => new(-16) { Name = "ChoiceState" };
+    public static NodeId SwitchStateMarker => new(-17) { Name = "SwitchState" };
+
     /// <summary>
     /// Represents the start NodeId with an index of 0 and an <b>empty</b> name
     /// (<see cref="ToString"/> prints <c>(0)</c>). Display names are presentation data

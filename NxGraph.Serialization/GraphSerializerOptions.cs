@@ -33,4 +33,13 @@ public sealed class GraphSerializerOptions
     /// factories for user <c>ISerializableBehavior</c> implementations.
     /// </summary>
     public IBehaviorRegistry? BehaviorRegistry { get; init; }
+
+    /// <summary>
+    /// Resolves condition payload identities (payload version 10). When left null the
+    /// serializer uses a fresh default <see cref="ConditionRegistry"/>, which carries the
+    /// standard set (<c>IsTrue</c>, <c>Not</c>, closed <c>KeyEquals&lt;T&gt;</c>) built in —
+    /// data-built branching graphs round-trip with zero options. Configure one to register
+    /// reconstruction factories for user <c>ISerializableCondition</c> implementations.
+    /// </summary>
+    public IConditionRegistry? ConditionRegistry { get; init; }
 }

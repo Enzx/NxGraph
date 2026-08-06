@@ -85,6 +85,8 @@ await EventEntryExample.RunAsync();
 Console.WriteLine();
 BehaviorsExample.Run();
 Console.WriteLine();
+await DataBranchingExample.RunAsync();
+Console.WriteLine();
 ObserverExample.Run();
 Console.WriteLine();
 await FeatureExamples.RunAsync();

@@ -13,6 +13,7 @@ public sealed class BehaviorFieldReader
 {
     private readonly IReadOnlyList<BehaviorField> _fields;
     private readonly IBehaviorEntryCodec? _entryCodec;
+    private readonly IConditionEntryCodec? _conditionCodec;
 
     /// <summary>Wraps a field list (in write order) — standalone, no nested-entry support (see <see cref="ReadBehaviors"/>).</summary>
     public BehaviorFieldReader(IReadOnlyList<BehaviorField> fields)
@@ -25,6 +26,14 @@ public sealed class BehaviorFieldReader
         : this(fields)
     {
         _entryCodec = entryCodec;
+    }
+
+    internal BehaviorFieldReader(IReadOnlyList<BehaviorField> fields, IBehaviorEntryCodec? entryCodec,
+        IConditionEntryCodec? conditionCodec)
+        : this(fields)
+    {
+        _entryCodec = entryCodec;
+        _conditionCodec = conditionCodec;
     }
 
     /// <summary><see langword="true"/> when a field named <paramref name="name"/> exists.</summary>
@@ -116,6 +125,37 @@ public sealed class BehaviorFieldReader
         for (int i = 0; i < entries.Length; i++)
         {
             live[i] = _entryCodec.ReadEntry(entries[i]);
+        }
+
+        return live;
+    }
+
+    /// <summary>
+    /// Reads a nested condition entry list (payload version 10) back as <b>live instances</b>
+    /// — <c>Not</c>'s inner condition. Each entry is reconstructed recursively through the
+    /// serializer's registry dispatch, with the usual targeted error for unregistered names.
+    /// Only operates inside a <c>GraphSerializer</c> payload session — the serializer wires
+    /// the entry codec into the readers it creates; a standalone reader throws a targeted
+    /// error.
+    /// </summary>
+    public object[] ReadConditions(string name)
+    {
+        if (_conditionCodec is null)
+        {
+            throw new InvalidOperationException(
+                "ReadConditions only operates inside a GraphSerializer payload session — nested condition " +
+                "entries are reconstructed by the serializer's entry codec, which is not wired on a " +
+                "standalone BehaviorFieldReader.");
+        }
+
+        BehaviorFieldValue value = Require(name, BehaviorFieldKind.Conditions);
+        ConditionEntry[] entries = value.Conditions ?? throw new InvalidOperationException(
+            $"Behavior field '{name}' is a condition list but carries no conditions payload.");
+
+        object[] live = new object[entries.Length];
+        for (int i = 0; i < entries.Length; i++)
+        {
+            live[i] = _conditionCodec.ReadEntry(entries[i]);
         }
 
         return live;
