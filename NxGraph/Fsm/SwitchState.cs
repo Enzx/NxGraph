@@ -34,8 +34,13 @@ public readonly record struct SwitchCase<T>(T Value, NodeId Target);
 /// <para>
 /// One class implements both logic slots and both director interfaces, so a single instance
 /// authors either runtime. <see cref="ILogic.Execute"/> returns <see cref="Result.Success"/> —
-/// a decision never faults. Selection is one typed <c>Get</c> plus a linear scan over one
-/// stack-allocated context — 0 B.
+/// a decision never faults. Selection is one typed <c>Get</c> plus a linear scan — 0 B.
+/// </para>
+/// <para>
+/// Unlike <see cref="ChoiceState"/> this state runs no user code: its decision is a key lookup
+/// against literals, so there is nothing to evaluate through a <c>BehaviorContext</c> and no
+/// report channel to wire. Reporting a routed case would be new observable behavior, not
+/// plumbing — deliberately not invented here.
 /// </para>
 /// </summary>
 /// <typeparam name="T">The tested key's value type.</typeparam>

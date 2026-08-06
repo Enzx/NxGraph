@@ -89,7 +89,10 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     private readonly ForkState?[] _forks; // index = NodeId.Index; null for non-fork nodes
     private readonly JoinState?[] _joins; // index = NodeId.Index; null for non-join nodes
     private readonly IBlackboardSettable?[] _settables; // per-node, for per-token scratch stamping
-    private readonly State?[] _logReportStates; // indexed by NodeId.Index, resolved once
+    // Indexed by NodeId.Index, resolved once. Typed to the capability, not to State: a node
+    // owning a report channel need not be a State subclass (the data-built branch states carry
+    // both slots themselves).
+    private readonly ISyncLogReporter?[] _syncReporters;
     private readonly Action<string> _cachedLogReportCallback;
     private readonly bool _hasNodeSchema;
 
@@ -150,7 +153,7 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _forks = new ForkState?[graph.NodeCount];
         _joins = new JoinState?[graph.NodeCount];
         _settables = new IBlackboardSettable?[graph.NodeCount];
-        _logReportStates = new State?[graph.NodeCount];
+        _syncReporters = new ISyncLogReporter?[graph.NodeCount];
         bool anyJoin = false;
         for (int i = 0; i < graph.NodeCount; i++)
         {
@@ -163,10 +166,10 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             _joins[i] = logicNode.Logic as JoinState ?? logicNode.AsyncLogic as JoinState;
             anyJoin |= _joins[i] is not null;
             _settables[i] = logicNode.AsyncLogic as IBlackboardSettable ?? logicNode.Logic as IBlackboardSettable;
-            // Decorator logic (timeout wrappers) hides the state it wraps — resolve through
-            // the seam so the machine wires the wrapped state's own report slots.
-            _logReportStates[i] = logicNode.Logic as State
-                                  ?? LogicWrappers.ResolveThroughWrappers<State>(logicNode);
+            // Decorator logic (timeout wrappers) hides the reporter it wraps — resolve through
+            // the seam so the machine wires the wrapped node's own report slots.
+            _syncReporters[i] = logicNode.Logic as ISyncLogReporter
+                                ?? LogicWrappers.ResolveThroughWrappers<ISyncLogReporter>(logicNode);
         }
 
         _joinArrivals = anyJoin ? new int[graph.NodeCount] : null;
@@ -726,16 +729,18 @@ public class TokenMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             settable.SetBlackboards(_blackboards.With(t.NodeBoard!));
         }
 
-        State? stateForLog = _logReportStates[idx];
-        if (stateForLog is not null)
+        // Wired before the node executes — and therefore before a director's SelectNext runs —
+        // so a report raised while *deciding* is attributed to this node and this token.
+        ISyncLogReporter? reporter = _syncReporters[idx];
+        if (reporter is not null)
         {
-            stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
+            reporter.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
 
-            // Both slots are machine-owned per visit: State.Log (and the behavior-composite
-            // report bridge) falls back to the async slot when the sync one is null, so a
-            // callback left by an async machine that ran this shared graph earlier must not
-            // receive reports from this run.
-            ((ILogReporter)stateForLog).LogReport = null;
+            // Both slots are machine-owned per visit: State.Log (and the shared report bridge)
+            // falls back to the async slot when the sync one is null, so a callback left by an
+            // async machine that ran this shared graph earlier must not receive reports from
+            // this run.
+            reporter.LogReport = null;
         }
 
         ILogic syncLogic = logicNode.Logic!;

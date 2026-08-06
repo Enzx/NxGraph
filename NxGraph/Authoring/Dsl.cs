@@ -309,6 +309,39 @@ public static partial class Dsl
         return switchBuilder.DefaultAsync(asyncRelay);
     }
 
+    /// <summary>
+    ///  Creates a case in the data-built switch statement of the FSM graph with async logic.
+    /// </summary>
+    /// <param name="switchBuilder">The KeySwitchBuilder that represents the switch statement.</param>
+    /// <param name="key">The key that identifies the case in the switch statement.</param>
+    /// <param name="run">A function that defines the async logic to be executed for this case.</param>
+    /// <typeparam name="TKey">The type of the key used to identify the case.</typeparam>
+    /// <returns>A KeySwitchBuilder that allows chaining further cases or a default case.</returns>
+    public static KeySwitchBuilder<TKey> CaseAsync<TKey>(this KeySwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<CancellationToken, ValueTask<Result>> run)
+        where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.CaseAsync(key, asyncRelay);
+    }
+
+    /// <summary>
+    /// Creates a default case in the data-built switch statement of the FSM graph with async logic.
+    /// </summary>
+    /// <param name="switchBuilder">The KeySwitchBuilder that represents the switch statement.</param>
+    /// <param name="run">A function that defines the async logic to be executed for the default case.</param>
+    /// <typeparam name="TKey">The type of the key used to identify the case.</typeparam>
+    /// <returns>A KeySwitchBuilder that allows chaining further cases or finalizing the switch statement.</returns>
+    public static KeySwitchBuilder<TKey> DefaultAsync<TKey>(this KeySwitchBuilder<TKey> switchBuilder,
+        Func<CancellationToken, ValueTask<Result>> run)
+        where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        AsyncRelayState asyncRelay = new(run);
+        return switchBuilder.DefaultAsync(asyncRelay);
+    }
+
     // ── AsyncSwitchBuilder convenience overloads (lambda → AsyncRelayState) ──
 
     /// <summary>

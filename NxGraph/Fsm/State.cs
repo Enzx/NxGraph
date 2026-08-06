@@ -16,7 +16,10 @@ namespace NxGraph.Fsm;
 /// <see cref="IAsyncLogic.ExecuteAsync"/> (zero-allocation on .NET 8+).
 /// </para>
 /// </summary>
-public abstract class State : ILogic, ILogReporter, IBlackboardSettable
+// ISyncLogReporter (which extends ILogReporter) is what the machines' sync report tables
+// target: the capability, not this base class. Declaring it here is a declaration change only
+// — both slots below already exist and keep their exact shape.
+public abstract class State : ILogic, ISyncLogReporter, IBlackboardSettable
 {
     /// <summary>
     /// Routed blackboard access (see <see cref="BlackboardContext"/>). Non-nullable: when the

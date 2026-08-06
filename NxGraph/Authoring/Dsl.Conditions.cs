@@ -11,9 +11,12 @@ namespace NxGraph.Authoring;
 /// with these round-trips through <c>GraphSerializer</c> with zero options and survives
 /// suspend/resume — and its arms carry labels into the Mermaid export.
 /// <para>
-/// The builders returned here are the same <see cref="Dsl.IfBuilder"/> /
-/// <see cref="Dsl.SwitchBuilder{TKey}"/> the delegate paths return, so
-/// <c>.Then(...)/.Else(...)</c> and <c>.Case(...)/.Default(...)/.End()</c> are unchanged.
+/// <c>.If(...)</c> returns the same <see cref="Dsl.IfBuilder"/> the delegate path returns —
+/// it builds its node eagerly either way. <c>.Switch(key)</c> returns
+/// <see cref="Dsl.KeySwitchBuilder{TKey}"/> instead of <see cref="Dsl.SwitchBuilder{TKey}"/>,
+/// because the data-built state is immutable and can only be constructed at <c>.End()</c>;
+/// the two builders mirror each other's surface, so <c>.Then(...)/.Else(...)</c> and
+/// <c>.Case(...)/.Default(...)/.End()</c> read exactly the same in both paths.
 /// </para>
 /// </summary>
 public static partial class Dsl
@@ -55,17 +58,17 @@ public static partial class Dsl
     /// <c>.End()</c>: a switch is a lookup, so at most one case may match. Ordered,
     /// first-match-wins rules are a chain of <c>.If(condition)</c> branches.
     /// </summary>
-    public static SwitchBuilder<TKey> Switch<TKey>(this StateToken prev, BlackboardKey<TKey> key)
+    public static KeySwitchBuilder<TKey> Switch<TKey>(this StateToken prev, BlackboardKey<TKey> key)
         where TKey : notnull
     {
-        return new SwitchBuilder<TKey>(prev, key);
+        return new KeySwitchBuilder<TKey>(prev, key);
     }
 
     /// <inheritdoc cref="Switch{TKey}(StateToken,BlackboardKey{TKey})" />
-    public static SwitchBuilder<TKey> Switch<TKey>(this StartToken root, BlackboardKey<TKey> key)
+    public static KeySwitchBuilder<TKey> Switch<TKey>(this StartToken root, BlackboardKey<TKey> key)
         where TKey : notnull
     {
-        return new SwitchBuilder<TKey>(root, key);
+        return new KeySwitchBuilder<TKey>(root, key);
     }
 
     private static ICondition[] Single(ICondition condition)

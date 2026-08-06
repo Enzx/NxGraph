@@ -853,12 +853,13 @@ public class AsyncTokenMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         {
             reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
 
-            // Sync states read both slots (State.Log prefers the sync one), so the sync slot
-            // is cleared too — a callback left by a sync machine that ran this shared graph
-            // earlier must neither shadow this machine's observer nor receive its reports.
-            if (reporter is State syncState)
+            // Sync-capable nodes read both slots (State.Log and the shared report bridge prefer
+            // the sync one), so the sync slot is cleared too — a callback left by a sync machine
+            // that ran this shared graph earlier must neither shadow this machine's observer nor
+            // receive its reports.
+            if (reporter is ISyncLogReporter syncReporter)
             {
-                syncState.SyncLogReport = null;
+                syncReporter.SyncLogReport = null;
             }
         }
 

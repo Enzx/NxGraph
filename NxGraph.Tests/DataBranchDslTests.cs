@@ -9,10 +9,11 @@ namespace NxGraph.Tests;
 /// <summary>
 /// The data-built authoring surface (spec 023, <c>Authoring/Dsl.Conditions.cs</c>):
 /// <c>.If(condition)</c>, <c>.If(match, conditions…)</c> and <c>.Switch(blackboardKey)</c> on
-/// both <c>StartToken</c> (the branch as the graph's first node) and <c>StateToken</c>. The
-/// builders are the same <c>IfBuilder</c> / <c>SwitchBuilder</c> the delegate paths return, so
-/// these tests pin that the chain shape is unchanged and that the data mode really builds the
-/// serializable states rather than a <c>Relay*</c> one.
+/// both <c>StartToken</c> (the branch as the graph's first node) and <c>StateToken</c>.
+/// <c>.If(...)</c> returns the same <c>IfBuilder</c> the delegate path returns; <c>.Switch(key)</c>
+/// returns <c>KeySwitchBuilder</c>, the data-built twin of <c>SwitchBuilder</c> that mirrors its
+/// authoring surface. These tests pin that the chain shape is unchanged and that the data path
+/// really builds the serializable states rather than a <c>Relay*</c> one.
 /// </summary>
 [TestFixture]
 [Category("branching_dsl")]
@@ -23,6 +24,18 @@ public class DataBranchDslTests
         trace.Add(name);
         return Result.Success;
     });
+
+    private static Result Mark(string name, List<string> trace)
+    {
+        trace.Add(name);
+        return Result.Success;
+    }
+
+    private static ValueTask<Result> MarkAsync(string name, List<string> trace)
+    {
+        trace.Add(name);
+        return ResultHelpers.Success;
+    }
 
     private static (BlackboardSchema schema, Blackboard board, BlackboardKey<bool> armed,
         BlackboardKey<string> mode) Boards()
@@ -280,5 +293,79 @@ public class DataBranchDslTests
             () => _ = GraphBuilder.Start().Switch(default(BlackboardKey<string>)));
 
         Assert.That(ex!.ParamName, Is.EqualTo("key"));
+    }
+
+    [Test]
+    public async Task Switch_key_mirrors_the_selector_builders_lambda_surface()
+    {
+        // KeySwitchBuilder must offer every convenience overload SwitchBuilder offers, so that
+        // swapping a selector for a key changes the .Switch(...) call and nothing else. One graph
+        // per lambda flavour — plain sync, plain async, context sync, context async — makes this a
+        // compile-time completeness proof as well as a routing check.
+        //
+        // Each graph runs on the runtime its own arms can run on: the async-lambda flavours build
+        // AsyncRelayState arms, which the sync StateMachine rejects at construction by design (it
+        // names the first node lacking ILogic). That is the pre-existing rule for every async
+        // lambda in the DSL, not something the data switch changes — so this test is not
+        // parameterised over the runtime; the branch node itself is pinned on both runtimes by the
+        // sibling tests and the parity conformance matrix.
+        (BlackboardSchema schema, Blackboard board, _, BlackboardKey<string> mode) = Boards();
+        List<string> trace = [];
+
+        Graph plainSync = GraphBuilder.Start()
+            .Switch(mode)
+            .Case("alpha", () => Mark("sync:alpha", trace))
+            .Default(() => Mark("sync:default", trace))
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        Graph plainAsync = GraphBuilder.Start()
+            .Switch(mode)
+            .CaseAsync("alpha", _ => MarkAsync("async:alpha", trace))
+            .DefaultAsync(_ => MarkAsync("async:default", trace))
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        Graph contextSync = GraphBuilder.Start()
+            .Switch(mode)
+            .Case("alpha", bb => Mark($"bb:{bb.Get(mode)}", trace))
+            .Default(bb => Mark($"bb:default:{bb.Get(mode)}", trace))
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        Graph contextAsync = GraphBuilder.Start()
+            .Switch(mode)
+            .CaseAsync("alpha", (bb, _) => MarkAsync($"bbAsync:{bb.Get(mode)}", trace))
+            .DefaultAsync((bb, _) => MarkAsync($"bbAsync:default:{bb.Get(mode)}", trace))
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        // (graph, runs on the sync machine)
+        (Graph Graph, bool Sync)[] graphs =
+        [
+            (plainSync, true), (plainAsync, false), (contextSync, true), (contextAsync, false),
+        ];
+
+        board.Set(mode, "alpha");
+        foreach ((Graph graph, bool runSync) in graphs)
+        {
+            Assert.That(await RunAsync(graph, board, runSync), Is.EqualTo(Result.Success));
+        }
+
+        board.Set(mode, "omega");
+        foreach ((Graph graph, bool runSync) in graphs)
+        {
+            Assert.That(await RunAsync(graph, board, runSync), Is.EqualTo(Result.Success));
+        }
+
+        Assert.That(trace, Is.EqualTo(new[]
+        {
+            "sync:alpha", "async:alpha", "bb:alpha", "bbAsync:alpha",
+            "sync:default", "async:default", "bb:default:omega", "bbAsync:default:omega",
+        }));
     }
 }

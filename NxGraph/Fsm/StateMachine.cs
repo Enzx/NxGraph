@@ -93,7 +93,10 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     // skips OnEnter entirely and never observes _executeGate.
     private bool _reentranceGuard;
     private readonly Action<string> _cachedLogReportCallback;
-    private readonly State?[] _logReportStates; // indexed by NodeId.Index, resolved once at construction
+    // Indexed by NodeId.Index, resolved once at construction. Typed to the capability, not to
+    // State: a node owning a report channel need not be a State subclass (the data-built branch
+    // states are plain ILogic/IAsyncDirector implementations that carry both slots themselves).
+    private readonly ISyncLogReporter?[] _syncReporters;
     private readonly RetryPolicy[]? _retryPolicies; // graph-owned; null when no node declares one
     private int _attempts; // executions of the current node in this run
     private bool _nodeEntered; // the current node's EnterAction has fired for this visit
@@ -146,7 +149,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         _initial = graph.StartNode.Id;
         _current = _initial;
         _cachedLogReportCallback = LogReportCallback;
-        _logReportStates = BuildLogReportTable(graph);
+        _syncReporters = BuildSyncReporterTable(graph);
         _eventEntry = FindEventEntry(graph);
         _retryPolicies = graph.RetryPolicies;
         _outcomeCodes = graph.OutcomeCodes;
@@ -321,18 +324,18 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
             "Cannot raise an event while the machine is executing — an event starts a new run. Finish the " +
             "current run before raising.");
 
-    private static State?[] BuildLogReportTable(Graph graph)
+    private static ISyncLogReporter?[] BuildSyncReporterTable(Graph graph)
     {
-        State?[] table = new State?[graph.NodeCount];
+        ISyncLogReporter?[] table = new ISyncLogReporter?[graph.NodeCount];
         for (int i = 0; i < table.Length; i++)
         {
             if (graph.TryGetNodeByIndex(i, out INode? node) && node is LogicNode logicNode)
             {
-                // Decorator logic (timeout wrappers) hides the state it wraps — resolve
-                // through the seam so the machine wires (and clears) the wrapped state's own
-                // report slots, exactly as it would for the bare state.
-                table[i] = logicNode.Logic as State
-                           ?? LogicWrappers.ResolveThroughWrappers<State>(logicNode);
+                // Decorator logic (timeout wrappers) hides the reporter it wraps — resolve
+                // through the seam so the machine wires (and clears) the wrapped node's own
+                // report slots, exactly as it would for the bare node.
+                table[i] = logicNode.Logic as ISyncLogReporter
+                           ?? LogicWrappers.ResolveThroughWrappers<ISyncLogReporter>(logicNode);
             }
         }
 
@@ -729,20 +732,23 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
 
         LogicNode logicNode = (LogicNode)node;
 
-        // Wire log-report callback for nodes that support it. Reassigned on every visit so
-        // interleaved machines sharing a graph each attribute reports to their own observer;
-        // null when this machine has no observer, so nodes that gate report formatting on a
-        // wired callback (behavior composites) pay nothing on observer-less machines.
-        State? stateForLog = _logReportStates[_current.Index];
-        if (stateForLog is not null)
+        // Wire the log-report callback for nodes that own a report channel. Done before the
+        // node executes — and therefore before a director's SelectNext runs — so a report
+        // raised while *deciding* (a condition inside a data-built branch node) is attributed
+        // to this node under this machine's observer. Reassigned on every visit so interleaved
+        // machines sharing a graph each attribute reports to their own observer; null when this
+        // machine has no observer, so nodes that gate report formatting on a wired callback
+        // (behavior composites, conditions) pay nothing on observer-less machines.
+        ISyncLogReporter? reporter = _syncReporters[_current.Index];
+        if (reporter is not null)
         {
-            stateForLog.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
+            reporter.SyncLogReport = _observer is null ? null : _cachedLogReportCallback;
 
-            // Both slots are machine-owned per visit: State.Log (and the behavior-composite
-            // report bridge) falls back to the async slot when the sync one is null, so a
-            // callback left by an async machine that ran this shared graph earlier must not
-            // receive reports from this run.
-            ((ILogReporter)stateForLog).LogReport = null;
+            // Both slots are machine-owned per visit: State.Log (and the shared report bridge)
+            // falls back to the async slot when the sync one is null, so a callback left by an
+            // async machine that ran this shared graph earlier must not receive reports from
+            // this run.
+            reporter.LogReport = null;
         }
 
         // Execute the node synchronously.

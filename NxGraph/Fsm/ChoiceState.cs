@@ -1,6 +1,7 @@
 using NxGraph.Behaviors;
 using NxGraph.Blackboards;
 using NxGraph.Conditions;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
@@ -26,13 +27,20 @@ namespace NxGraph.Fsm;
 /// the false arm, so reachability validation and Mermaid export need no special casing.
 /// </para>
 /// <para>
-/// The condition list is evaluated through a <see cref="BehaviorContext"/> whose report channel
-/// is inert: a branch node's decision is side-effect free by contract, so nothing is routed to
-/// the observer from here (<see cref="BehaviorContext.HasReporter"/> is
-/// <see langword="false"/>). Selection is an array walk over one stack-allocated context — 0 B.
+/// The condition list is evaluated through a <see cref="BehaviorContext"/> carrying this node's
+/// <b>live</b> report channel, so <see cref="BehaviorContext.Report"/> from inside a condition
+/// reaches the running machine's observer (<c>OnLogReport</c>) attributed to this node, exactly
+/// as <c>State.Log</c> and the behavior composites do. Reporting a decision is diagnostics, not
+/// a side effect — the side-effect-free <see cref="ICondition"/> contract still forbids writing
+/// to the boards, which is what keeps short-circuit evaluation legal. Because this state is not
+/// a <c>State</c> subclass it owns the two machine-wired slots itself; on an observer-less
+/// machine both are wired <see langword="null"/>, so
+/// <see cref="BehaviorContext.HasReporter"/>-gated conditions pay nothing. Selection stays an
+/// array walk over one stack-allocated context — 0 B.
 /// </para>
 /// </summary>
-public sealed class ChoiceState : ILogic, IAsyncLogic, IDirector, IAsyncDirector, IBlackboardSettable, IChoiceNode
+public sealed class ChoiceState : ILogic, IAsyncLogic, IDirector, IAsyncDirector, IBlackboardSettable, IChoiceNode,
+    ISyncLogReporter, IBehaviorReportSink
 {
     private readonly ICondition[] _conditions;
     private readonly ConditionMatch _match;
@@ -40,6 +48,12 @@ public sealed class ChoiceState : ILogic, IAsyncLogic, IDirector, IAsyncDirector
     private readonly NodeId _falseTarget;
     private readonly NodeId[] _staticTargets;
     private BlackboardContext _blackboards;
+
+    // The node's report channel. Both slots are machine-owned and reassigned on every visit
+    // (the running machine wires its own family's slot and clears the other's), which is what
+    // keeps reports attributed to the machine that is actually running — see ISyncLogReporter.
+    private Action<string>? _syncLogReport;
+    private Func<string, CancellationToken, ValueTask>? _asyncLogReport;
 
     /// <param name="conditions">The conditions to evaluate, in order. At least one is
     /// required; null entries are rejected.</param>
@@ -76,9 +90,28 @@ public sealed class ChoiceState : ILogic, IAsyncLogic, IDirector, IAsyncDirector
 
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => _blackboards = context;
 
+    Action<string>? ISyncLogReporter.SyncLogReport
+    {
+        get => _syncLogReport;
+        set => _syncLogReport = value;
+    }
+
+    Func<string, CancellationToken, ValueTask>? ILogReporter.LogReport
+    {
+        get => _asyncLogReport;
+        set => _asyncLogReport = value;
+    }
+
+    // Reuses the behavior composites' bridge verbatim: prefer the sync callback, fall back to
+    // the async one (waited out, so delivery completes before Report returns under either
+    // runtime). `this` is the sink, so no per-selection allocation.
+    bool IBehaviorReportSink.HasReporter => BehaviorComposition.SyncHasReporter(this);
+
+    void IBehaviorReportSink.Report(string message) => BehaviorComposition.SyncReport(this, message);
+
     private NodeId SelectNextCore()
     {
-        BehaviorContext ctx = new(in _blackboards, null);
+        BehaviorContext ctx = new(in _blackboards, this);
         ICondition[] conditions = _conditions;
         if (_match == ConditionMatch.All)
         {

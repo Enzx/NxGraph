@@ -88,6 +88,28 @@ public static partial class Dsl
         return switchBuilder.Default(new RelayState(run));
     }
 
+    // ── KeySwitchBuilder overloads accepting Func<Result> ───────────────
+
+    /// <summary>
+    /// Adds a case with a synchronous lambda to the data-built switch builder.
+    /// </summary>
+    public static KeySwitchBuilder<TKey> Case<TKey>(this KeySwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Case(key, new RelayState(run));
+    }
+
+    /// <summary>
+    /// Adds a default case with a synchronous lambda to the data-built switch builder.
+    /// </summary>
+    public static KeySwitchBuilder<TKey> Default<TKey>(this KeySwitchBuilder<TKey> switchBuilder,
+        Func<Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Default(new RelayState(run));
+    }
+
     // ── AsyncSwitchBuilder overloads accepting Func<Result> ──────────────
 
     /// <summary>
