@@ -6,7 +6,7 @@ namespace NxGraph.Tests;
 
 [TestFixture]
 [Category("branching_choice")]
-public class ChoiceStateTests
+public class RelayChoiceStateTests
 {
     [Test]
     [CancelAfter(10_000)]
@@ -44,8 +44,8 @@ public class ChoiceStateTests
     public void start_if_graph_is_executable_by_the_sync_runtime()
     {
         // Regression: Start().If(predicate) used to wrap the sync predicate in an
-        // AsyncChoiceState, making the start node unexecutable by the sync StateMachine
-        // while every sibling If overload produced a sync ChoiceState.
+        // AsyncRelayChoiceState, making the start node unexecutable by the sync StateMachine
+        // while every sibling If overload produced a sync RelayChoiceState.
         const bool flag = true;
 
         StateMachine fsm = GraphBuilder.Start()

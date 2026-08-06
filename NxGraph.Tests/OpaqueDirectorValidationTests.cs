@@ -75,6 +75,6 @@ public class OpaqueDirectorValidationTests
 
         Assert.That(result.Diagnostics.Any(d =>
                 d.Message.Contains("no static targets", StringComparison.OrdinalIgnoreCase)),
-            Is.False, "Built-in ChoiceState surfaces its branches and must not be flagged.");
+            Is.False, "Built-in RelayChoiceState surfaces its branches and must not be flagged.");
     }
 }

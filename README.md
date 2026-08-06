@@ -80,7 +80,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 ## Why NxGraph
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
-- **Predictable branching**: run-one fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
+- **Predictable branching**: run-one fan-out happens through director nodes such as `RelayChoiceState` and `RelaySwitchState<TKey>`; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
 
 - **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`/`.WaitFor(...)`, and `.ToWithTimeoutAsync(...)`/`.ToWithTimeout(...)` — every construct has twins in both runtimes.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
@@ -225,7 +225,7 @@ var graph = GraphBuilder
 
 ### Custom directors
 
-`.If(...)` and `.Switch(...)` compile down to the built-in director nodes `ChoiceState` and `SwitchState<TKey>`. A **director** is a node implementing `IDirector` (`IAsyncDirector` for the async runtime) whose `SelectNext()` picks the next node at runtime — implement it yourself when the routing decision doesn't fit a predicate or a key/case map. Override `EnumerateStaticTargets()` to surface the nodes you can route to: the validator and the Mermaid exporter walk it, and the validator warns when a custom director exposes none (its branches would be invisible to reachability analysis and diagrams).
+`.If(...)` and `.Switch(...)` compile down to the built-in director nodes `RelayChoiceState` and `RelaySwitchState<TKey>`. A **director** is a node implementing `IDirector` (`IAsyncDirector` for the async runtime) whose `SelectNext()` picks the next node at runtime — implement it yourself when the routing decision doesn't fit a predicate or a key/case map. Override `EnumerateStaticTargets()` to surface the nodes you can route to: the validator and the Mermaid exporter walk it, and the validator warns when a custom director exposes none (its branches would be invisible to reachability analysis and diagrams).
 
 ### Fan-out at a glance
 
@@ -233,7 +233,7 @@ Every fan-out construct answers two questions: **how many successors run**, and 
 
 | How many run | Chosen statically (declared in the graph) | Chosen dynamically (at runtime) |
 |---|---|---|
-| **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule | Director — [`IDirector`](#custom-directors) selects any node in code; `ChoiceState`/`SwitchState<TKey>` are the built-ins |
+| **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule | Director — [`IDirector`](#custom-directors) selects any node in code; `RelayChoiceState`/`RelaySwitchState<TKey>` are the built-ins |
 | **Many at once** | Parallel — [`.Parallel(regions...)`](#parallel-regions-and-states) runs **all** region graphs | Dynamic parallel — [`.Parallel(selector, ...)`](#dynamic-some-of-many-regions) runs the **subset** a blackboard selector picks |
 | **Many in one flat graph** | Token runtime — [`.ForkTo(...)` + `JoinState`](#token-runtime-fork-join-and-mid-graph-merge) fan tokens out and merge them mid-graph (all / any / M-of-N) | The same fork/join graph — which tokens reach a join, and when, is decided by each token's own path at runtime |
 
@@ -1249,7 +1249,7 @@ The tests cover:
 ## FAQ
 
 **Why is there only one direct success transition per node?**  
-Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path. When several paths must run at once, use the parallel composites instead of extra edges — see [Fan-out at a glance](#fan-out-at-a-glance); a token runner with free-form fan-out in one flat graph is a recorded, deliberately deferred design.
+Branching is modeled explicitly through directors such as `RelayChoiceState` and `RelaySwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path. When several paths must run at once, use the parallel composites instead of extra edges — see [Fan-out at a glance](#fan-out-at-a-glance); a token runner with free-form fan-out in one flat graph is a recorded, deliberately deferred design.
 
 **Can I share a graph across machines?**  
 Yes. `Graph` is immutable after build and can be reused across multiple state machine instances.

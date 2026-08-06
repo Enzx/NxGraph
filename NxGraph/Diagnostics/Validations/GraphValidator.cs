@@ -225,6 +225,11 @@ public static class GraphValidator
         // 4e) Event-entry lints (spec 013) — always on, mirroring the fork/join presence Info.
         ValidateEventEntries(graph, result);
 
+        // 4f) Data-built branch lints (spec 023) — both are about branches that cannot be what
+        // the author meant. Empty condition lists and duplicate case values are constructor
+        // rejections, not lints: they cannot reach a built graph.
+        ValidateBranches(graph, result);
+
         // 5) Unreachable-node and duplicate-name checks. A supplied AllNodes wins (back-compat
         // for pre-build ID lists); otherwise the set is derived from the graph itself — a built
         // Graph holds every node with its display name applied at Build(), so standalone
@@ -312,6 +317,33 @@ public static class GraphValidator
 
             foreach (int dup in kvp.Value)
                 result.Add(Severity.Error, $"Duplicate node UID '{kvp.Key:D}'.", graph.GetNodeByIndex(dup).Id);
+        }
+    }
+
+    private static void ValidateBranches(Graph graph, GraphValidationResult result)
+    {
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            if ((logicNode.AsyncLogic as IChoiceNode ?? logicNode.Logic as IChoiceNode) is { } choice &&
+                choice.TrueTarget.Equals(choice.FalseTarget))
+            {
+                result.Add(Severity.Warning,
+                    "Choice routes both arms to the same node — the branch decides nothing. Point the arms " +
+                    "at different nodes, or drop the choice.", node.Id);
+            }
+
+            if ((logicNode.AsyncLogic as ISwitchNode ?? logicNode.Logic as ISwitchNode) is { } switchNode &&
+                switchNode.DefaultTarget.Equals(NodeId.Default))
+            {
+                result.Add(Severity.Warning,
+                    "Switch declares no default target — a value matching no case terminates the run " +
+                    "silently. Declare an explicit Default(...) arm.", node.Id);
+            }
         }
     }
 

@@ -6,7 +6,7 @@ namespace NxGraph.Tests;
 
 [TestFixture]
 [Category("switch_default")]
-public class SwitchDefaultCaseTests
+public class RelaySwitchStateTests
 {
     [Test]
     public async Task switch_should_follow_default_when_no_case_matches()
@@ -29,7 +29,7 @@ public class SwitchDefaultCaseTests
     [Test]
     public async Task async_switch_without_default_should_terminate_when_no_case_matches()
     {
-        // Regression: previously AsyncSwitchState defaulted _defaultNode to default(NodeId)
+        // Regression: previously AsyncRelaySwitchState defaulted _defaultNode to default(NodeId)
         // (index 0 = Start) so a no-match case silently looped to Start instead of
         // exiting cleanly. The fix routes the no-default case through NodeId.Default,
         // which the async runtime treats as terminal success.

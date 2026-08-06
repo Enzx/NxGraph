@@ -16,8 +16,8 @@ namespace NxFSM.Examples.DungeonCrawler;
 /// <list type="bullet">
 ///   <item>Custom <see cref="State{TAgent}"/> classes with full lifecycle (OnEnter / OnRun / OnExit)</item>
 ///   <item>Agent propagation via <see cref="StateMachine{TAgent}"/> + <c>WithAgent</c></item>
-///   <item><see cref="SwitchState{TKey}"/> branching (encounter routing)</item>
-///   <item><see cref="ChoiceState"/> branching (alive check, boss-defeated check)</item>
+///   <item><see cref="RelaySwitchState{TKey}"/> branching (encounter routing)</item>
+///   <item><see cref="RelayChoiceState"/> branching (alive check, boss-defeated check)</item>
 ///   <item>Graph cycles (loop back to Explore after each encounter)</item>
 ///   <item>Hierarchical / nested FSM (boss fight is a child <see cref="StateMachine"/>)</item>
 ///   <item><see cref="IStateMachineObserver"/> for full event tracing</item>
@@ -60,7 +60,7 @@ public static class DungeonCrawlerExample
 
         // We must drop down to the builder to wire the converging paths (merges) 
         // and loop backs, which the linear DSL does not support directly.
-        // Also, for 'SwitchState' to log target names correctly, we must supply
+        // Also, for 'RelaySwitchState' to log target names correctly, we must supply
         // the named NodeIds explicitly to its constructor.
 
         // Add Encounter Nodes and use the named ids directly
@@ -70,8 +70,8 @@ public static class DungeonCrawlerExample
         NodeId bossFightId = builder.AddNode(bossFight); builder.SetName(bossFightId, "BossFight"); bossFightId = bossFightId.WithName("BossFight");
         NodeId emptyRoomId = builder.AddNode(emptyRoom); builder.SetName(emptyRoomId, "EmptyRoom"); emptyRoomId = emptyRoomId.WithName("EmptyRoom");
 
-        // Manually build SwitchState with named nodes
-        SwitchState<EncounterType> encounterSwitch = new(
+        // Manually build RelaySwitchState with named nodes
+        RelaySwitchState<EncounterType> encounterSwitch = new(
             () => ctx.CurrentEncounter,
             new Dictionary<EncounterType, NodeId>
             {
@@ -96,13 +96,13 @@ public static class DungeonCrawlerExample
         // Build Director Logic (Choice) - resolving loops manually
 
         // Boss Defeated? -> Victory OR Explore (Loop)
-        ChoiceState bossCheck = new(() => ctx.BossDefeated, victoryId, exploreToken.Id);
+        RelayChoiceState bossCheck = new(() => ctx.BossDefeated, victoryId, exploreToken.Id);
         NodeId bossCheckId = builder.AddNode(bossCheck);
         builder.SetName(bossCheckId, "BossDefeatedCheck");
         bossCheckId = bossCheckId.WithName("BossDefeatedCheck");
 
         // Hero Alive? -> BossCheck OR Defeat
-        ChoiceState aliveCheck = new(() => ctx.HeroAlive, bossCheckId, defeatId);
+        RelayChoiceState aliveCheck = new(() => ctx.HeroAlive, bossCheckId, defeatId);
         NodeId aliveCheckId = builder.AddNode(aliveCheck);
         builder.SetName(aliveCheckId, "AliveCheck");
         aliveCheckId = aliveCheckId.WithName("AliveCheck");

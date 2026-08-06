@@ -4,12 +4,15 @@ using NxGraph.Graphs;
 namespace NxGraph.Fsm.Async;
 
 /// <summary>
-/// Async director that picks between two destinations via a predicate. The
+/// <b>Delegate-backed</b> async director that picks between two destinations via a predicate
+/// (the <c>Relay*</c> family — a state whose decision closes over code; it cannot ride a
+/// serialization payload, so prefer the data-built <c>ChoiceState</c> when the decision is
+/// data). The
 /// blackboard-context overload receives the machine-bound routed context (see
 /// <see cref="BlackboardContext"/>), so branching can read shared memory instead of
 /// closing over ad-hoc state.
 /// </summary>
-public sealed class AsyncChoiceState : IAsyncLogic, IAsyncDirector, IBlackboardSettable
+public sealed class AsyncRelayChoiceState : IAsyncLogic, IAsyncDirector, IBlackboardSettable
 {
     private readonly Func<ValueTask<bool>>? _predicate;
     private readonly Func<BlackboardContext, ValueTask<bool>>? _bbPredicate;
@@ -17,14 +20,14 @@ public sealed class AsyncChoiceState : IAsyncLogic, IAsyncDirector, IBlackboardS
     private readonly NodeId _falseNode;
     private BlackboardContext _blackboards;
 
-    public AsyncChoiceState(Func<ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
+    public AsyncRelayChoiceState(Func<ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
     {
         _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
         _trueNode = trueNode;
         _falseNode = falseNode;
     }
 
-    public AsyncChoiceState(Func<BlackboardContext, ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
+    public AsyncRelayChoiceState(Func<BlackboardContext, ValueTask<bool>> predicate, NodeId trueNode, NodeId falseNode)
     {
         _bbPredicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
         _trueNode = trueNode;

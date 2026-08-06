@@ -161,7 +161,7 @@ public class MermaidGraphExporterTests
         NodeId start = builder.AddNode(new RelayState(() => Result.Success), isStart: true);
         NodeId thenBranch = builder.AddNode(new RelayState(() => Result.Success)); // n1
         NodeId elseBranch = builder.AddNode(new RelayState(() => Result.Success)); // n2
-        NodeId choice = builder.AddNode(new ChoiceState(() => true, thenBranch, elseBranch)); // n3
+        NodeId choice = builder.AddNode(new RelayChoiceState(() => true, thenBranch, elseBranch)); // n3
         builder.SetName(choice, "say \"hi\"");
         builder.AddTransition(start, choice);
         Graph graph = builder.Build(throwOnError: false);

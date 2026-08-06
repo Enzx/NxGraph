@@ -216,7 +216,7 @@ public class GraphValidatorTests
         NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
         NodeId trueBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
         NodeId falseBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
-        NodeId choice = builder.AddNode(new ChoiceState(() => true, trueBranch, falseBranch));
+        NodeId choice = builder.AddNode(new RelayChoiceState(() => true, trueBranch, falseBranch));
 
         builder.AddTransition(start, choice);
 

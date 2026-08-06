@@ -552,7 +552,7 @@ sealed class NxGraph.Fsm.AllState : NxGraph.Fsm.State, NxGraph.Blackboards.IBlac
 sealed class NxGraph.Fsm.Async.AsyncAllState : NxGraph.Fsm.Async.AsyncState, NxGraph.Blackboards.IBlackboardSettable, NxGraph.Diagnostics.Replay.ILogReporter, NxGraph.Graphs.IAsyncLogic
   ctor System.Void .ctor(System.Func`3[NxGraph.Blackboards.BlackboardContext,System.Threading.CancellationToken,System.Threading.Tasks.ValueTask`1[NxGraph.Result]][])
   method System.Threading.Tasks.ValueTask`1[NxGraph.Result] OnRunAsync(System.Threading.CancellationToken)
-sealed class NxGraph.Fsm.Async.AsyncChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
+sealed class NxGraph.Fsm.Async.AsyncRelayChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
   ctor System.Void .ctor(System.Func`1[System.Threading.Tasks.ValueTask`1[System.Boolean]], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Threading.Tasks.ValueTask`1[System.Boolean]], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
@@ -633,7 +633,7 @@ abstract class NxGraph.Fsm.Async.AsyncState`1 : NxGraph.Fsm.Async.AsyncState, IA
   ctor System.Void .ctor()
   field TAgent Agent
   method System.Void SetAgent(TAgent)
-sealed class NxGraph.Fsm.Async.AsyncSwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
+sealed class NxGraph.Fsm.Async.AsyncRelaySwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IAsyncDirector, NxGraph.Graphs.IAsyncLogic
   ctor System.Void .ctor(System.Func`1[System.Threading.Tasks.ValueTask`1[TKey]], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
   ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Threading.Tasks.ValueTask`1[TKey]], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
   method System.Collections.Generic.IEnumerable`1[NxGraph.Graphs.NodeId] EnumerateStaticTargets()
@@ -651,7 +651,7 @@ enum NxGraph.Fsm.BackoffKind : System.IComparable, System.IConvertible, System.I
   Exponential = 2
   Fixed = 0
   Linear = 1
-sealed class NxGraph.Fsm.ChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
+sealed class NxGraph.Fsm.RelayChoiceState : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
   ctor System.Void .ctor(System.Func`1[System.Boolean], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,System.Boolean], NxGraph.Graphs.NodeId, NxGraph.Graphs.NodeId)
   method NxGraph.Graphs.NodeId SelectNext()
@@ -875,7 +875,7 @@ abstract class NxGraph.Fsm.State`1 : NxGraph.Fsm.State, IAgentSettable`1, NxGrap
   ctor System.Void .ctor()
   field TAgent Agent
   method System.Void SetAgent(TAgent)
-sealed class NxGraph.Fsm.SwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
+sealed class NxGraph.Fsm.RelaySwitchState`1 : NxGraph.Blackboards.IBlackboardSettable, NxGraph.Fsm.IDirector, NxGraph.Graphs.ILogic
   ctor System.Void .ctor(System.Func`1[TKey], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
   ctor System.Void .ctor(System.Func`2[NxGraph.Blackboards.BlackboardContext,TKey], System.Collections.Generic.IReadOnlyDictionary`2[TKey,NxGraph.Graphs.NodeId], NxGraph.Graphs.NodeId)
   method NxGraph.Graphs.NodeId SelectNext()

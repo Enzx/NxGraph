@@ -940,7 +940,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
                         next = CanonicalId(next);
                     }
-                    // Sync directors (ChoiceState/SwitchState behind a SyncLogicAdapter) route
+                    // Sync directors (RelayChoiceState/RelaySwitchState behind a SyncLogicAdapter) route
                     // here too — mirroring the sync runtime's `Logic is IDirector` check, and
                     // matching the validator/exporter, which already probe both logic slots.
                     else if (logic.Logic is IDirector syncDirector)

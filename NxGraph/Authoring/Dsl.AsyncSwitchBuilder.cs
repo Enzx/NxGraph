@@ -15,7 +15,7 @@ public static partial class Dsl
         private readonly GraphBuilder _builder;
         private readonly StateToken _prev;
         private readonly Dictionary<TKey, NodeId> _map = new();
-        private readonly AsyncSwitchState<TKey> _switchNode;
+        private readonly AsyncRelaySwitchState<TKey> _switchNode;
         private readonly bool _isStart;
 
         internal AsyncSwitchBuilder(StateToken prev, Func<ValueTask<TKey>> selector)
@@ -23,7 +23,7 @@ public static partial class Dsl
             _prev = prev;
             _builder = prev.Builder;
             _isStart = false;
-            _switchNode = new AsyncSwitchState<TKey>(selector, _map);
+            _switchNode = new AsyncRelaySwitchState<TKey>(selector, _map);
         }
 
         internal AsyncSwitchBuilder(StartToken start, Func<ValueTask<TKey>> selector)
@@ -31,7 +31,7 @@ public static partial class Dsl
             _prev = new StateToken(NodeId.Default, start.Builder);
             _builder = start.Builder;
             _isStart = true;
-            _switchNode = new AsyncSwitchState<TKey>(selector, _map);
+            _switchNode = new AsyncRelaySwitchState<TKey>(selector, _map);
         }
 
         /// <summary>

@@ -4,11 +4,14 @@ using NxGraph.Graphs;
 namespace NxGraph.Fsm.Async;
 
 /// <summary>
-/// Async switch/case director. The blackboard-context overload receives the machine-bound
+/// <b>Delegate-backed</b> async switch/case director (the <c>Relay*</c> family — a state whose
+/// decision closes over code; it cannot ride a serialization payload, so prefer the data-built
+/// <c>SwitchState&lt;T&gt;</c> when the tested value is a blackboard slot).
+/// The blackboard-context overload receives the machine-bound
 /// routed context (see <see cref="BlackboardContext"/>), so the selector can read shared
 /// memory instead of closing over ad-hoc state.
 /// </summary>
-public sealed class AsyncSwitchState<TKey> : IAsyncLogic, IAsyncDirector, IBlackboardSettable
+public sealed class AsyncRelaySwitchState<TKey> : IAsyncLogic, IAsyncDirector, IBlackboardSettable
     where TKey : notnull
 {
     private readonly Func<ValueTask<TKey>>? _selector;
@@ -20,7 +23,7 @@ public sealed class AsyncSwitchState<TKey> : IAsyncLogic, IAsyncDirector, IBlack
     private NodeId _defaultNode;
     private BlackboardContext _blackboards;
 
-    public AsyncSwitchState(
+    public AsyncRelaySwitchState(
         Func<ValueTask<TKey>> selector,
         IReadOnlyDictionary<TKey, NodeId> cases,
         NodeId defaultNode = default)
@@ -30,7 +33,7 @@ public sealed class AsyncSwitchState<TKey> : IAsyncLogic, IAsyncDirector, IBlack
         _defaultNode = defaultNode.Equals(default(NodeId)) ? NodeId.Default : defaultNode;
     }
 
-    public AsyncSwitchState(
+    public AsyncRelaySwitchState(
         Func<BlackboardContext, ValueTask<TKey>> selector,
         IReadOnlyDictionary<TKey, NodeId> cases,
         NodeId defaultNode = default)
