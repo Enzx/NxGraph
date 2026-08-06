@@ -2,15 +2,26 @@
 
 All notable changes to this package will be documented in this file.
 
-## [Unreleased]
-
-### Runtime (staged NxGraph core)
-- **Data-built branching**: `ChoiceState(conditions, ConditionMatch.All|Any, trueTarget, falseTarget)` and `SwitchState<T>(key, literal cases, defaultTarget)` decide from data instead of a closure, so a branching graph rides the serialization payload with zero serializer options and survives suspend/resume. Conditions live in `NxGraph.Conditions` (`ICondition`, `KeyEquals<T>`, `IsTrue`, `Not`), reuse the behavior model's `BehaviorContext`, and reuse none of the fault model — a false condition is a decision, never a node failure. Author with `.If(condition)`, `.If(ConditionMatch.Any, …)`, and `.Switch(blackboardKey).Case(value, …).Default(…).End()`.
-- Mermaid export labels data-built arms (`true` / `false`, the case literal, `otherwise`), and the validator warns on a choice whose arms are the same node and on a switch with no default target.
-- Serialization payload version 10: sparse choice and switch sections, with an `ISerializableCondition` / `ConditionRegistry` pair mirroring the behavior registry. Version 9 payloads read branch-free.
+## [2.2.0-alpha]
 
 ### Breaking
-- The delegate-backed director states were renamed: `ChoiceState` → `RelayChoiceState`, `SwitchState<TKey>` → `RelaySwitchState<TKey>`, `AsyncChoiceState` → `AsyncRelayChoiceState`, `AsyncSwitchState<TKey>` → `AsyncRelaySwitchState<TKey>`. Behavior and constructors are unchanged, and the `.If(predicate)` / `.Switch(selector)` DSL paths still build them. **No obsolete forwarding aliases exist**: the old names are reused in the same release for the new data-built states, so an alias would silently compile old code into a state that means something else. Update the type names; the compiler error is the migration instruction.
+- The delegate-backed director states were renamed: `ChoiceState` → `RelayChoiceState`, `SwitchState<TKey>` → `RelaySwitchState<TKey>`, `AsyncChoiceState` → `AsyncRelayChoiceState`, `AsyncSwitchState<TKey>` → `AsyncRelaySwitchState<TKey>`. Behavior and constructors are unchanged, and the `.If(predicate)` / `.Switch(selector)` DSL paths still build them. **No obsolete forwarding aliases exist**: the old names are reused in this same release for the new data-built states, so an alias would silently compile old code into a state that means something else. Update the type names; the compiler error is the migration instruction.
+
+### Runtime (staged NxGraph core)
+- **Data-built branching**: `ChoiceState(conditions, ConditionMatch.All|Any, trueTarget, falseTarget)` and `SwitchState<T>(key, literal cases, defaultTarget)` decide from data instead of a closure, so a branching graph rides the serialization payload with zero serializer options and survives suspend/resume. Conditions live in `NxGraph.Conditions` (`ICondition`, `KeyEquals<T>`, `IsTrue`, `Not`), reuse the behavior model's `BehaviorContext`, and reuse none of the fault model — a false condition is a decision, never a node failure. Author with `.If(condition)`, `.If(ConditionMatch.Any, …)`, and `.Switch(blackboardKey).Case(value, …).Default(…).End()`; a switch is a lookup (literal cases, duplicates rejected at build time) and ordered first-match-wins rules lower to a chain of choices.
+- Typed event entry points: `GraphBuilder.StartWithEvents()` builds one graph with N externally-raised entry chains (`.On(key, e => chain)`, `.Otherwise(...)`); raise with `Execute<TEvent>(evt)` / `ExecuteAsync<TEvent>(evt, ct)` / `StepAsync<TEvent>(evt, ct)`. Event payloads deliver through Graph-scoped blackboard keys, so payload durability falls out of the existing blackboard artifacts.
+- Declarative behaviors: author a node as an ordered, fail-fast list of small data-shaped behaviors (`.ToBehaviors(...)` / `.ToBehaviorsAsync(...)`, plus typed-agent variants). `BlackboardValue<T>` binds each field to a literal or a blackboard key; the standard set ships `Log` and `SetValue<T>`, and `Repeat` adds bounded sub-node iteration in both runtimes.
+- Machine lifecycle hardening: run-start initialization is throw-hardened on all four machines (a throwing observer or context stamp repairs status back to Ready and releases the execute gate), sync `Reset()` is idempotent from every status, and every `Resume` rejects snapshots with undefined execution statuses.
+- `State.Log` now delivers to the attached observer under both runtimes, and machines sharing a graph each attribute log reports to their own observer. The report channel is a capability rather than a base-class membership, so a node that is not a `State` subclass — a data-built branch, for instance — reaches the observer too, and a condition can report the decision it just made.
+- Director-selected next nodes (choice/switch) are reported to observers under their built ids, and timeout wrappers forward machine wiring to the logic they wrap.
+- Cross-runtime behavior is pinned by a parity conformance suite comparing sync/async × full-run/stepped runs as order-exact traces.
+- Validation is self-sufficient (the node set derives from the graph itself); the Mermaid exporter escapes director labels correctly and labels data-built branch arms (`true` / `false`, the case literal, `otherwise`). The validator warns on a choice whose arms are the same node and on a switch with no default target.
+- Serialization payload versions 7–10: event entry sections, behavior sections, nested behavior entries, and the choice/switch branch sections ride the graph payload — the last with an `ISerializableCondition` / `ConditionRegistry` pair mirroring the behavior registry, so branch graphs round-trip with zero serializer options. Read paths are hardened and the blackboard `Skip` restore policy never resets a board without restoring at least one value. Each version reads its predecessors unchanged.
+
+### Package
+- Source staging now includes the `Behaviors` and `Conditions` folders and `ValueTaskSync.cs`. The staging list is an explicit allowlist and unlisted files are dropped silently, so a source-mode package built before this fix was missing the behavior composites, the condition set, and the sync/async report bridge they and `State.Log` call.
+- The netstandard2.1 (Unity-facing) public API surface now has its own approved baseline, so Unity-visible API changes are caught explicitly.
+- Analyzer warnings are errors across the build; the staged runtime compiles warning-free under the stricter regime.
 
 ## [2.1.0-alpha]
 

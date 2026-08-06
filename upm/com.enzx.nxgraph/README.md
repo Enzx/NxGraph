@@ -31,7 +31,7 @@ Or pin a specific release tag:
 ```json
 {
   "dependencies": {
-    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm/v2.1.0-alpha"
+    "com.enzx.nxgraph": "https://github.com/Enzx/NxGraph.git#upm/v2.2.0-alpha"
   }
 }
 ```
