@@ -19,6 +19,7 @@ All notable changes to this package will be documented in this file.
 - Serialization payload versions 7–10: event entry sections, behavior sections, nested behavior entries, and the choice/switch branch sections ride the graph payload — the last with an `ISerializableCondition` / `ConditionRegistry` pair mirroring the behavior registry, so branch graphs round-trip with zero serializer options. Read paths are hardened and the blackboard `Skip` restore policy never resets a board without restoring at least one value. Each version reads its predecessors unchanged.
 
 ### Package
+- Source staging now includes the `Behaviors` and `Conditions` folders and `ValueTaskSync.cs`. The staging list is an explicit allowlist and unlisted files are dropped silently, so a source-mode package built before this fix was missing the behavior composites, the condition set, and the sync/async report bridge they and `State.Log` call.
 - The netstandard2.1 (Unity-facing) public API surface now has its own approved baseline, so Unity-visible API changes are caught explicitly.
 - Analyzer warnings are errors across the build; the staged runtime compiles warning-free under the stricter regime.
 

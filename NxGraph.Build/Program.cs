@@ -11,11 +11,17 @@ public static class Program
     // different SDK mid-run if the environment changes.
     private static DotNetLocator.Result? _dotnet;
 
+    // Source staging is an explicit allowlist: a folder that is not named here is silently
+    // absent from the staged package, and source mode then fails to compile at the consumer.
+    // Keep it in step with the core project's folders — every folder under NxGraph/ that holds
+    // compiled code belongs here (Docs holds markdown only).
     private static readonly string[] DirectoriesToCopy =
     [
         Path.Combine("Authoring"),
+        Path.Combine("Behaviors"),
         Path.Combine("Blackboards"),
         Path.Combine("Compatibility"),
+        Path.Combine("Conditions"),
         Path.Combine("Diagnostics", "Export"),
         Path.Combine("Diagnostics", "Replay"),
         Path.Combine("Diagnostics", "Validations"),
@@ -29,6 +35,8 @@ public static class Program
     [
         "Result.cs",
         "ResultHelpers.cs",
+        // The sync/async report bridge State.Log and the behavior composites both call.
+        "ValueTaskSync.cs",
     ];
 
     private static readonly string[] ExcludedFiles =
