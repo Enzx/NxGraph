@@ -11,6 +11,7 @@ public sealed class BehaviorFieldWriter
 {
     private readonly List<BehaviorField> _fields = [];
     private readonly IBehaviorEntryCodec? _entryCodec;
+    private readonly IConditionEntryCodec? _conditionCodec;
 
     /// <summary>Creates a standalone writer (no nested-entry support — see <see cref="WriteBehaviors"/>).</summary>
     public BehaviorFieldWriter()
@@ -20,6 +21,12 @@ public sealed class BehaviorFieldWriter
     internal BehaviorFieldWriter(IBehaviorEntryCodec? entryCodec)
     {
         _entryCodec = entryCodec;
+    }
+
+    internal BehaviorFieldWriter(IBehaviorEntryCodec? entryCodec, IConditionEntryCodec? conditionCodec)
+    {
+        _entryCodec = entryCodec;
+        _conditionCodec = conditionCodec;
     }
 
     /// <summary>Writes a string field (null allowed).</summary>
@@ -96,6 +103,35 @@ public sealed class BehaviorFieldWriter
         }
 
         Add(name, new BehaviorFieldValue(BehaviorFieldKind.Behaviors, entries: encoded));
+    }
+
+    /// <summary>
+    /// Writes a nested condition entry list (payload version 10) — <c>Not</c>'s inner
+    /// condition. Each entry is encoded recursively by the serializer's per-entry dispatch
+    /// (<see cref="ISerializableCondition.Write"/> else the condition registry), so nested
+    /// user conditions serialize under exactly the top-level rules. Only operates inside a
+    /// <c>GraphSerializer</c> payload session — the serializer wires the entry codec into the
+    /// writers it creates; a standalone writer throws a targeted error.
+    /// </summary>
+    public void WriteConditions(string name, IReadOnlyList<object> conditions)
+    {
+        ArgumentNullException.ThrowIfNull(conditions);
+
+        if (_conditionCodec is null)
+        {
+            throw new InvalidOperationException(
+                "WriteConditions only operates inside a GraphSerializer payload session — nested condition " +
+                "entries are encoded by the serializer's entry codec, which is not wired on a standalone " +
+                "BehaviorFieldWriter.");
+        }
+
+        ConditionEntry[] encoded = new ConditionEntry[conditions.Count];
+        for (int i = 0; i < conditions.Count; i++)
+        {
+            encoded[i] = _conditionCodec.WriteEntry(conditions[i]);
+        }
+
+        Add(name, new BehaviorFieldValue(BehaviorFieldKind.Conditions, conditions: encoded));
     }
 
     /// <summary>Drains the collected fields in write order.</summary>

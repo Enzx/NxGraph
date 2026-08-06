@@ -9,6 +9,11 @@ sealed class NxGraph.Serialization.BlackboardSerializer : NxGraph.Serialization.
   method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
   method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+sealed class NxGraph.Serialization.ConditionRegistry : NxGraph.Serialization.Abstraction.IConditionRegistry
+  ctor Void .ctor()
+  method Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object ByRef)
+  method Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+  method Void Register(System.String, System.Func`2[NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object])
 sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstraction.IGraphBinarySerializer, NxGraph.Serialization.Abstraction.IGraphJsonSerializer, NxGraph.Serialization.Abstraction.IGraphSerializer
   ctor Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec)
   ctor Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.GraphSerializerOptions)
@@ -21,6 +26,7 @@ sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstr
 sealed class NxGraph.Serialization.GraphSerializerOptions
   ctor Void .ctor()
   property NxGraph.Serialization.Abstraction.IBehaviorRegistry BehaviorRegistry { get; set; }
+  property NxGraph.Serialization.Abstraction.IConditionRegistry ConditionRegistry { get; set; }
   property NxGraph.Serialization.Abstraction.IContainerCodec ContainerCodec { get; set; }
   property NxGraph.Serialization.Abstraction.IRegionSelectorRegistry SelectorRegistry { get; set; }
 interface NxGraph.Serialization.IContainerBinaryCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]

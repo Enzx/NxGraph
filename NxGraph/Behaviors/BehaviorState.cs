@@ -190,24 +190,30 @@ internal static class BehaviorComposition
     }
 #pragma warning restore CA2208
 
-    internal static bool SyncHasReporter(State state) =>
-        state.SyncLogReport is not null || ((ILogReporter)state).LogReport is not null;
+    /// <summary>
+    /// Whether either machine-owned slot of a sync-capable node's report channel is wired.
+    /// Typed to <see cref="ISyncLogReporter"/> rather than <c>State</c> so nodes that own a
+    /// report channel without deriving from <c>State</c> (the data-built branch states) share
+    /// this bridge verbatim.
+    /// </summary>
+    internal static bool SyncHasReporter(ISyncLogReporter reporter) =>
+        reporter.SyncLogReport is not null || reporter.LogReport is not null;
 
     /// <summary>
-    /// Delivers a report from a sync composite: through the sync callback when the sync
-    /// machine wired it, else through the async callback (the async machine wires that slot
-    /// when the composite runs behind the sync-logic adapter), waiting out a genuinely
+    /// Delivers a report from a sync-capable node: through the sync callback when a sync
+    /// machine wired it, else through the async callback (the async machines wire that slot,
+    /// reaching a sync composite behind the sync-logic adapter), waiting out a genuinely
     /// asynchronous observer so delivery-before-return holds on both runtimes.
     /// </summary>
-    internal static void SyncReport(State state, string message)
+    internal static void SyncReport(ISyncLogReporter reporter, string message)
     {
-        if (state.SyncLogReport is { } sync)
+        if (reporter.SyncLogReport is { } sync)
         {
             sync(message);
             return;
         }
 
-        if (((ILogReporter)state).LogReport is { } asyncReport)
+        if (reporter.LogReport is { } asyncReport)
         {
             ValueTaskSync.Await(asyncReport(message, CancellationToken.None));
         }

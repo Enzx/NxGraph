@@ -1,58 +1,152 @@
+using NxGraph.Behaviors;
 using NxGraph.Blackboards;
+using NxGraph.Conditions;
+using NxGraph.Diagnostics.Replay;
 using NxGraph.Graphs;
 
 namespace NxGraph.Fsm;
 
 /// <summary>
-/// Executes a predicate and immediately returns <see cref="Result.Success"/>; the
-/// destination is selected via <see cref="IDirector.SelectNext"/>.
-/// The blackboard-context overload receives the machine-bound routed context (see
-/// <see cref="BlackboardContext"/>), so branching can read shared memory instead of
-/// closing over ad-hoc state.
-/// Purely synchronous — the authoring layer wraps this in a <see cref="SyncLogicAdapter"/>
-/// so that async runtimes can also execute it.
+/// <b>Data-built</b> two-way branch (spec 023): the decision is a list of
+/// <see cref="ICondition"/> data objects combined by a <see cref="ConditionMatch"/> mode, not
+/// a closure — so a branching graph rides the serialization payload with zero options and
+/// therefore survives suspend/resume. For a decision that is genuinely code, the delegate-backed
+/// <see cref="RelayChoiceState"/> stays fully supported.
+/// <para>
+/// <see cref="ILogic.Execute"/> returns <see cref="Result.Success"/> — <b>a decision never
+/// faults</b>. Selection evaluates the list against the machine-stamped blackboard context:
+/// <see cref="ConditionMatch.All"/> walks until the first <see langword="false"/>,
+/// <see cref="ConditionMatch.Any"/> until the first <see langword="true"/>; the outcome picks
+/// <see cref="TrueTarget"/> or <see cref="FalseTarget"/>. Either arm may be
+/// <see cref="NodeId.Default"/> (terminal exit).
+/// </para>
+/// <para>
+/// One class implements both logic slots and both director interfaces (the <c>ForkState</c> /
+/// <c>EventEntryState</c> shape), so a single instance authors either runtime and one wire
+/// marker covers both. <see cref="IDirector.EnumerateStaticTargets"/> yields the true arm then
+/// the false arm, so reachability validation and Mermaid export need no special casing.
+/// </para>
+/// <para>
+/// The condition list is evaluated through a <see cref="BehaviorContext"/> carrying this node's
+/// <b>live</b> report channel, so <see cref="BehaviorContext.Report"/> from inside a condition
+/// reaches the running machine's observer (<c>OnLogReport</c>) attributed to this node, exactly
+/// as <c>State.Log</c> and the behavior composites do. Reporting a decision is diagnostics, not
+/// a side effect — the side-effect-free <see cref="ICondition"/> contract still forbids writing
+/// to the boards, which is what keeps short-circuit evaluation legal. Because this state is not
+/// a <c>State</c> subclass it owns the two machine-wired slots itself; on an observer-less
+/// machine both are wired <see langword="null"/>, so
+/// <see cref="BehaviorContext.HasReporter"/>-gated conditions pay nothing. Selection stays an
+/// array walk over one stack-allocated context — 0 B.
+/// </para>
 /// </summary>
-public sealed class ChoiceState : ILogic, IDirector, IBlackboardSettable
+public sealed class ChoiceState : ILogic, IAsyncLogic, IDirector, IAsyncDirector, IBlackboardSettable, IChoiceNode,
+    ISyncLogReporter, IBehaviorReportSink
 {
-    private readonly Func<bool>? _predicate;
-    private readonly Func<BlackboardContext, bool>? _bbPredicate;
-    private readonly NodeId _trueNode;
-    private readonly NodeId _falseNode;
+    private readonly ICondition[] _conditions;
+    private readonly ConditionMatch _match;
+    private readonly NodeId _trueTarget;
+    private readonly NodeId _falseTarget;
+    private readonly NodeId[] _staticTargets;
     private BlackboardContext _blackboards;
 
-    public ChoiceState(Func<bool> predicate, NodeId trueNode, NodeId falseNode)
+    // The node's report channel. Both slots are machine-owned and reassigned on every visit
+    // (the running machine wires its own family's slot and clears the other's), which is what
+    // keeps reports attributed to the machine that is actually running — see ISyncLogReporter.
+    private Action<string>? _syncLogReport;
+    private Func<string, CancellationToken, ValueTask>? _asyncLogReport;
+
+    /// <param name="conditions">The conditions to evaluate, in order. At least one is
+    /// required; null entries are rejected.</param>
+    /// <param name="match">How the conditions combine.</param>
+    /// <param name="trueTarget">The arm taken when the combined decision is true.</param>
+    /// <param name="falseTarget">The arm taken when it is false.</param>
+    public ChoiceState(IReadOnlyList<ICondition> conditions, ConditionMatch match, NodeId trueTarget,
+        NodeId falseTarget)
     {
-        _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
-        _trueNode = trueNode;
-        _falseNode = falseNode;
+        _conditions = ConditionComposition.ValidateEntries(conditions, nameof(conditions));
+        _match = match;
+        _trueTarget = trueTarget;
+        _falseTarget = falseTarget;
+        _staticTargets = [trueTarget, falseTarget];
     }
 
-    public ChoiceState(Func<BlackboardContext, bool> predicate, NodeId trueNode, NodeId falseNode)
+    /// <summary>Creates a single-condition choice (<see cref="ConditionMatch.All"/> of one).</summary>
+    public ChoiceState(ICondition condition, NodeId trueTarget, NodeId falseTarget)
+        : this(new[] { condition }, ConditionMatch.All, trueTarget, falseTarget)
     {
-        _bbPredicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
-        _trueNode = trueNode;
-        _falseNode = falseNode;
     }
+
+    /// <inheritdoc />
+    public ConditionMatch Match => _match;
+
+    /// <inheritdoc />
+    public IReadOnlyList<ICondition> Conditions => _conditions;
+
+    /// <inheritdoc />
+    public NodeId TrueTarget => _trueTarget;
+
+    /// <inheritdoc />
+    public NodeId FalseTarget => _falseTarget;
 
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context) => _blackboards = context;
 
-    /// <inheritdoc />
-    public Result Execute() => Result.Success;
-
-    /// <summary>
-    /// Selects the next node based on the predicate.
-    /// </summary>
-    /// <returns>The next node to run.</returns>
-    public NodeId SelectNext()
+    Action<string>? ISyncLogReporter.SyncLogReport
     {
-        bool taken = _bbPredicate is not null ? _bbPredicate(_blackboards) : _predicate!();
-        return taken ? _trueNode : _falseNode;
+        get => _syncLogReport;
+        set => _syncLogReport = value;
     }
 
-    /// <inheritdoc />
-    public IEnumerable<NodeId> EnumerateStaticTargets()
+    Func<string, CancellationToken, ValueTask>? ILogReporter.LogReport
     {
-        yield return _trueNode;
-        yield return _falseNode;
+        get => _asyncLogReport;
+        set => _asyncLogReport = value;
     }
+
+    // Reuses the behavior composites' bridge verbatim: prefer the sync callback, fall back to
+    // the async one (waited out, so delivery completes before Report returns under either
+    // runtime). `this` is the sink, so no per-selection allocation.
+    bool IBehaviorReportSink.HasReporter => BehaviorComposition.SyncHasReporter(this);
+
+    void IBehaviorReportSink.Report(string message) => BehaviorComposition.SyncReport(this, message);
+
+    private NodeId SelectNextCore()
+    {
+        BehaviorContext ctx = new(in _blackboards, this);
+        ICondition[] conditions = _conditions;
+        if (_match == ConditionMatch.All)
+        {
+            for (int i = 0; i < conditions.Length; i++)
+            {
+                if (!conditions[i].Evaluate(in ctx))
+                {
+                    return _falseTarget;
+                }
+            }
+
+            return _trueTarget;
+        }
+
+        for (int i = 0; i < conditions.Length; i++)
+        {
+            if (conditions[i].Evaluate(in ctx))
+            {
+                return _trueTarget;
+            }
+        }
+
+        return _falseTarget;
+    }
+
+    /// <inheritdoc cref="IDirector.SelectNext" />
+    public NodeId SelectNext() => SelectNextCore();
+
+    Result ILogic.Execute() => Result.Success;
+
+    ValueTask<Result> IAsyncLogic.ExecuteAsync(CancellationToken ct) => ResultHelpers.Success;
+
+    ValueTask<NodeId> IAsyncDirector.SelectNextAsync(CancellationToken ct) => new(SelectNextCore());
+
+    IEnumerable<NodeId> IDirector.EnumerateStaticTargets() => _staticTargets;
+
+    IEnumerable<NodeId> IAsyncDirector.EnumerateStaticTargets() => _staticTargets;
 }

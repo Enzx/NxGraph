@@ -22,8 +22,9 @@ public interface IDirector
     /// <remarks>
     /// The default returns an empty sequence so existing user implementations compile
     /// unchanged — but those custom directors will be opaque to the validator and the
-    /// exporter. Built-in <see cref="ChoiceState"/> and <see cref="SwitchState{TKey}"/>
-    /// override this to surface their known targets.
+    /// exporter. The built-in branch states — data-built <see cref="ChoiceState"/> /
+    /// <see cref="SwitchState{T}"/> and delegate-backed <see cref="RelayChoiceState"/> /
+    /// <see cref="RelaySwitchState{TKey}"/> — override this to surface their known targets.
     /// </remarks>
     IEnumerable<NodeId> EnumerateStaticTargets() => System.Array.Empty<NodeId>();
 }

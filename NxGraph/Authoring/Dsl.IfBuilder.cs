@@ -1,4 +1,5 @@
 ﻿using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -21,7 +22,7 @@ public static partial class Dsl
             _builder = prev.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
+            NodeId choiceId = _builder.AddNode(new RelayChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
 
@@ -30,10 +31,10 @@ public static partial class Dsl
             _builder = root.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            // Sync ChoiceState, matching every sibling overload: it runs on both runtimes
-            // (the async loop routes sync directors), whereas an AsyncChoiceState start node
+            // Sync RelayChoiceState, matching every sibling overload: it runs on both runtimes
+            // (the async loop routes sync directors), whereas an AsyncRelayChoiceState start node
             // would make the graph unexecutable by the sync StateMachine.
-            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
+            _builder.AddNode(new RelayChoiceState(predicate, _truePad, _falsePad), true);
         }
 
         internal IfBuilder(StateToken prev, Func<BlackboardContext, bool> predicate)
@@ -41,7 +42,7 @@ public static partial class Dsl
             _builder = prev.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            NodeId choiceId = _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad));
+            NodeId choiceId = _builder.AddNode(new RelayChoiceState(predicate, _truePad, _falsePad));
             _builder.AddTransition(prev.Id, choiceId);
         }
 
@@ -50,7 +51,29 @@ public static partial class Dsl
             _builder = root.Builder;
             _truePad = _builder.AddNode(new EmptyLogic());
             _falsePad = _builder.AddNode(new EmptyLogic());
-            _builder.AddNode(new ChoiceState(predicate, _truePad, _falsePad), true);
+            _builder.AddNode(new RelayChoiceState(predicate, _truePad, _falsePad), true);
+        }
+
+        // Data-built branches (spec 023): the decision is a condition list, so the node
+        // serializes and its arms carry labels into Mermaid. Added through the IAsyncLogic
+        // overload — ChoiceState implements both logic slots, so the node exposes the same
+        // instance on Logic and AsyncLogic and runs under either runtime family.
+        internal IfBuilder(StateToken prev, IReadOnlyList<ICondition> conditions, ConditionMatch match)
+        {
+            _builder = prev.Builder;
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            NodeId choiceId = _builder.AddNode(
+                (IAsyncLogic)new ChoiceState(conditions, match, _truePad, _falsePad));
+            _builder.AddTransition(prev.Id, choiceId);
+        }
+
+        internal IfBuilder(StartToken root, IReadOnlyList<ICondition> conditions, ConditionMatch match)
+        {
+            _builder = root.Builder;
+            _truePad = _builder.AddNode(new EmptyLogic());
+            _falsePad = _builder.AddNode(new EmptyLogic());
+            _builder.AddNode((IAsyncLogic)new ChoiceState(conditions, match, _truePad, _falsePad), true);
         }
 
         /// <summary>Adds an async "then" branch.</summary>

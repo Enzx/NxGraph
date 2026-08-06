@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -13,6 +14,13 @@ namespace NxGraph.Diagnostics.Export;
 /// first-class: subroutine-bar shapes, solid <c>fork</c>-labeled branch edges (every branch
 /// runs — an AND-split, not a choice), the join's <see cref="JoinPolicy"/> in its label, and
 /// no terminal edge from forks (a fork never ends a token).
+/// <para>
+/// Data-built branches (spec 023) carry their arms' labels: a <see cref="ChoiceState"/>'s two
+/// edges are labeled <c>true</c> and <c>false</c>, and a <see cref="SwitchState{T}"/>'s case
+/// edges carry the case literal with the default edge labeled <c>otherwise</c>. The
+/// delegate-backed <c>Relay*</c> states stay unlabeled — their decision is opaque by
+/// construction.
+/// </para>
 /// </summary>
 public sealed class MermaidGraphExporter : IGraphExporter
 {
@@ -210,6 +218,31 @@ public sealed class MermaidGraphExporter : IGraphExporter
                 continue;
             }
 
+            // Data-built branches (spec 023) are the one director family whose arms the exporter
+            // can name: the decision is data, so "which way did you go" is knowable statically.
+            // The Relay* (delegate-backed) states keep the unlabeled rendering below — drawing a
+            // label the exporter cannot know would be a lie.
+            if (ChoiceOf(dn) is { } choice)
+            {
+                string choiceVar = NodeVar(i);
+                AppendDirectorEdge(sb, choiceVar, choice.TrueTarget, "true", graph);
+                AppendDirectorEdge(sb, choiceVar, choice.FalseTarget, "false", graph);
+                continue;
+            }
+
+            if (SwitchOf(dn) is { } switchNode)
+            {
+                string switchVar = NodeVar(i);
+                for (int c = 0; c < switchNode.CaseCount; c++)
+                {
+                    AppendDirectorEdge(sb, switchVar, switchNode.CaseTargetAt(c),
+                        FormatCaseLabel(switchNode.CaseValueAt(c)), graph);
+                }
+
+                AppendDirectorEdge(sb, switchVar, switchNode.DefaultTarget, "otherwise", graph);
+                continue;
+            }
+
             IEnumerable<NodeId>? targets =
                 (dn.AsyncLogic as IDirector)?.EnumerateStaticTargets()
                 ?? (dn.Logic as IDirector)?.EnumerateStaticTargets()
@@ -243,6 +276,45 @@ public sealed class MermaidGraphExporter : IGraphExporter
 
     private static EventEntryState? EventEntryOf(LogicNode node) =>
         node.AsyncLogic as EventEntryState ?? node.Logic as EventEntryState;
+
+    private static IChoiceNode? ChoiceOf(LogicNode node) =>
+        node.AsyncLogic as IChoiceNode ?? node.Logic as IChoiceNode;
+
+    private static ISwitchNode? SwitchOf(LogicNode node) =>
+        node.AsyncLogic as ISwitchNode ?? node.Logic as ISwitchNode;
+
+    /// <summary>
+    /// Emits one labeled dashed director edge, skipping the <see cref="NodeId.Default"/>
+    /// terminal sentinel and out-of-range destinations exactly as the unlabeled path does.
+    /// </summary>
+    private static void AppendDirectorEdge(StringBuilder sb, string from, NodeId target, string label, Graph graph)
+    {
+        if (target.Equals(NodeId.Default))
+        {
+            return;
+        }
+
+        int dstIdx = target.Index;
+        if ((uint)dstIdx >= (uint)graph.NodeCount)
+        {
+            return;
+        }
+
+        sb.Append("  ").Append(from).Append(" -. ").Append(EscapeLabel(label)).Append(" .-> ")
+            .Append(NodeVar(dstIdx)).AppendLine();
+    }
+
+    /// <summary>
+    /// Renders a switch case literal for its edge label — culture-neutral, so exports are
+    /// byte-identical regardless of the exporting machine's locale.
+    /// </summary>
+    private static string FormatCaseLabel(object? value) =>
+        value switch
+        {
+            null => "null",
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? "null",
+        };
 
     private static bool IsFork(Graph graph, int index) =>
         graph.GetNodeByIndex(index) is LogicNode ln && ForkOf(ln) is not null;

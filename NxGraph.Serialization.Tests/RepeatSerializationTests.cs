@@ -385,7 +385,7 @@ public class RepeatSerializationTests
     // ── Version stamps and back compatibility ────────────────────────────
 
     [Test]
-    public async Task Payload_carries_the_version_nine_stamp_and_stable_repeat_names()
+    public async Task Payload_carries_the_current_version_stamp_and_stable_repeat_names()
     {
         (BlackboardSchema schema, BlackboardKey<int> trips, BlackboardKey<int> index, _) = LoopSchema();
         Graph graph = GraphBuilder.Start()
@@ -397,8 +397,11 @@ public class RepeatSerializationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(SerializationVersion.Version, Is.EqualTo(9));
-            Assert.That(json, Does.Contain("\"version\": 9"));
+            // Nested repeat bodies shipped with payload version 9, so the stamp can only move
+            // forward from there; the single deliberate version pin lives in
+            // GraphSerializerTestsTextCodec.
+            Assert.That(SerializationVersion.Version, Is.GreaterThanOrEqualTo(9));
+            Assert.That(json, Does.Contain($"\"version\": {SerializationVersion.Version}"));
             Assert.That(json, Does.Contain("NxGraph.Behaviors.Repeat"));
             Assert.That(json, Does.Contain("NxGraph.Behaviors.Log"),
                 "The nested body entry rides under its own stable name.");

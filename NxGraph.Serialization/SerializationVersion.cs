@@ -29,6 +29,15 @@ public static class SerializationVersion
     //     inside them) ride under the top-level entry rules; read-side nesting is capped at
     //     32. No new section — the change lives entirely inside the field model, and pre-v9
     //     payloads never contain the new kind, so they read unchanged.
-    public const int Version = 9;
+    // v10: data-built branching sections (sparse ChoiceDto/SwitchDto beside the other
+    //      sections, markers "ChoiceState"/"SwitchState", one per state for both runtimes) —
+    //      a choice rides its ConditionMatch mode plus its condition list in the neutral field
+    //      model (nested Not bodies via the new BehaviorFieldKind.Conditions, read-side
+    //      recursion capped at 32); a switch rides its key name, runtime-stable value type
+    //      name, literal cases and default target, rebuilding unbound so the key resolves by
+    //      name against the machine's bound schemas. The standard condition set (IsTrue, Not,
+    //      KeyEquals<T>) rides with zero options via the default ConditionRegistry, closing
+    //      the last relay-lambda hole in graph payloads. Pre-v10 payloads read branch-free.
+    public const int Version = 10;
 }
 

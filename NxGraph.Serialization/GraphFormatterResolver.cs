@@ -181,6 +181,33 @@ internal sealed class GraphFormatterResolver : IFormatterResolver
                 return;
             }
 
+            if (typeof(T) == typeof(ChoiceDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ChoiceDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(ChoiceDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)ChoiceArrayDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(SwitchDto))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)SwitchDtoFormatter.Instance;
+                return;
+            }
+
+            if (typeof(T) == typeof(SwitchDto[]))
+            {
+                Formatter = (IMessagePackFormatter<T>)(object)SwitchArrayDtoFormatter.Instance;
+                return;
+            }
+
+            // SwitchCaseDto needs no entry: its literal and target ride inline in
+            // SwitchDtoFormatter, which owns the whole case-array shape.
+
             Formatter = null;
         }
     }

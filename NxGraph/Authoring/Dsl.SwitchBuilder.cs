@@ -1,4 +1,4 @@
-﻿using NxGraph.Blackboards;
+using NxGraph.Blackboards;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -8,6 +8,13 @@ public static partial class Dsl
 {
     /// <summary>
     /// Represents a switch statement in the FSM graph, allowing for multiple branches based on a key.
+    /// <para>
+    /// The key is chosen by a <b>delegate</b> (<c>.Switch(selector)</c>), so this builds a
+    /// <see cref="RelaySwitchState{TKey}"/> and the graph cannot serialize. The serializable twin
+    /// is <see cref="KeySwitchBuilder{TKey}"/> (<c>.Switch(blackboardKey)</c>, spec 023), which
+    /// offers the same <c>.Case(...)</c> / <c>.Default(...)</c> / <c>.End()</c> surface — swapping
+    /// a selector for a key changes one call and nothing else.
+    /// </para>
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     public readonly struct SwitchBuilder<TKey> where TKey : notnull
@@ -15,7 +22,7 @@ public static partial class Dsl
         private readonly GraphBuilder _builder;
         private readonly StateToken _prev;
         private readonly Dictionary<TKey, NodeId> _map = new();
-        private readonly SwitchState<TKey> _switchNode;
+        private readonly RelaySwitchState<TKey> _switchNode;
         private readonly bool _isStart;
 
         internal SwitchBuilder(StateToken prev, Func<TKey> selector)
@@ -23,7 +30,7 @@ public static partial class Dsl
             _prev = prev;
             _builder = prev.Builder;
             _isStart = false;
-            _switchNode = new SwitchState<TKey>(selector, _map);
+            _switchNode = new RelaySwitchState<TKey>(selector, _map);
         }
 
         internal SwitchBuilder(StartToken start, Func<TKey> selector)
@@ -31,7 +38,7 @@ public static partial class Dsl
             _prev = new StateToken(NodeId.Default, start.Builder);
             _builder = start.Builder;
             _isStart = true;
-            _switchNode = new SwitchState<TKey>(selector, _map);
+            _switchNode = new RelaySwitchState<TKey>(selector, _map);
         }
 
         internal SwitchBuilder(StateToken prev, Func<BlackboardContext, TKey> selector)
@@ -39,7 +46,7 @@ public static partial class Dsl
             _prev = prev;
             _builder = prev.Builder;
             _isStart = false;
-            _switchNode = new SwitchState<TKey>(selector, _map);
+            _switchNode = new RelaySwitchState<TKey>(selector, _map);
         }
 
         internal SwitchBuilder(StartToken start, Func<BlackboardContext, TKey> selector)
@@ -47,7 +54,7 @@ public static partial class Dsl
             _prev = new StateToken(NodeId.Default, start.Builder);
             _builder = start.Builder;
             _isStart = true;
-            _switchNode = new SwitchState<TKey>(selector, _map);
+            _switchNode = new RelaySwitchState<TKey>(selector, _map);
         }
 
         /// <summary>

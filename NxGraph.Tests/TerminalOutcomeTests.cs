@@ -16,7 +16,7 @@ public class TerminalOutcomeTests
         GraphBuilder builder = new();
         NodeId approved = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
         NodeId rejected = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
-        builder.AddNode(new AsyncChoiceState(() => new ValueTask<bool>(approve()), approved, rejected),
+        builder.AddNode(new AsyncRelayChoiceState(() => new ValueTask<bool>(approve()), approved, rejected),
             isStart: true);
         builder.SetName(approved, "Approved");
         builder.SetName(rejected, "Rejected");

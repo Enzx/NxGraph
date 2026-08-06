@@ -890,19 +890,22 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
             ILogReporter? reporter = _reporters[_current.Index];
             if (reporter is not null)
             {
-                // Reassigned on every visit so interleaved machines sharing a graph each
-                // attribute log reports to their own observer; null when this machine has no
-                // observer, so nodes that gate report formatting on a wired callback
-                // (behavior composites) pay nothing on observer-less machines.
+                // Wired before the node executes — and therefore before a director's
+                // SelectNextAsync runs — so a report raised while *deciding* (a condition
+                // inside a data-built branch node) is attributed to this node. Reassigned on
+                // every visit so interleaved machines sharing a graph each attribute log
+                // reports to their own observer; null when this machine has no observer, so
+                // nodes that gate report formatting on a wired callback (behavior composites,
+                // conditions) pay nothing on observer-less machines.
                 reporter.LogReport = _observer is null ? null : _cachedLogReportCallback;
 
-                // Sync states read both slots (State.Log prefers the sync one), so the sync
-                // slot is cleared too: a callback left by a sync machine that ran this shared
-                // graph earlier must neither shadow this machine's observer nor receive
-                // reports from this run.
-                if (reporter is State syncState)
+                // Sync-capable nodes read both slots (State.Log and the shared report bridge
+                // prefer the sync one), so the sync slot is cleared too: a callback left by a
+                // sync machine that ran this shared graph earlier must neither shadow this
+                // machine's observer nor receive reports from this run.
+                if (reporter is ISyncLogReporter syncReporter)
                 {
-                    syncState.SyncLogReport = null;
+                    syncReporter.SyncLogReport = null;
                 }
             }
 
@@ -940,7 +943,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
 
                         next = CanonicalId(next);
                     }
-                    // Sync directors (ChoiceState/SwitchState behind a SyncLogicAdapter) route
+                    // Sync directors (RelayChoiceState/RelaySwitchState behind a SyncLogicAdapter) route
                     // here too — mirroring the sync runtime's `Logic is IDirector` check, and
                     // matching the validator/exporter, which already probe both logic slots.
                     else if (logic.Logic is IDirector syncDirector)

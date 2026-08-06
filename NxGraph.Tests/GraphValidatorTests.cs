@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 using NxGraph.Authoring;
+using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Diagnostics.Validations;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
@@ -216,7 +218,7 @@ public class GraphValidatorTests
         NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
         NodeId trueBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
         NodeId falseBranch = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
-        NodeId choice = builder.AddNode(new ChoiceState(() => true, trueBranch, falseBranch));
+        NodeId choice = builder.AddNode(new RelayChoiceState(() => true, trueBranch, falseBranch));
 
         builder.AddTransition(start, choice);
 
@@ -263,6 +265,87 @@ public class GraphValidatorTests
         {
             Assert.That(duplicates, Has.Length.EqualTo(2), "Every node claiming the UID gets its own Error.");
             Assert.That(duplicates.Select(d => d.Node.Index), Is.EquivalentTo(new[] { a.Index, b.Index }));
+        });
+    }
+
+    // ── Data-built branch lints (spec 023) ───────────────────────────────
+
+    private const string DecidesNothing = "decides nothing";
+    private const string NoDefaultTarget = "no default target";
+
+    [Test]
+    public void ChoiceWithBothArmsOnTheSameNode_ShouldBeWarning()
+    {
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId only = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId choice = builder.AddNode((IAsyncLogic)new ChoiceState(new IsTrue(true), only, only));
+        builder.AddTransition(start, choice);
+
+        Graph graph = builder.Build(throwOnError: false);
+        GraphValidationResult res = graph.Validate();
+
+        Assert.That(
+            res.Diagnostics.Any(d =>
+                d.Severity == Severity.Warning && d.Node.Index == choice.Index &&
+                d.Message.Contains(DecidesNothing, StringComparison.OrdinalIgnoreCase)), Is.True,
+            "A choice routing both arms to the same node decides nothing and must be flagged.");
+    }
+
+    [Test]
+    public void SwitchWithoutADefaultTarget_ShouldBeWarning()
+    {
+        BlackboardSchema schema = new("validation");
+        BlackboardKey<string> mode = schema.Register("mode", "alpha");
+
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId alpha = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId switchNode = builder.AddNode((IAsyncLogic)new SwitchState<string>(mode,
+            [new SwitchCase<string>("alpha", alpha)], NodeId.Default));
+        builder.AddTransition(start, switchNode);
+        builder.WithSchema(schema);
+
+        Graph graph = builder.Build(throwOnError: false);
+        GraphValidationResult res = graph.Validate();
+
+        Assert.That(
+            res.Diagnostics.Any(d =>
+                d.Severity == Severity.Warning && d.Node.Index == switchNode.Index &&
+                d.Message.Contains(NoDefaultTarget, StringComparison.OrdinalIgnoreCase)), Is.True,
+            "An unmatched value terminating the run silently must be flagged.");
+    }
+
+    [Test]
+    public void WellFormedDataBranchGraph_ProducesNoBranchWarnings()
+    {
+        BlackboardSchema schema = new("validation");
+        BlackboardKey<string> mode = schema.Register("mode", "alpha");
+
+        GraphBuilder builder = new();
+        NodeId start = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success), isStart: true);
+        NodeId yes = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId no = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId fallback = builder.AddNode(new AsyncRelayState(_ => ResultHelpers.Success));
+        NodeId choice = builder.AddNode((IAsyncLogic)new ChoiceState(new IsTrue(true), yes, no));
+        NodeId switchNode = builder.AddNode((IAsyncLogic)new SwitchState<string>(mode,
+            [new SwitchCase<string>("alpha", yes), new SwitchCase<string>("beta", no)], fallback));
+        builder.AddTransition(start, choice);
+        builder.AddTransition(yes, switchNode);
+        builder.WithSchema(schema);
+
+        Graph graph = builder.Build(throwOnError: false);
+        GraphValidationResult res = graph.Validate();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(res.HasErrors, Is.False);
+            Assert.That(
+                res.Diagnostics.Any(d => d.Message.Contains(DecidesNothing, StringComparison.OrdinalIgnoreCase)),
+                Is.False, "Distinct arms must not be flagged.");
+            Assert.That(
+                res.Diagnostics.Any(d => d.Message.Contains(NoDefaultTarget, StringComparison.OrdinalIgnoreCase)),
+                Is.False, "An explicit default target must not be flagged.");
         });
     }
 

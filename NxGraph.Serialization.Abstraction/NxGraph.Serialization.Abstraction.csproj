@@ -26,9 +26,10 @@
         <ProjectReference Include="..\NxGraph\NxGraph.csproj"/>
     </ItemGroup>
     <ItemGroup>
-        <!-- The behavior entry-codec hook (IBehaviorEntryCodec + the internal writer/reader
-             ctors) is internal wiring for GraphSerializer's payload sessions, not public
-             surface — see BehaviorFieldWriter.WriteBehaviors. -->
+        <!-- The behavior and condition entry-codec hooks (IBehaviorEntryCodec,
+             IConditionEntryCodec + the internal writer/reader ctors) are internal wiring for
+             GraphSerializer's payload sessions, not public surface — see
+             BehaviorFieldWriter.WriteBehaviors / WriteConditions. -->
         <InternalsVisibleTo Include="NxGraph.Serialization"/>
     </ItemGroup>
     <ItemGroup>

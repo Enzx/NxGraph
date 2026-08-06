@@ -446,7 +446,7 @@ public class GraphSerializerTestsTextCodec
         // drains) must never move the payload version — the project bumps it only for
         // structural format additions. Update this pin consciously, together with the
         // changelog comment in SerializationVersion.cs, when such an addition ships.
-        Assert.That(SerializationVersion.Version, Is.EqualTo(9));
+        Assert.That(SerializationVersion.Version, Is.EqualTo(10));
     }
 
     // ── Crafted MessagePack: inflated header counts must drain, not desync ──
@@ -469,7 +469,7 @@ public class GraphSerializerTestsTextCodec
 
     /// <summary>
     /// A parent graph whose nested subgraph's GraphDto array header declares one element more
-    /// than the current 16-element shape (the 16 known fields plus one trailing nil). The
+    /// than the current 18-element shape (the 18 known fields plus one trailing nil). The
     /// parent carries a retry policy <i>after</i> the subgraph section, so its reads only stay
     /// aligned if the child read drains the extra element instead of leaving it in the stream.
     /// </summary>
@@ -478,8 +478,8 @@ public class GraphSerializerTestsTextCodec
         ArrayBufferWriter<byte> buffer = new();
         MessagePackWriter writer = new(buffer);
 
-        // Parent GraphDto: the regular 16-element v9 shape.
-        writer.WriteArrayHeader(16);
+        // Parent GraphDto: the regular 18-element v10 shape.
+        writer.WriteArrayHeader(18);
         writer.Write(SerializationVersion.Version); // 0. version
         writer.Write(-1); // 1. index
         writer.WriteNil(); // 2. name
@@ -493,8 +493,8 @@ public class GraphSerializerTestsTextCodec
         writer.WriteArrayHeader(2); //    SubGraphDto: [OwnerIndex, GraphDto]
         writer.Write(1);
 
-        // Child GraphDto with an inflated header: 17 declared elements.
-        writer.WriteArrayHeader(17);
+        // Child GraphDto with an inflated header: 19 declared elements.
+        writer.WriteArrayHeader(19);
         writer.Write(SerializationVersion.Version);
         writer.Write(-1);
         writer.WriteNil();
@@ -502,14 +502,14 @@ public class GraphSerializerTestsTextCodec
         WriteTextNode(ref writer, 0, "c", "{\"Data\":\"c\"}");
         writer.WriteArrayHeader(1); // transitions
         WriteTransition(ref writer, -1);
-        for (int section = 0; section < 11; section++)
+        for (int section = 0; section < 13; section++)
         {
-            writer.WriteArrayHeader(0); // subGraphs .. behaviors, all empty
+            writer.WriteArrayHeader(0); // subGraphs .. switches, all empty
         }
 
-        writer.WriteNil(); // the unknown 17th element the reader must drain
+        writer.WriteNil(); // the unknown 19th element the reader must drain
 
-        // Parent sections 6..15: a real retry policy first, then the rest empty. Without the
+        // Parent sections 6..17: a real retry policy first, then the rest empty. Without the
         // child drain, this policy would be read one slot late and misparse.
         writer.WriteArrayHeader(1); // 6. retryPolicies
         writer.WriteArrayHeader(4); //    [Index, MaxAttempts, BackoffTicks, BackoffKind]
@@ -517,9 +517,9 @@ public class GraphSerializerTestsTextCodec
         writer.Write(2);
         writer.Write(0L);
         writer.Write(0);
-        for (int section = 0; section < 9; section++)
+        for (int section = 0; section < 11; section++)
         {
-            writer.WriteArrayHeader(0); // 7. outcomeCodes .. 15. behaviors, all empty
+            writer.WriteArrayHeader(0); // 7. outcomeCodes .. 17. switches, all empty
         }
 
         writer.Flush();

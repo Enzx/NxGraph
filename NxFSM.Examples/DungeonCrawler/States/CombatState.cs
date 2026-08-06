@@ -7,7 +7,7 @@ namespace NxFSM.Examples.DungeonCrawler.States;
 /// The hero fights a random monster.
 /// Combat is a simple loop of trading blows until one side falls.
 /// Always returns <see cref="Result.Success"/> — the alive-check is done by a
-/// downstream <see cref="NxGraph.Fsm.ChoiceState"/> director node.
+/// downstream <see cref="NxGraph.Fsm.RelayChoiceState"/> director node.
 /// </summary>
 public sealed class CombatState : State<DungeonContext>
 {

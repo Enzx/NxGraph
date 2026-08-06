@@ -80,7 +80,7 @@ The core package targets `net8.0` and `netstandard2.1`.
 ## Why NxGraph
 
 - **Simple runtime model**: graphs are backed by dense node/transition arrays and each node has at most one success edge plus an optional failure edge.
-- **Predictable branching**: run-one fan-out happens through director nodes such as `ChoiceState` and `SwitchState<TKey>`; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
+- **Predictable branching**: run-one fan-out happens through director nodes — the data-built `ChoiceState`/`SwitchState<T>`, which [serialize](#data-built-branching-serializable), or their delegate-backed `RelayChoiceState`/`RelaySwitchState<TKey>` twins; run-many fan-out through parallel composites — see [Fan-out at a glance](#fan-out-at-a-glance).
 
 - **Authoring ergonomics**: build flows with `StartWithAsync`, `.ToAsync(...)`, `.If(...)`, `.Switch(...)`, `.WaitForAsync(...)`/`.WaitFor(...)`, and `.ToWithTimeoutAsync(...)`/`.ToWithTimeout(...)` — every construct has twins in both runtimes.
 - **Unity-ready sync runtime**: `StateMachine.Execute()` advances exactly one node per call, drop it into `MonoBehaviour.Update()`.
@@ -223,9 +223,43 @@ var graph = GraphBuilder
     .Build();
 ```
 
+### Data-built branching (serializable)
+
+The `.If(predicate)` / `.Switch(selector)` overloads above take **delegates**, and a closure cannot ride a serialization payload — a graph that branches through them cannot round-trip, and therefore cannot survive suspend and resume. When the decision is *data* — a comparison against a blackboard slot — pass a condition or a key instead, and the branch becomes an ordinary part of the payload:
+
+```csharp
+var world = new BlackboardSchema("world");
+BlackboardKey<bool> alarmRaised = world.Register("alarmRaised", false);
+BlackboardKey<int> tier = world.Register("tier", 0);
+
+var graph = GraphBuilder
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Entry")
+    .If(new IsTrue(alarmRaised))
+        .ThenAsync(_ => ResultHelpers.Success).SetName("Evacuate")
+        .ElseAsync(_ => ResultHelpers.Success).SetName("Patrol")
+    .WithSchema(world)
+    .Build();
+
+var routed = GraphBuilder
+    .StartWithAsync(_ => ResultHelpers.Success).SetName("Entry")
+    .Switch(tier)                                   // the key is the tested value
+        .CaseAsync(1, _ => ResultHelpers.Success)   // cases are literals
+        .CaseAsync(2, _ => ResultHelpers.Success)
+        .DefaultAsync(_ => ResultHelpers.Success)
+    .End().SetName("Router")
+    .WithSchema(world)
+    .Build();
+```
+
+`.If(...)` with conditions builds a `ChoiceState`, `.Switch(key)` builds a `SwitchState<T>`; both serialize with **zero serializer options** and both render labelled arms in the Mermaid export (`true` / `false`, the case literal, `otherwise`).
+
+A **condition** implements `ICondition` — `bool Evaluate(in BehaviorContext ctx)`, reading the machine-bound blackboards through the same context [behaviors](#behaviors-declarative-state-composition) use. It reuses none of the fault model: a condition that is false is *not* a failure, so branching never spends the node's retry/failure edge. Conditions are side-effect free by contract, which is what makes short-circuit evaluation safe; a genuine wiring fault (an unbound key, a key declared with another type) throws rather than answering `false`. The standard set is deliberately tiny — `KeyEquals<T>` (whose expected side is a literal *or* another key), `IsTrue`, and `Not` — and `.If(ConditionMatch.All, …)` / `.If(ConditionMatch.Any, …)` combine several.
+
+Two shapes, two jobs: a **switch is a lookup**, so its case values are literals and a value cased twice is rejected at build time — at most one arm can match, and the arms carry no order. Ordered, first-match-wins rules, where an earlier arm may shadow a later one or different arms test different keys, are a **chain of choices**, which is what `if`/`else if` is; lower to that rather than reaching for an ordered rule table.
+
 ### Custom directors
 
-`.If(...)` and `.Switch(...)` compile down to the built-in director nodes `ChoiceState` and `SwitchState<TKey>`. A **director** is a node implementing `IDirector` (`IAsyncDirector` for the async runtime) whose `SelectNext()` picks the next node at runtime — implement it yourself when the routing decision doesn't fit a predicate or a key/case map. Override `EnumerateStaticTargets()` to surface the nodes you can route to: the validator and the Mermaid exporter walk it, and the validator warns when a custom director exposes none (its branches would be invisible to reachability analysis and diagrams).
+`.If(predicate)` and `.Switch(selector)` compile down to the delegate-backed director nodes `RelayChoiceState` and `RelaySwitchState<TKey>`; their data-built twins are `ChoiceState` and `SwitchState<T>` (above). A **director** is a node implementing `IDirector` (`IAsyncDirector` for the async runtime) whose `SelectNext()` picks the next node at runtime — implement it yourself when the routing decision doesn't fit a predicate or a key/case map. Override `EnumerateStaticTargets()` to surface the nodes you can route to: the validator and the Mermaid exporter walk it, and the validator warns when a custom director exposes none (its branches would be invisible to reachability analysis and diagrams).
 
 ### Fan-out at a glance
 
@@ -233,7 +267,7 @@ Every fan-out construct answers two questions: **how many successors run**, and 
 
 | How many run | Chosen statically (declared in the graph) | Chosen dynamically (at runtime) |
 |---|---|---|
-| **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule | Director — [`IDirector`](#custom-directors) selects any node in code; `ChoiceState`/`SwitchState<TKey>` are the built-ins |
+| **One of many** | Conditional — [`.If(...)`](#branching-with-if) / [`.Switch(...)`](#branching-with-switch) declare the branches and the routing rule; the [data-built forms](#data-built-branching-serializable) additionally serialize | Director — [`IDirector`](#custom-directors) selects any node in code; `RelayChoiceState`/`RelaySwitchState<TKey>` are the built-ins |
 | **Many at once** | Parallel — [`.Parallel(regions...)`](#parallel-regions-and-states) runs **all** region graphs | Dynamic parallel — [`.Parallel(selector, ...)`](#dynamic-some-of-many-regions) runs the **subset** a blackboard selector picks |
 | **Many in one flat graph** | Token runtime — [`.ForkTo(...)` + `JoinState`](#token-runtime-fork-join-and-mid-graph-merge) fan tokens out and merge them mid-graph (all / any / M-of-N) | The same fork/join graph — which tokens reach a join, and when, is decided by each token's own path at runtime |
 
@@ -1150,6 +1184,7 @@ Notes:
 - event entry dispatchers serialize out of the box (payload version 7): the dispatch table — key names, runtime-stable event type names, targets, and the `Otherwise` target — is plain structure. Blackboard keys never ride the graph payload (schemas are code), so a deserialized graph raises by resolving the event's type name and the delivery key by name against the machine's bound Graph board, with targeted errors on a missing name or a changed value type
 - behavior composites serialize out of the box for the standard set (payload version 8): `Log` and `SetValue<T>` ride as self-describing field lists with **zero options configured** — the default `BehaviorRegistry` reconstructs them, closing `SetValue<T>` (and `BehaviorState<TAgent>`'s agent type) from runtime-stable type names. Key bindings ride by name and rebind against the machine's bound boards at execution. Custom behaviors implement `ISerializableBehavior` (writing through the small neutral field model: strings, bools, numerics, enums, bindings) and register a reconstruction factory on `GraphSerializerOptions.BehaviorRegistry`; a behavior that does neither fails with a targeted error naming that option. The agent never rides — re-attach it via `SetAgent`/`WithAgent`
 - `Repeat` bodies ride as nested behavior entry lists (payload version 9): all four repeat forms serialize with zero options via the default registry, bodies encode recursively under exactly the top-level entry rules (user behaviors nested in a body follow the same `ISerializableBehavior` + factory contract), the count binding and index key rebind by name, and read-side nesting is capped at 32 as a crafted-payload guard. Pre-v9 payloads read unchanged
+- [data-built branches](#data-built-branching-serializable) serialize out of the box (payload version 10): a `ChoiceState`'s condition list and a `SwitchState<T>`'s key, literal cases and default target ride as two sparse sections, and the standard conditions (`KeyEquals<T>`, `IsTrue`, `Not`) reconstruct with **zero options** through the default `ConditionRegistry` — nested `Not` conditions encode recursively under the same rules and the same read-side depth cap. Custom conditions implement `ISerializableCondition` and register a factory on `GraphSerializerOptions.ConditionRegistry`, exactly as custom behaviors do. Keys never ride typed: the switch's key and `KeyEquals<T>`'s key rebind by name against the machine's bound boards at execution. Pre-v10 payloads read branch-free — which is the point of the whole feature: a graph that branches can now be suspended, stored and resumed
 
 ---
 
@@ -1249,7 +1284,7 @@ The tests cover:
 ## FAQ
 
 **Why is there only one direct success transition per node?**  
-Branching is modeled explicitly through directors such as `ChoiceState` and `SwitchState<TKey>`, which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path. When several paths must run at once, use the parallel composites instead of extra edges — see [Fan-out at a glance](#fan-out-at-a-glance); a token runner with free-form fan-out in one flat graph is a recorded, deliberately deferred design.
+Branching is modeled explicitly through directors — `ChoiceState`/`SwitchState<T>` when the decision is data, `RelayChoiceState`/`RelaySwitchState<TKey>` when it is code — which keeps execution simple and predictable. A node can additionally carry one failure edge (`.OnError`) for the fault path. When several paths must run at once, use the parallel composites instead of extra edges — see [Fan-out at a glance](#fan-out-at-a-glance); a token runner with free-form fan-out in one flat graph is a recorded, deliberately deferred design.
 
 **Can I share a graph across machines?**  
 Yes. `Graph` is immutable after build and can be reused across multiple state machine instances.

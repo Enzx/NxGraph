@@ -255,4 +255,36 @@ public static partial class Dsl
         Guard.NotNull(run, nameof(run));
         return switchBuilder.DefaultAsync(new AsyncRelayState(run));
     }
+
+    /// <summary>Adds a case with a synchronous context lambda to the data-built switch builder.</summary>
+    public static KeySwitchBuilder<TKey> Case<TKey>(this KeySwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<BlackboardContext, Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Case(key, new RelayState(run));
+    }
+
+    /// <summary>Adds a case with an asynchronous context lambda to the data-built switch builder.</summary>
+    public static KeySwitchBuilder<TKey> CaseAsync<TKey>(this KeySwitchBuilder<TKey> switchBuilder, TKey key,
+        Func<BlackboardContext, CancellationToken, ValueTask<Result>> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.CaseAsync(key, new AsyncRelayState(run));
+    }
+
+    /// <summary>Adds a default case with a synchronous context lambda to the data-built switch builder.</summary>
+    public static KeySwitchBuilder<TKey> Default<TKey>(this KeySwitchBuilder<TKey> switchBuilder,
+        Func<BlackboardContext, Result> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.Default(new RelayState(run));
+    }
+
+    /// <summary>Adds a default case with an asynchronous context lambda to the data-built switch builder.</summary>
+    public static KeySwitchBuilder<TKey> DefaultAsync<TKey>(this KeySwitchBuilder<TKey> switchBuilder,
+        Func<BlackboardContext, CancellationToken, ValueTask<Result>> run) where TKey : notnull
+    {
+        Guard.NotNull(run, nameof(run));
+        return switchBuilder.DefaultAsync(new AsyncRelayState(run));
+    }
 }

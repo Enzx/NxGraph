@@ -14,13 +14,15 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
     private const int VersionSixHeaderCount = 14;
     private const int VersionSevenHeaderCount = 15;
     private const int VersionEightHeaderCount = 16;
+    private const int VersionTenHeaderCount = 18;
 
     public override void Serialize(ref MessagePackWriter writer, GraphDto value, MessagePackSerializerOptions options)
     {
         // [0.Version 1.Index, 2.Name, 3.Nodes[], 4.Transitions[], 5.SubGraphs[],
         //  6.RetryPolicies[], 7.OutcomeCodes[], 8.OutcomeNames[], 9.Composites[], 10.Uids[],
-        //  11.Forks[], 12.Joins[], 13.Containers[], 14.EventEntries[], 15.Behaviors[]]
-        writer.WriteArrayHeader(VersionEightHeaderCount);
+        //  11.Forks[], 12.Joins[], 13.Containers[], 14.EventEntries[], 15.Behaviors[],
+        //  16.Choices[], 17.Switches[]]
+        writer.WriteArrayHeader(VersionTenHeaderCount);
         writer.Write(value.Version);
         writer.Write(value.Index);
         writer.Write(value.Name);
@@ -47,6 +49,10 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             .Serialize(ref writer, value.EventEntries, options);
         options.Resolver.GetFormatterWithVerify<BehaviorDto[]>()
             .Serialize(ref writer, value.Behaviors, options);
+        options.Resolver.GetFormatterWithVerify<ChoiceDto[]>()
+            .Serialize(ref writer, value.Choices, options);
+        options.Resolver.GetFormatterWithVerify<SwitchDto[]>()
+            .Serialize(ref writer, value.Switches, options);
     }
 
     public override GraphDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
@@ -93,6 +99,9 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 8 or 9 when count < VersionEightHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionEightHeaderCount} elements, got {count}");
+            case 10 when count < VersionTenHeaderCount:
+                throw new InvalidOperationException(
+                    $"GraphDto: expected at least {VersionTenHeaderCount} elements, got {count}");
         }
 
         int index = reader.ReadInt32();
@@ -173,6 +182,19 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             consumed = VersionEightHeaderCount;
         }
 
+        // Pre-v10 payloads end after Behaviors; the data-built branch sections arrived with
+        // version 10 and read branch-free before it.
+        ChoiceDto[] choices = [];
+        SwitchDto[] switches = [];
+        if (count >= VersionTenHeaderCount)
+        {
+            choices = options.Resolver.GetFormatterWithVerify<ChoiceDto[]>()
+                .Deserialize(ref reader, options);
+            switches = options.Resolver.GetFormatterWithVerify<SwitchDto[]>()
+                .Deserialize(ref reader, options);
+            consumed = VersionTenHeaderCount;
+        }
+
         // Drain any trailing elements beyond the known shape so the reader always ends
         // positioned after this array — a nested read that under-consumes desyncs every
         // subsequent read of its parent. The version gate rejects newer payloads, so extras
@@ -187,6 +209,7 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
         reader.Depth--;
 
         return new GraphDto(nodes, transitions, subGraphs, index, name, retryPolicies, outcomeCodes, outcomeNames,
-            composites, uids, forks, joins, containers, eventEntries, behaviors) { Version = version };
+                composites, uids, forks, joins, containers, eventEntries, behaviors, choices, switches)
+            { Version = version };
     }
 }

@@ -37,6 +37,13 @@ public enum BehaviorFieldKind : byte
     /// composition, carrying <c>Repeat</c>/<c>AsyncRepeat</c> bodies (payload version 9).
     /// </summary>
     Behaviors = 8,
+
+    /// <summary>
+    /// A nested condition entry list (<see cref="BehaviorFieldValue.Conditions"/>) — the
+    /// condition model's one nesting shape, carrying <c>Not</c>'s inner condition
+    /// (payload version 10).
+    /// </summary>
+    Conditions = 9,
 }
 
 /// <summary>
@@ -52,7 +59,8 @@ public sealed class BehaviorFieldValue(
     long integer = 0,
     double number = 0,
     BehaviorBinding? binding = null,
-    BehaviorEntry[]? entries = null)
+    BehaviorEntry[]? entries = null,
+    ConditionEntry[]? conditions = null)
 {
     /// <summary>The value kind, deciding which payload slot is meaningful.</summary>
     public BehaviorFieldKind Kind { get; } = kind;
@@ -74,6 +82,9 @@ public sealed class BehaviorFieldValue(
 
     /// <summary>Nested behavior entries payload (payload version 9); null for every other kind.</summary>
     public BehaviorEntry[]? Entries { get; } = entries;
+
+    /// <summary>Nested condition entries payload (payload version 10); null for every other kind.</summary>
+    public ConditionEntry[]? Conditions { get; } = conditions;
 }
 
 /// <summary>
@@ -87,6 +98,23 @@ public sealed class BehaviorEntry(string behaviorTypeName, BehaviorField[] field
 {
     /// <summary>The behavior's runtime-stable CLR type name — the registry's lookup identity.</summary>
     public string BehaviorTypeName { get; } = behaviorTypeName;
+
+    /// <summary>The entry's fields in write order.</summary>
+    public BehaviorField[] Fields { get; } = fields;
+}
+
+/// <summary>
+/// One serialized condition entry (payload version 10) — the exact twin of
+/// <see cref="BehaviorEntry"/>, deliberately a separate type so a condition list can never be
+/// read as a behavior list: the condition's runtime-stable CLR type name plus its fields. The
+/// recursion closure is the same one behaviors have: a
+/// <see cref="BehaviorFieldKind.Conditions"/> field carries entries, and each entry carries
+/// fields.
+/// </summary>
+public sealed class ConditionEntry(string conditionTypeName, BehaviorField[] fields)
+{
+    /// <summary>The condition's runtime-stable CLR type name — the registry's lookup identity.</summary>
+    public string ConditionTypeName { get; } = conditionTypeName;
 
     /// <summary>The entry's fields in write order.</summary>
     public BehaviorField[] Fields { get; } = fields;

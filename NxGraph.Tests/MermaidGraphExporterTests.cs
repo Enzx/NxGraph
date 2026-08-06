@@ -1,4 +1,6 @@
 using NxGraph.Authoring;
+using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Diagnostics.Export;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
@@ -161,7 +163,7 @@ public class MermaidGraphExporterTests
         NodeId start = builder.AddNode(new RelayState(() => Result.Success), isStart: true);
         NodeId thenBranch = builder.AddNode(new RelayState(() => Result.Success)); // n1
         NodeId elseBranch = builder.AddNode(new RelayState(() => Result.Success)); // n2
-        NodeId choice = builder.AddNode(new ChoiceState(() => true, thenBranch, elseBranch)); // n3
+        NodeId choice = builder.AddNode(new RelayChoiceState(() => true, thenBranch, elseBranch)); // n3
         builder.SetName(choice, "say \"hi\"");
         builder.AddTransition(start, choice);
         Graph graph = builder.Build(throwOnError: false);
@@ -201,5 +203,106 @@ public class MermaidGraphExporterTests
         // Regular nodes should keep their shapes without spaces
         Assert.That(mmd, Does.Contain("\n  n0(["));
         Assert.That(mmd, Does.Not.Contain("n0 ("));
+    }
+
+    // ── Data-built branches (spec 023): the arms carry their labels ──────
+
+    [Test]
+    public void data_choice_arms_are_labeled_true_and_false()
+    {
+        // n0 start → n1 true pad, n2 false pad, n3 choice, n4 then, n5 else.
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .If(new IsTrue(true))
+            .Then(() => Result.Success)
+            .Else(() => Result.Success)
+            .Build();
+
+        string mmd = new MermaidGraphExporter().Export(graph);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mmd, Does.Contain("n3 -. true .-> n1"));
+            Assert.That(mmd, Does.Contain("n3 -. false .-> n2"));
+            Assert.That(mmd, Does.Contain("\n  n3{\""), "A choice still renders as a decision rhombus.");
+        });
+    }
+
+    [Test]
+    public void relay_choice_arms_stay_unlabeled()
+    {
+        // Regression guard for the deliberate asymmetry: a delegate-backed decision is opaque,
+        // so the exporter must not invent a label it cannot know.
+        const bool flag = true;
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .If(() => flag)
+            .Then(() => Result.Success)
+            .Else(() => Result.Success)
+            .Build();
+
+        string mmd = new MermaidGraphExporter().Export(graph);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mmd, Does.Contain("n3 -.-> n1"));
+            Assert.That(mmd, Does.Contain("n3 -.-> n2"));
+            Assert.That(mmd, Does.Not.Contain("-. true .->"));
+            Assert.That(mmd, Does.Not.Contain("-. false .->"));
+        });
+    }
+
+    [Test]
+    public void data_switch_case_edges_carry_the_literal_and_the_default_says_otherwise()
+    {
+        BlackboardSchema schema = new("export");
+        BlackboardKey<string> mode = schema.Register("mode", "idle");
+
+        // n0 start → n1 "armed", n2 "idle", n3 default, n4 switch.
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .Switch(mode)
+            .Case("armed", () => Result.Success)
+            .Case("idle", () => Result.Success)
+            .Default(() => Result.Success)
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        string mmd = new MermaidGraphExporter().Export(graph);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mmd, Does.Contain("n4 -. armed .-> n1"));
+            Assert.That(mmd, Does.Contain("n4 -. idle .-> n2"));
+            Assert.That(mmd, Does.Contain("n4 -. otherwise .-> n3"));
+        });
+    }
+
+    [Test]
+    public void data_switch_renders_numeric_case_literals_culture_neutrally()
+    {
+        BlackboardSchema schema = new("export");
+        BlackboardKey<int> tier = schema.Register("tier", 1);
+
+        // n0 start → n1 case 1, n2 case 2, n3 switch (no default arm declared).
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success)
+            .Switch(tier)
+            .Case(1, () => Result.Success)
+            .Case(2, () => Result.Success)
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        string mmd = new MermaidGraphExporter().Export(graph);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mmd, Does.Contain("n3 -. 1 .-> n1"));
+            Assert.That(mmd, Does.Contain("n3 -. 2 .-> n2"));
+            Assert.That(mmd, Does.Not.Contain("otherwise"),
+                "A NodeId.Default default target is a terminal exit — there is no edge to draw.");
+        });
     }
 }

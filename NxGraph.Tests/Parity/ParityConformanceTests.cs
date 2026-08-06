@@ -1,4 +1,6 @@
 using NxGraph.Authoring;
+using NxGraph.Blackboards;
+using NxGraph.Conditions;
 using NxGraph.Fsm;
 using NxGraph.Graphs;
 
@@ -118,6 +120,51 @@ public class ParityConformanceTests
             .Case("beta", () => Result.Success)
             .Default(() => Result.Failure)
             .End().SetName("switch")
+            .Build();
+        return new ParityScenario { Graph = graph };
+    }
+
+    // Data-built branching (spec 023). The adapters build machines straight from the Graph
+    // with no board binding, so these recipes stay board-free: literal conditions bind
+    // nothing, and the Node-scoped key resolves against the board each machine auto-creates
+    // from the graph's Node schema — its registered default makes routing deterministic.
+    private static ParityScenario DataIfBranch(bool takeThen)
+    {
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success).SetName("ask")
+            .If(new IsTrue(takeThen))
+            .Then(() => Result.Success).SetName("yes")
+            .Else(() => Result.Success).SetName("no")
+            .Build();
+        return new ParityScenario { Graph = graph };
+    }
+
+    private static ParityScenario DataChoiceOverNodeScratch()
+    {
+        BlackboardSchema scratch = new("parity-choice", BlackboardScope.Node);
+        BlackboardKey<int> tier = scratch.Register("tier", 2);
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success).SetName("ask")
+            .If(ConditionMatch.All, new KeyEquals<int>(tier, 2), new Not(new KeyEquals<int>(tier, 3)))
+            .Then(() => Result.Success).SetName("yes")
+            .Else(() => Result.Success).SetName("no")
+            .WithSchema(scratch)
+            .Build();
+        return new ParityScenario { Graph = graph };
+    }
+
+    private static ParityScenario DataSwitchRouting()
+    {
+        BlackboardSchema scratch = new("parity-switch", BlackboardScope.Node);
+        BlackboardKey<int> tier = scratch.Register("tier", 2);
+        Graph graph = GraphBuilder
+            .StartWith(() => Result.Success).SetName("pick")
+            .Switch(tier)
+            .Case(1, () => Result.Failure)
+            .Case(2, () => Result.Success)
+            .Default(() => Result.Failure)
+            .End().SetName("switch")
+            .WithSchema(scratch)
             .Build();
         return new ParityScenario { Graph = graph };
     }
@@ -269,6 +316,44 @@ public class ParityConformanceTests
         {
             Assert.That(baseline, Does.Contain("transition switch->#2"),
                 "The 'beta' case node (index 2) is selected by the director.");
+            Assert.That(baseline, Does.Contain("run-result Success"));
+        });
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task data_if_branching_runs_identically(bool takeThen)
+    {
+        // A data-built ChoiceState is one class implementing both logic slots and both
+        // director slots, so the same node must route identically on all four surfaces.
+        List<string> baseline =
+            await ParityRunner.AssertFsmParityAsync(() => DataIfBranch(takeThen), ParityDrives.OneRunAsync);
+        Assert.That(baseline, Does.Contain(takeThen ? "entered yes" : "entered no"));
+    }
+
+    [Test]
+    public async Task data_choice_over_node_scratch_runs_identically()
+    {
+        // Condition evaluation reads the machine-owned Node board; both runtimes must resolve
+        // the same value and take the same arm.
+        List<string> baseline =
+            await ParityRunner.AssertFsmParityAsync(DataChoiceOverNodeScratch, ParityDrives.OneRunAsync);
+        Assert.Multiple(() =>
+        {
+            Assert.That(baseline, Does.Contain("entered yes"));
+            Assert.That(baseline, Does.Contain("run-result Success"));
+        });
+    }
+
+    [Test]
+    public async Task data_switch_routing_runs_identically()
+    {
+        List<string> baseline =
+            await ParityRunner.AssertFsmParityAsync(DataSwitchRouting, ParityDrives.OneRunAsync);
+        Assert.Multiple(() =>
+        {
+            Assert.That(baseline, Does.Contain("transition switch->#2"),
+                "The case-2 node (index 2) is selected by the director.");
             Assert.That(baseline, Does.Contain("run-result Success"));
         });
     }
