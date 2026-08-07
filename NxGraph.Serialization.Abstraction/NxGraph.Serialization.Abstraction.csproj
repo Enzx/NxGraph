@@ -3,7 +3,7 @@
     <!-- Common properties (LangVersion/Nullable/analyzers/package metadata) come from the
          repo-root Directory.Build.props. -->
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <!-- CS1591: XML docs are required only where they add value; missing-doc coverage is
              tracked editorially, not as a build gate.
@@ -20,6 +20,16 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <!-- Shims mirror the core project's arrangement: compiled only into the netstandard2.1
+         build, where the BCL lacks init-only setters and the argument-expression attribute.
+         They are per-assembly copies because the core's are internal. -->
+    <ItemGroup>
+        <Compile Remove="Shims\**\*.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <Compile Include="Shims\**\*.cs" />
     </ItemGroup>
 
     <ItemGroup>

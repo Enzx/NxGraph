@@ -60,6 +60,21 @@ jobs:
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE"   >> "$GITHUB_OUTPUT"
+
+          # Only binary mode ships the serialization package: a prebuilt
+          # NxGraph.Serialization.dll references the assembly named NxGraph and cannot bind
+          # to a source-compiled core, so source-mode releases publish the core alone.
+          if [[ "$MODE" == "binary" ]]; then
+            {
+              echo "assets<<EOF"
+              echo "com.enzx.nxgraph-${VER}.tgz"
+              echo "com.enzx.nxgraph.serialization-${VER}.tgz"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "assets=com.enzx.nxgraph-${VER}.tgz" >> "$GITHUB_OUTPUT"
+          fi
+
           echo "Resolved: version=$VER, mode=$MODE"
 
       - name: Build, test, stage, and package UPM
@@ -74,41 +89,59 @@ jobs:
           upm-patch-version
           upm-tarball
 
-      - name: Push to upm branch
+      - name: Push package branches
         shell: bash
         run: |
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
+          MODE="${{ steps.meta.outputs.mode }}"
 
-          # Park the tarball outside the worktree: `git clean -fdx` below would delete it
-          # (it is untracked and not covered by the package-dir exclusion), and the release
-          # step needs it as an asset.
-          mv "com.enzx.nxgraph-${VER}.tgz" /tmp/
+          # Park everything the release still needs outside the worktree. Publishing rewrites
+          # the tree to each package's layout in turn, and `git clean -fdx` deletes anything
+          # untracked — which covers both the tarballs and the staged binaries.
+          STASH=/tmp/upm-release
+          rm -rf "$STASH" && mkdir -p "$STASH"
+          mv "com.enzx.nxgraph-${VER}.tgz" "$STASH/"
+          cp -r upm/com.enzx.nxgraph "$STASH/core"
+          if [[ "$MODE" == "binary" ]]; then
+            mv "com.enzx.nxgraph.serialization-${VER}.tgz" "$STASH/"
+            cp -r upm/com.enzx.nxgraph.serialization "$STASH/serialization"
+          fi
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create an orphan branch with just the UPM package contents
-          git checkout --orphan upm-staging
-          git rm -rf . > /dev/null 2>&1 || true
-          git clean -fdx -e "${UPM_PACKAGE_DIR}" > /dev/null 2>&1 || true
+          # Publish one package layout at the root of its own orphan branch. Each package gets
+          # its own branch so both stay installable by plain git URL, and so the existing
+          # '#upm' URL keeps meaning exactly what it meant before the split.
+          publish() {
+            local src="$1" branch="$2"
 
-          # Move UPM package contents to root
-          cp -r ${UPM_PACKAGE_DIR}/* .
-          cp -r ${UPM_PACKAGE_DIR}/.* . 2>/dev/null || true
+            git checkout --orphan upm-staging
+            git rm -rf . > /dev/null 2>&1 || true
+            git clean -fdx > /dev/null 2>&1 || true
 
-          # Drop the nested copy so the published branch is only the package layout.
-          rm -rf upm
+            # `/.` copies dotfiles (.gitkeep) along with everything else.
+            cp -r "${src}/." .
 
-          git add -A
-          git commit -m "Release UPM v${VER}"
+            git add -A
+            git commit -m "Release UPM v${VER}"
+            git push origin "upm-staging:${branch}" --force
 
-          git push origin upm-staging:upm --force
+            # Return to the released commit so the next publish starts from a known tree.
+            git checkout --force --detach "${GITHUB_SHA}" > /dev/null 2>&1
+            git branch -D upm-staging > /dev/null 2>&1 || true
 
-          # Restore the tarball for the release step.
-          mv "/tmp/com.enzx.nxgraph-${VER}.tgz" .
+            echo "Pushed ${branch} @ v${VER}."
+          }
 
-          echo "Pushed UPM package v${VER} to 'upm' branch."
+          publish "$STASH/core" upm
+          if [[ "$MODE" == "binary" ]]; then
+            publish "$STASH/serialization" upm-serialization
+          fi
+
+          # Restore the tarballs for the release step.
+          mv "$STASH"/*.tgz .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -134,8 +167,18 @@ jobs:
             "com.enzx.nxgraph": "https://github.com/${{ github.repository }}.git#upm/v${{ steps.meta.outputs.version }}"
             ```
 
+            ### Optional: serialization
+
+            JSON and MessagePack payloads live in a separate package, released from the same
+            version and published to its own branch. It bundles its own dependencies — see its
+            README for the duplicate-assembly caveat. Binary-mode releases only.
+
+            ```json
+            "com.enzx.nxgraph.serialization": "https://github.com/${{ github.repository }}.git#upm-serialization"
+            ```
+
             ### Install from tarball
-            Download the `.tgz` file below and install via Unity Package Manager → "Add package from tarball".
-          files: com.enzx.nxgraph-${{ steps.meta.outputs.version }}.tgz
+            Download a `.tgz` file below and install via Unity Package Manager → "Add package from tarball".
+          files: ${{ steps.meta.outputs.assets }}
           draft: false
           prerelease: ${{ contains(steps.meta.outputs.version, '-') }}

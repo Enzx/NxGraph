@@ -25,7 +25,7 @@ Bullseye supports passing **multiple targets** in a single invocation. Shared de
 | Target | Depends on | Description |
 |---|---|---|
 | `info` | — | Diagnostic preflight: print repo root, resolved `dotnet` (and why), candidates, `dotnet --info` |
-| `clean` | — | Remove all staged UPM files (source & binary) |
+| `clean` | — | Remove staged UPM files (source & binary) from both packages |
 | `restore` | — | `dotnet restore` the solution |
 | `build` | `restore` | `dotnet build` the solution |
 | `test` | `build` | `dotnet test` with code coverage + threshold gate (see [Coverage](#coverage)) |
@@ -33,10 +33,10 @@ Bullseye supports passing **multiple targets** in a single invocation. Shared de
 | `pack` | `build` | Pack one or more NuGet packages |
 | `push` | `pack` | Push `.nupkg` + `.snupkg` to nuget.org (API key never echoed — see below) |
 | **`publish`** | `ci`, `push` | **Full release pipeline** (ci + pack + push) |
-| `stage-source` | — | Copy NxGraph source files into the UPM package |
-| `stage-binary` | — | Build NxGraph DLL and copy into the UPM package |
-| `upm-patch-version` | — | Patch `version` field in UPM `package.json` |
-| `upm-tarball` | `upm-patch-version` | Create a `.tgz` archive of the UPM package |
+| `stage-source` | — | Copy NxGraph source files into the core UPM package (the serialization package is binary-only and is cleared) |
+| `stage-binary` | — | Build the netstandard2.1 assemblies and distribute them across both UPM packages |
+| `upm-patch-version` | — | Patch `version` in both UPM `package.json` files, pinning the serialization package's dependency on the core |
+| `upm-tarball` | `upm-patch-version` | Create a `.tgz` archive per staged UPM package |
 
 ### Dependency tree
 
@@ -155,11 +155,19 @@ Bullseye runs all four targets (and their transitive dependencies) in a single p
 This is what the `upm-release.yml` workflow runs — the remaining git-push and GitHub Release
 steps stay in YAML because they need authenticated git operations.
 
-**UPM release checklist:** the committed `upm/com.enzx.nxgraph/package.json` carries the
-**last released** version by policy (CI's `upm-patch-version` stamps the same value at
-release time). When cutting a UPM release, bump the manifest `version`, the CHANGELOG top
-entry, and the package README's install pin to the new version in the release-prep commit —
-three artifacts, one version.
+**UPM release checklist:** both committed `package.json` files carry the **last released**
+version by policy (CI's `upm-patch-version` stamps the same value at release time, and pins
+the serialization package's `com.enzx.nxgraph` dependency to it). When cutting a UPM release,
+bump both manifest `version` fields, the serialization manifest's dependency pin, both
+CHANGELOG top entries, and the core package README's install pin — one version everywhere.
+
+**Staged plugin allowlist:** `stage-binary` copies only assemblies that already have a
+committed `.meta` sidecar in the target `Runtime/Plugins` folder, and fails when the built
+set and the sidecar set disagree in either direction. The sidecars are the reviewed record of
+what each package ships (the binaries themselves are gitignored), and they hold the plugin
+GUIDs Unity treats as reference identity — which is why staging preserves them rather than
+clearing the folder wholesale. If a transitive dependency appears or disappears, the target
+fails with the file names; review the change, then add or delete sidecars.
 
 ### Clean staged UPM files
 
@@ -196,7 +204,7 @@ sensible defaults for local development.
 | `REPO_URL` | `pack` | _(optional)_ | Repository URL embedded in NuGet package (SourceLink) |
 | `REPO_BRANCH` | `pack` | _(optional)_ | Branch name embedded in NuGet package |
 | `REPO_COMMIT` | `pack` | _(optional)_ | Commit SHA embedded in NuGet package |
-| `UPM_PACKAGE_DIR` | `upm-patch-version`, `upm-tarball` | `upm/com.enzx.nxgraph` | Relative path to the UPM package directory |
+| `UPM_PACKAGE_DIR` | `upm-patch-version`, `upm-tarball` | `upm/com.enzx.nxgraph` | Relative path to the **core** UPM package directory. The serialization package is not relocatable — it is versioned and released with the core. |
 
 In CI, these are set automatically by the GitHub Actions workflows. For local use, only
 `TARGET` and `VERSION` are needed for pack/UPM commands; everything else has defaults.
@@ -208,7 +216,7 @@ In CI, these are set automatically by the GitHub Actions workflows. For local us
 | **`dotnet.yml`** | checkout, setup .NET, upload coverage artifact | `ci` (restore → build → test) |
 | **`publish-nuget.yml`** | checkout, setup .NET, preflight API key mask, validate `.nupkg` contents, upload artifact | `publish` (ci + pack + push) |
 | **`upm-build.yml`** | checkout, setup .NET, upload artifact | `stage-source` or `stage-binary` |
-| **`upm-release.yml`** | checkout, setup .NET, resolve version, git push to `upm` branch, create GitHub Release | `ci` + `stage-{mode}` + `upm-patch-version` + `upm-tarball` |
+| **`upm-release.yml`** | checkout, setup .NET, resolve version, git push to the `upm` and `upm-serialization` branches, create GitHub Release | `ci` + `stage-{mode}` + `upm-patch-version` + `upm-tarball` |
 
 The YAML files only contain what **must** stay in GitHub Actions: triggers, permissions,
 concurrency groups, checkout, SDK setup, secret masking, artifact upload, git push, and

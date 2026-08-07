@@ -122,7 +122,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
         GraphDto dto = ToDto(graph);
 
-        await using StreamWriter writer = new(destination, new UTF8Encoding(false), leaveOpen: true);
+        // bufferSize is spelled out because netstandard2.1 has no (Stream, Encoding, bool)
+        // overload; 1024 is the value the omitted-argument overload uses on net8.0.
+        await using StreamWriter writer = new(destination, new UTF8Encoding(false), bufferSize: 1024, leaveOpen: true);
 
         string json = JsonSerializer.Serialize(dto, _jsonOptions);
         await writer.WriteAsync(json.AsMemory(), ct).ConfigureAwait(false);

@@ -3,7 +3,7 @@
     <!-- Common properties (LangVersion/Nullable/analyzers/package metadata) come from the
          repo-root Directory.Build.props. -->
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <!-- CS1591: XML docs are required only where they add value; missing-doc coverage is
              tracked editorially, not as a build gate. -->
@@ -17,6 +17,30 @@
     <ItemGroup>
       <PackageReference Include="MessagePack" Version="3.1.7" />
       <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <!-- System.Text.Json is in the shared framework on net8.0 and must be referenced
+         explicitly on netstandard2.1. Pinned to the 8.0.x line to match the net8.0 in-box
+         version, so the two TFMs serialize identically. -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+      <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    </ItemGroup>
+
+    <!-- netstandard2.1 has no shared framework, so every dependency must travel with the
+         assembly. Emitting them next to the build output is what lets UPM binary staging copy
+         a self-contained plugin set, and what lets the netstandard2.1 public-API baseline
+         resolve MessagePack/System.Text.Json references. net8.0 is left alone: there the
+         framework supplies most of this and the NuGet package declares the rest. -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+      <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <!-- Shims mirror the core project's arrangement; see the Abstraction project. -->
+    <ItemGroup>
+        <Compile Remove="Shims\**\*.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <Compile Include="Shims\**\*.cs" />
     </ItemGroup>
 
     <ItemGroup>

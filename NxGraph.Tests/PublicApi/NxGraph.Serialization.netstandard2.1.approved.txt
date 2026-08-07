@@ -1,0 +1,42 @@
+sealed class NxGraph.Serialization.BehaviorRegistry : NxGraph.Serialization.Abstraction.IBehaviorRegistry
+  ctor System.Void .ctor()
+  method System.Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object&)
+  method System.Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+  method System.Void Register(System.String, System.Func`2[NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object])
+sealed class NxGraph.Serialization.BlackboardSerializer : NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer, NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
+  ctor System.Void .ctor(System.Text.Json.JsonSerializerOptions, MessagePack.MessagePackSerializerOptions)
+  method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+sealed class NxGraph.Serialization.ConditionRegistry : NxGraph.Serialization.Abstraction.IConditionRegistry
+  ctor System.Void .ctor()
+  method System.Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object&)
+  method System.Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+  method System.Void Register(System.String, System.Func`2[NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object])
+sealed class NxGraph.Serialization.GraphSerializer : NxGraph.Serialization.Abstraction.IGraphBinarySerializer, NxGraph.Serialization.Abstraction.IGraphJsonSerializer, NxGraph.Serialization.Abstraction.IGraphSerializer
+  ctor System.Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec)
+  ctor System.Void .ctor(NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.GraphSerializerOptions)
+  method NxGraph.Serialization.Abstraction.IGraphBinarySerializer AsBinarySerializer()
+  method NxGraph.Serialization.Abstraction.IGraphJsonSerializer AsJsonSerializer()
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromJsonAsync(System.IO.Stream, System.Threading.CancellationToken)
+sealed class NxGraph.Serialization.GraphSerializerOptions
+  ctor System.Void .ctor()
+  property NxGraph.Serialization.Abstraction.IBehaviorRegistry BehaviorRegistry { get; set; }
+  property NxGraph.Serialization.Abstraction.IConditionRegistry ConditionRegistry { get; set; }
+  property NxGraph.Serialization.Abstraction.IContainerCodec ContainerCodec { get; set; }
+  property NxGraph.Serialization.Abstraction.IRegionSelectorRegistry SelectorRegistry { get; set; }
+interface NxGraph.Serialization.IContainerBinaryCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]
+interface NxGraph.Serialization.IContainerTextCodec : NxGraph.Serialization.Abstraction.IContainerCodec, NxGraph.Serialization.Abstraction.IContainerCodec`1[[System.String]]
+interface NxGraph.Serialization.ILogicBinaryCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.ReadOnlyMemory`1[[System.Byte]]]]
+interface NxGraph.Serialization.ILogicTextCodec : NxGraph.Serialization.Abstraction.ILogicCodec, NxGraph.Serialization.Abstraction.ILogicCodec`1[[System.String]]
+sealed class NxGraph.Serialization.RegionSelectorRegistry : NxGraph.Serialization.Abstraction.IRegionSelectorRegistry
+  ctor System.Void .ctor()
+  method System.Boolean TryGetKey(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], System.String&)
+  method System.Boolean TryGetSelector(System.String, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask]&)
+  method System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask] Register(System.String, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask])
+static class NxGraph.Serialization.SerializationVersion
+  field static System.Int32 Version

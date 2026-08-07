@@ -1,0 +1,27 @@
+{
+  "name": "com.enzx.nxgraph.serialization",
+  "displayName": "NxGraph Serialization",
+  "version": "2.2.0-alpha",
+  "description": "Optional JSON and MessagePack serialization for NxGraph: durable graph payloads, state-machine snapshots, and blackboard payloads with pluggable node-logic codecs. Bundles its own dependencies.",
+  "unity": "2021.3",
+  "license": "MIT",
+  "author": {
+    "name": "Mohamad Iraji",
+    "url": "https://github.com/Enzx/NxGraph"
+  },
+  "dependencies": {
+    "com.enzx.nxgraph": "2.2.0-alpha"
+  },
+  "keywords": [
+    "fsm",
+    "state-machine",
+    "graph",
+    "serialization",
+    "messagepack",
+    "json",
+    "unity"
+  ],
+  "documentationUrl": "https://github.com/Enzx/NxGraph/tree/main/upm/com.enzx.nxgraph.serialization/Documentation~",
+  "changelogUrl": "https://github.com/Enzx/NxGraph/blob/main/upm/com.enzx.nxgraph.serialization/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Enzx/NxGraph/blob/main/LICENSE"
+}
