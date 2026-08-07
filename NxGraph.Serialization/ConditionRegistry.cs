@@ -34,7 +34,7 @@ public sealed class ConditionRegistry : IConditionRegistry
     /// </summary>
     public void Register(string conditionTypeName, Func<BehaviorFieldReader, object> factory)
     {
-        ArgumentException.ThrowIfNullOrEmpty(conditionTypeName);
+        Guard.NotNullOrEmpty(conditionTypeName);
         ArgumentNullException.ThrowIfNull(factory);
         if (!_factories.TryAdd(conditionTypeName, factory))
         {

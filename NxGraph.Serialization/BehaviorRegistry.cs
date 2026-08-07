@@ -37,7 +37,7 @@ public sealed class BehaviorRegistry : IBehaviorRegistry
     /// </summary>
     public void Register(string behaviorTypeName, Func<BehaviorFieldReader, object> factory)
     {
-        ArgumentException.ThrowIfNullOrEmpty(behaviorTypeName);
+        Guard.NotNullOrEmpty(behaviorTypeName);
         ArgumentNullException.ThrowIfNull(factory);
         if (!_factories.TryAdd(behaviorTypeName, factory))
         {

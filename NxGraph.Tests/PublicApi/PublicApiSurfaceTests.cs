@@ -20,10 +20,11 @@ namespace NxGraph.Tests.PublicApi;
 /// </para>
 /// <para>
 /// Two flavors of capture: the loaded net8.0 assemblies are described via runtime
-/// reflection; the netstandard2.1 build of NxGraph (the Unity-facing surface, compiled
-/// with the <c>Shims/**</c> re-includes) is described via a <see cref="MetadataLoadContext"/>
-/// walk over <c>NxGraph/bin/{Configuration}/netstandard2.1/NxGraph.dll</c> resolved against
-/// the NETStandard.Library.Ref facades, and lands in <c>NxGraph.netstandard2.1.approved.txt</c>.
+/// reflection; the netstandard2.1 builds (the Unity-facing surfaces, compiled with the
+/// <c>Shims/**</c> re-includes) are described via a <see cref="MetadataLoadContext"/> walk
+/// over <c>{Project}/bin/{Configuration}/netstandard2.1/</c> resolved against the
+/// NETStandard.Library.Ref facades, and land in <c>*.netstandard2.1.approved.txt</c>.
+/// All three shipped assemblies multi-target, so all three are captured both ways.
 /// </para>
 /// <para>
 /// Known limitation (both flavors, unchanged from the original fixture): the walk captures
@@ -44,6 +45,20 @@ public class PublicApiSurfaceTests
         ("NxGraph.Serialization.Abstraction.approved.txt", typeof(ILogicCodec).Assembly),
     ];
 
+    /// <summary>
+    /// The netstandard2.1 flavor of each shipped assembly: the project directory holding the
+    /// build output, and the baseline the walk is compared against. All three multi-target, so
+    /// all three have a Unity-facing surface worth guarding.
+    /// </summary>
+    private static readonly (string ProjectDirectory, string AssemblyFileName, string BaselineFile)[] NetStandardAssemblies =
+    [
+        ("NxGraph", "NxGraph.dll", "NxGraph.netstandard2.1.approved.txt"),
+        ("NxGraph.Serialization", "NxGraph.Serialization.dll",
+            "NxGraph.Serialization.netstandard2.1.approved.txt"),
+        ("NxGraph.Serialization.Abstraction", "NxGraph.Serialization.Abstraction.dll",
+            "NxGraph.Serialization.Abstraction.netstandard2.1.approved.txt"),
+    ];
+
     [Test]
     public void Public_api_matches_approved_baseline(
         [Range(0, 2)] int assemblyIndex)
@@ -53,9 +68,13 @@ public class PublicApiSurfaceTests
     }
 
     [Test]
-    public void Public_api_matches_approved_baseline_for_netstandard21()
+    public void Public_api_matches_approved_baseline_for_netstandard21(
+        [Range(0, 2)] int assemblyIndex)
     {
-        string targetDll = NetStandardAssemblyPath();
+        (string projectDirectory, string assemblyFileName, string baselineFile) =
+            NetStandardAssemblies[assemblyIndex];
+
+        string targetDll = NetStandardAssemblyPath(projectDirectory, assemblyFileName);
         if (!File.Exists(targetDll))
         {
             Assert.Ignore(
@@ -63,13 +82,18 @@ public class PublicApiSurfaceTests
                 "Build the full solution (dotnet build) to produce it; the solution build always emits both TFMs.");
         }
 
+        // Everything sitting beside the target resolves too: the sibling NxGraph assemblies and
+        // — because the serialization project sets CopyLocalLockFileAssemblies on this TFM —
+        // MessagePack and System.Text.Json, whose types appear in the serializer's signatures.
         string facadeDir = NetStandardFacadeDirectory();
         PathAssemblyResolver resolver = new(
-            Directory.EnumerateFiles(facadeDir, "*.dll").Append(targetDll));
+            Directory.EnumerateFiles(facadeDir, "*.dll")
+                .Concat(Directory.EnumerateFiles(Path.GetDirectoryName(targetDll)!, "*.dll")));
         using MetadataLoadContext mlc = new(resolver, coreAssemblyName: "netstandard");
 
         string actual = DescribePublicApi(mlc.LoadFromAssemblyPath(targetDll));
-        CompareOrUpdateBaseline("NxGraph.netstandard2.1.approved.txt", "NxGraph (netstandard2.1)", actual);
+        CompareOrUpdateBaseline(baselineFile,
+            $"{Path.GetFileNameWithoutExtension(assemblyFileName)} (netstandard2.1)", actual);
     }
 
     private static void CompareOrUpdateBaseline(string baselineFile, string assemblyDisplayName, string actual)
@@ -101,8 +125,8 @@ public class PublicApiSurfaceTests
             "\nIf this change is intentional, re-run with NXGRAPH_UPDATE_PUBLIC_API=1 and commit the baseline diff.");
     }
 
-    /// <summary>NxGraph's netstandard2.1 build output for the configuration this test run was built as.</summary>
-    private static string NetStandardAssemblyPath()
+    /// <summary>A project's netstandard2.1 build output for the configuration this test run was built as.</summary>
+    private static string NetStandardAssemblyPath(string projectDirectory, string assemblyFileName)
     {
         // Test bin layout: <repo>/NxGraph.Tests/bin/<Configuration>/net8.0/ — take the live
         // configuration from the test host's own path so a Debug test run checks the Debug
@@ -112,7 +136,7 @@ public class PublicApiSurfaceTests
         string configuration = new DirectoryInfo(baseDir).Parent?.Name ?? "Release";
 
         string repoRoot = Path.GetFullPath(Path.Combine(BaselineDirectory(), "..", ".."));
-        return Path.Combine(repoRoot, "NxGraph", "bin", configuration, "netstandard2.1", "NxGraph.dll");
+        return Path.Combine(repoRoot, projectDirectory, "bin", configuration, "netstandard2.1", assemblyFileName);
     }
 
     /// <summary>Reference-facade directory of the restored NETStandard.Library.Ref pack.</summary>

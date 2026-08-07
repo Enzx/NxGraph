@@ -27,7 +27,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Stage UPM package (${{ matrix.mode }})
+      - name: Stage UPM packages (${{ matrix.mode }})
         run: dotnet run --project NxGraph.Build -- stage-${{ matrix.mode }}
 
       - name: Upload staged UPM package
@@ -35,4 +35,14 @@ jobs:
         with:
           name: upm-${{ matrix.mode }}
           path: upm/com.enzx.nxgraph/
+
+      # Only binary mode produces this package: a prebuilt NxGraph.Serialization.dll
+      # references the assembly named NxGraph and cannot bind to a source-compiled core,
+      # which Unity would surface as an unresolved reference.
+      - name: Upload staged serialization UPM package
+        if: matrix.mode == 'binary'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: upm-serialization
+          path: upm/com.enzx.nxgraph.serialization/
 

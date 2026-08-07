@@ -68,8 +68,17 @@ public static partial class BuildHelpers
     public static string SourceRoot(string repoRoot) =>
         Path.Combine(repoRoot, "NxGraph");
 
+    /// <summary>Directory name of the core UPM package.</summary>
+    public const string CorePackageDir = "com.enzx.nxgraph";
+
+    /// <summary>Directory name of the optional serialization UPM package.</summary>
+    public const string SerializationPackageDir = "com.enzx.nxgraph.serialization";
+
     public static string PackageRoot(string repoRoot) =>
-        Path.Combine(repoRoot, "upm", "com.enzx.nxgraph");
+        Path.Combine(repoRoot, "upm", CorePackageDir);
+
+    public static string SerializationPackageRoot(string repoRoot) =>
+        Path.Combine(repoRoot, "upm", SerializationPackageDir);
 
     public static string StagedSourceRoot(string repoRoot) =>
         Path.Combine(PackageRoot(repoRoot), "Runtime", "NxGraph");
@@ -77,17 +86,40 @@ public static partial class BuildHelpers
     public static string PluginsRoot(string repoRoot) =>
         Path.Combine(PackageRoot(repoRoot), "Runtime", "Plugins");
 
+    public static string SerializationPluginsRoot(string repoRoot) =>
+        Path.Combine(SerializationPackageRoot(repoRoot), "Runtime", "Plugins");
+
     public static string BuildOutput(string repoRoot) =>
         Path.Combine(repoRoot, "NxGraph", "bin", "Release", "netstandard2.1");
+
+    /// <summary>
+    /// The serialization project's netstandard2.1 output. Because that project sets
+    /// <c>CopyLocalLockFileAssemblies</c> on this TFM, the directory holds the whole
+    /// dependency closure — which is exactly what the Unity package bundles.
+    /// </summary>
+    public static string SerializationBuildOutput(string repoRoot) =>
+        Path.Combine(repoRoot, "NxGraph.Serialization", "bin", "Release", "netstandard2.1");
 
     public static string ArtifactsDir(string repoRoot) =>
         Path.Combine(repoRoot, OptionalEnv("ARTIFACTS_DIR") ?? "artifacts");
 
+    /// <summary>
+    /// The core package's package.json. <c>UPM_PACKAGE_DIR</c> still overrides it, which is how
+    /// the release workflow points at a relocated layout.
+    /// </summary>
     public static string PackageJsonPath(string repoRoot)
     {
-        var upmDir = OptionalEnv("UPM_PACKAGE_DIR") ?? Path.Combine("upm", "com.enzx.nxgraph");
+        var upmDir = OptionalEnv("UPM_PACKAGE_DIR") ?? Path.Combine("upm", CorePackageDir);
         return Path.Combine(repoRoot, upmDir, "package.json");
     }
+
+    /// <summary>
+    /// The serialization package's package.json. Deliberately not overridable by
+    /// <c>UPM_PACKAGE_DIR</c> — that variable names one directory, and the two packages are
+    /// versioned and released together.
+    /// </summary>
+    public static string SerializationPackageJsonPath(string repoRoot) =>
+        Path.Combine(SerializationPackageRoot(repoRoot), "package.json");
 
     // ── Pack helper (replaces the 3× duplicated dotnet pack blocks) ───
 
@@ -137,7 +169,13 @@ public static partial class BuildHelpers
 
     // ── package.json version patching ──────────────────────────────────
 
-    public static void PatchPackageJsonVersion(string packageJsonPath, string version)
+    /// <param name="pinDependency">
+    /// When set, the named entry under <c>dependencies</c> is pinned to the same version. The
+    /// two UPM packages ship as a unit, so the serialization package always depends on the
+    /// exact core version released alongside it.
+    /// </param>
+    public static void PatchPackageJsonVersion(string packageJsonPath, string version,
+        string? pinDependency = null)
     {
         if (!File.Exists(packageJsonPath))
             throw new FileNotFoundException($"package.json not found at {packageJsonPath}");
@@ -148,25 +186,44 @@ public static partial class BuildHelpers
 
         node["version"] = version;
 
+        if (pinDependency is not null)
+        {
+            if (node["dependencies"] is not JsonObject dependencies)
+                throw new InvalidOperationException(
+                    $"{packageJsonPath} has no 'dependencies' object to pin '{pinDependency}' in.");
+
+            if (!dependencies.ContainsKey(pinDependency))
+                throw new InvalidOperationException(
+                    $"{packageJsonPath} declares no dependency on '{pinDependency}'.");
+
+            dependencies[pinDependency] = version;
+            Console.WriteLine($"Pinned dependency {pinDependency} to {version}");
+        }
+
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(packageJsonPath, node.ToJsonString(options) + Environment.NewLine);
 
-        Console.WriteLine($"Updated package.json version to {version}");
+        Console.WriteLine($"Updated {Path.GetFileName(Path.GetDirectoryName(packageJsonPath))} version to {version}");
     }
 
     // ── Tarball creation ───────────────────────────────────────────────
 
     public static string CreateTarball(string repoRoot, string version)
     {
-        var upmRelDir = OptionalEnv("UPM_PACKAGE_DIR") ?? Path.Combine("upm", "com.enzx.nxgraph");
-        var upmAbsDir = Path.Combine(repoRoot, upmRelDir);
-        var tarballName = $"com.enzx.nxgraph-{version}.tgz";
+        var upmRelDir = OptionalEnv("UPM_PACKAGE_DIR") ?? Path.Combine("upm", CorePackageDir);
+        return CreateTarball(repoRoot, version, Path.Combine(repoRoot, upmRelDir), CorePackageDir);
+    }
+
+    /// <summary>Tarballs one package directory as <c>{packageName}-{version}.tgz</c>.</summary>
+    public static string CreateTarball(string repoRoot, string version, string upmAbsDir, string packageName)
+    {
+        var tarballName = $"{packageName}-{version}.tgz";
         var tarballPath = Path.Combine(repoRoot, tarballName);
 
         if (!Directory.Exists(upmAbsDir))
             throw new DirectoryNotFoundException($"UPM package directory not found: {upmAbsDir}");
 
-        // We need to create a .tar.gz with entries rooted at "com.enzx.nxgraph/"
+        // We need to create a .tar.gz with entries rooted at "{packageName}/"
         using var fileStream = File.Create(tarballPath);
         using var gzipStream = new GZipStream(fileStream, CompressionLevel.Optimal);
         TarFile.CreateFromDirectory(
@@ -213,16 +270,46 @@ public static partial class BuildHelpers
         }
     }
 
-    public static void ClearStagedPlugins(string repoRoot)
-    {
-        var dir = PluginsRoot(repoRoot);
-        Directory.CreateDirectory(dir);
+    public static void ClearStagedPlugins(string repoRoot) => ClearPlugins(PluginsRoot(repoRoot));
 
-        foreach (var file in Directory.GetFiles(dir))
+    /// <summary>
+    /// Removes staged binaries from a Plugins folder while preserving the tracked sidecars.
+    /// <para>
+    /// The <c>.meta</c> files must survive: they carry the plugin GUIDs Unity uses as reference
+    /// identity, they are committed (the binaries themselves are gitignored and staged on
+    /// demand), and regenerating them would hand every consumer project a new GUID for the same
+    /// assembly. They double as the reviewed allowlist of what may be staged — see
+    /// <see cref="StagedPluginNames"/>.
+    /// </para>
+    /// </summary>
+    public static void ClearPlugins(string pluginsDir)
+    {
+        Directory.CreateDirectory(pluginsDir);
+
+        foreach (var file in Directory.GetFiles(pluginsDir))
         {
-            if (Path.GetFileName(file) == ".gitkeep") continue;
+            var name = Path.GetFileName(file);
+            if (name == ".gitkeep" || name.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             File.Delete(file);
         }
+    }
+
+    /// <summary>
+    /// The file names a Plugins folder is allowed to contain, derived from the committed
+    /// <c>.meta</c> sidecars. Staging compares against this so that a new transitive dependency
+    /// can neither be silently bundled (unreviewed binary in a shipped package) nor silently
+    /// dropped (a TypeLoadException at the consumer) — it fails the build until someone adds
+    /// the matching <c>.meta</c>.
+    /// </summary>
+    public static HashSet<string> StagedPluginNames(string pluginsDir)
+    {
+        Directory.CreateDirectory(pluginsDir);
+
+        return Directory.GetFiles(pluginsDir, "*.meta")
+            .Select(f => Path.GetFileNameWithoutExtension(f)!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     // ── Target resolution (tag-based) ──────────────────────────────────

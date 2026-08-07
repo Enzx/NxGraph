@@ -12,8 +12,31 @@ TestResults/
 coverage.info
 coverage.json
 /BenchmarkDotNet.Artifacts/
-upm/com.enzx.nxgraph/Runtime/**/*.dll
-upm/com.enzx.nxgraph/Runtime/**/*.pdb
-upm/com.enzx.nxgraph/Runtime/**/*.xml
+# Staged UPM binaries: produced on demand by `NxGraph.Build -- stage-binary`, never
+# committed. The `.meta` sidecars beside them ARE committed — they carry the plugin GUIDs
+# and define which assemblies staging is allowed to write.
+upm/*/Runtime/**/*.dll
+upm/*/Runtime/**/*.pdb
+upm/*/Runtime/**/*.xml
+# Staged UPM sources: `stage-source` copies the core library here. The folder is a staging
+# artifact and only exists in source mode, so Unity's generated .meta for it goes too.
+upm/com.enzx.nxgraph/Runtime/NxGraph/
+upm/com.enzx.nxgraph/Runtime/NxGraph.meta
 *.log
 *.tgz
+
+# Unity development project. Everything here is regenerated from the packages and the
+# assets that are tracked; Unity rewrites the C# projects on every import, so they must
+# not sit next to NxGraph.sln in source control.
+unity/*/Library/
+unity/*/Temp/
+unity/*/Obj/
+unity/*/Build/
+unity/*/Builds/
+unity/*/Logs/
+unity/*/UserSettings/
+unity/*/MemoryCaptures/
+unity/*/Recordings/
+unity/*/*.csproj
+unity/*/*.sln
+unity/*/*.user

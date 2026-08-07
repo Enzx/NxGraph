@@ -3,12 +3,20 @@
      these. Per-project files keep only what genuinely differs: TargetFramework(s), package
      Title/Description/Tags/readme, and IsPackable/IsTestProject flags.
 
-     TFM decision (recorded): TargetFrameworks stay per-project. The core library
-     multi-targets net8.0 + netstandard2.1 because the Unity (UPM) package stages the
-     netstandard2.1 build of NxGraph.dll; the serialization packages stay net8.0-only —
-     no netstandard2.1 consumer story exists for them (the UPM package ships only the
-     core), so widening them would cost polyfills for nothing. Revisit only if a
-     netstandard consumer of the serialization surface appears. -->
+     TFM decision (recorded, superseding the earlier net8.0-only serialization rule):
+     TargetFrameworks stay per-project, and all three shipped libraries — NxGraph,
+     NxGraph.Serialization.Abstraction, NxGraph.Serialization — multi-target
+     net8.0 + netstandard2.1. The netstandard2.1 leg exists for Unity: the core package
+     (com.enzx.nxgraph) stages NxGraph.dll and the abstraction, and the serialization
+     package (com.enzx.nxgraph.serialization) stages NxGraph.Serialization.dll together
+     with its dependencies. The netstandard2.1 consumer the previous note was waiting for
+     is the Unity graph editor, which loads and saves graph payloads in-editor.
+
+     Cost of the widening, so it is not re-litigated: three small shim files per
+     serialization assembly (init-only marker, caller-argument attribute, argument-null
+     guard), an explicit System.Text.Json reference on the netstandard2.1 leg only, and
+     the Compat.cs helpers for the text-IO overloads netstandard2.1 lacks. No public
+     surface differs between the two TFMs. -->
 <Project>
 
     <PropertyGroup>

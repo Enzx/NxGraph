@@ -27,7 +27,7 @@ public sealed class RegionSelectorRegistry : IRegionSelectorRegistry
     /// </summary>
     public Func<BlackboardContext, RegionMask> Register(string key, Func<BlackboardContext, RegionMask> selector)
     {
-        ArgumentException.ThrowIfNullOrEmpty(key);
+        Guard.NotNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(selector);
         if (_byKey.ContainsKey(key))
         {

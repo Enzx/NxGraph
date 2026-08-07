@@ -1,0 +1,100 @@
+sealed class NxGraph.Serialization.Abstraction.BehaviorBinding
+  ctor System.Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
+  property NxGraph.Serialization.Abstraction.BehaviorFieldValue Literal { get; }
+  property System.String KeyName { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorEntry
+  ctor System.Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorField[])
+  property NxGraph.Serialization.Abstraction.BehaviorField[] Fields { get; }
+  property System.String BehaviorTypeName { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorField
+  ctor System.Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldValue)
+  property NxGraph.Serialization.Abstraction.BehaviorFieldValue Value { get; }
+  property System.String Name { get; }
+enum NxGraph.Serialization.Abstraction.BehaviorFieldKind : System.IComparable, System.IConvertible, System.IFormattable
+  Behaviors = 8
+  Binding = 7
+  Bool = 1
+  Conditions = 9
+  Double = 5
+  Enum = 6
+  Int32 = 2
+  Int64 = 3
+  Single = 4
+  String = 0
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldReader
+  ctor System.Void .ctor(System.Collections.Generic.IReadOnlyList`1[NxGraph.Serialization.Abstraction.BehaviorField])
+  method NxGraph.Behaviors.BlackboardValue`1[T] ReadBinding[T](System.String)
+  method System.Boolean Has(System.String)
+  method System.Boolean ReadBool(System.String)
+  method System.Double ReadDouble(System.String)
+  method System.Int32 ReadInt32(System.String)
+  method System.Int64 ReadInt64(System.String)
+  method System.Object[] ReadBehaviors(System.String)
+  method System.Object[] ReadConditions(System.String)
+  method System.Single ReadSingle(System.String)
+  method System.String ReadString(System.String)
+  method TEnum ReadEnum[TEnum](System.String)
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldValue
+  ctor System.Void .ctor(NxGraph.Serialization.Abstraction.BehaviorFieldKind, System.String, System.Boolean, System.Int64, System.Double, NxGraph.Serialization.Abstraction.BehaviorBinding, NxGraph.Serialization.Abstraction.BehaviorEntry[], NxGraph.Serialization.Abstraction.ConditionEntry[])
+  property NxGraph.Serialization.Abstraction.BehaviorBinding Binding { get; }
+  property NxGraph.Serialization.Abstraction.BehaviorEntry[] Entries { get; }
+  property NxGraph.Serialization.Abstraction.BehaviorFieldKind Kind { get; }
+  property NxGraph.Serialization.Abstraction.ConditionEntry[] Conditions { get; }
+  property System.Boolean Flag { get; }
+  property System.Double Number { get; }
+  property System.Int64 Integer { get; }
+  property System.String Text { get; }
+sealed class NxGraph.Serialization.Abstraction.BehaviorFieldWriter
+  ctor System.Void .ctor()
+  method NxGraph.Serialization.Abstraction.BehaviorField[] ToFields()
+  method System.Void WriteBehaviors(System.String, System.Collections.Generic.IReadOnlyList`1[System.Object])
+  method System.Void WriteBinding[T](System.String, NxGraph.Behaviors.BlackboardValue`1[T]&)
+  method System.Void WriteBool(System.String, System.Boolean)
+  method System.Void WriteConditions(System.String, System.Collections.Generic.IReadOnlyList`1[System.Object])
+  method System.Void WriteDouble(System.String, System.Double)
+  method System.Void WriteEnum[TEnum](System.String, TEnum)
+  method System.Void WriteInt32(System.String, System.Int32)
+  method System.Void WriteInt64(System.String, System.Int64)
+  method System.Void WriteSingle(System.String, System.Single)
+  method System.Void WriteString(System.String, System.String)
+enum NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy : System.IComparable, System.IConvertible, System.IFormattable
+  Skip = 1
+  Strict = 0
+sealed class NxGraph.Serialization.Abstraction.ConditionEntry
+  ctor System.Void .ctor(System.String, NxGraph.Serialization.Abstraction.BehaviorField[])
+  property NxGraph.Serialization.Abstraction.BehaviorField[] Fields { get; }
+  property System.String ConditionTypeName { get; }
+interface NxGraph.Serialization.Abstraction.IBehaviorRegistry
+  method System.Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object&)
+  method System.Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+interface NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer
+  method System.Threading.Tasks.ValueTask RestoreFromBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer
+  method System.Threading.Tasks.ValueTask RestoreFromJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Blackboards.Blackboard, System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IConditionRegistry
+  method System.Boolean TryRead(System.String, NxGraph.Serialization.Abstraction.BehaviorFieldReader, System.Object&)
+  method System.Boolean TryWrite(System.Object, NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+interface NxGraph.Serialization.Abstraction.IContainerCodec
+interface NxGraph.Serialization.Abstraction.IContainerCodec`1 : NxGraph.Serialization.Abstraction.IContainerCodec
+  method NxGraph.Graphs.IAsyncLogic Deserialize(TWire, System.Collections.Generic.IReadOnlyList`1[NxGraph.Graphs.Graph])
+  method TWire Serialize(NxGraph.Graphs.ISubGraphProvider)
+interface NxGraph.Serialization.Abstraction.IGraphBinarySerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
+  method System.Threading.Tasks.ValueTask ToBinaryAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromBinaryAsync(System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IGraphJsonSerializer : NxGraph.Serialization.Abstraction.IGraphSerializer
+  method System.Threading.Tasks.ValueTask ToJsonAsync(NxGraph.Graphs.Graph, System.IO.Stream, System.Threading.CancellationToken)
+  method System.Threading.Tasks.ValueTask`1[NxGraph.Graphs.Graph] FromJsonAsync(System.IO.Stream, System.Threading.CancellationToken)
+interface NxGraph.Serialization.Abstraction.IGraphSerializer
+interface NxGraph.Serialization.Abstraction.ILogicCodec
+interface NxGraph.Serialization.Abstraction.ILogicCodec`1 : NxGraph.Serialization.Abstraction.ILogicCodec
+  method NxGraph.Graphs.IAsyncLogic Deserialize(TWire)
+  method TWire Serialize(NxGraph.Graphs.IAsyncLogic)
+interface NxGraph.Serialization.Abstraction.IRegionSelectorRegistry
+  method System.Boolean TryGetKey(System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask], System.String&)
+  method System.Boolean TryGetSelector(System.String, System.Func`2[NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask]&)
+interface NxGraph.Serialization.Abstraction.ISerializableBehavior
+  method System.Void Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)
+interface NxGraph.Serialization.Abstraction.ISerializableCondition
+  method System.Void Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)

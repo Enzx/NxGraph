@@ -1,4 +1,5 @@
-﻿using static Bullseye.Targets;
+﻿using System.Text;
+using static Bullseye.Targets;
 using static SimpleExec.Command;
 using static NxGraph.Build.BuildHelpers;
 
@@ -43,6 +44,18 @@ public static class Program
     [
         Path.Combine("Fsm", "TracingObserver.cs"),
     ];
+
+    // Assemblies the core package owns. They are present in the serialization project's
+    // netstandard2.1 output too (it references them), and staging them into both packages
+    // would give Unity two copies of the same types.
+    private static readonly string[] CoreAssemblies =
+    [
+        "NxGraph",
+        "NxGraph.Serialization.Abstraction",
+    ];
+
+    // Sidecars worth shipping next to a staged assembly, in staging order.
+    private static readonly string[] AssemblySidecars = [".dll", ".pdb", ".xml"];
 
     public static async Task Main(string[] args)
     {
@@ -217,15 +230,36 @@ public static class Program
         {
             var version = OptionalEnv("VERSION");
             version = ValidateSemVer(version);
-            var path = PackageJsonPath(repoRoot);
-            PatchPackageJsonVersion(path, version);
+
+            PatchPackageJsonVersion(PackageJsonPath(repoRoot), version);
+
+            // The serialization package rides the same version and pins the core it was built
+            // against — the two are staged from one build and are not independently versioned.
+            PatchPackageJsonVersion(SerializationPackageJsonPath(repoRoot), version,
+                pinDependency: CorePackageDir);
         });
 
         Target("upm-tarball", DependsOn("upm-patch-version"), () =>
         {
             var version = OptionalEnv("VERSION");
             version = ValidateSemVer(version);
+
             CreateTarball(repoRoot, version);
+
+            // Source mode leaves the serialization package unstaged (see StageSource); there is
+            // nothing to ship, so no second tarball is produced.
+            if (Directory.GetFiles(SerializationPluginsRoot(repoRoot), "*.dll").Length > 0)
+            {
+                CreateTarball(repoRoot, version, SerializationPackageRoot(repoRoot), SerializationPackageDir);
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine(
+                    $"Skipping {SerializationPackageDir} tarball: no staged assemblies " +
+                    "(expected when staging in source mode).");
+                Console.ResetColor();
+            }
         });
 
         await RunTargetsAndExitAsync(args);
@@ -413,6 +447,13 @@ public static class Program
         ClearStagedSource(repoRoot);
         ClearStagedPlugins(repoRoot);
 
+        // Source mode compiles the core into the package's own asmdef, so the resulting Unity
+        // assembly is named NxGraph.Unity.Runtime — not NxGraph. A prebuilt
+        // NxGraph.Serialization.dll carries an assembly reference to "NxGraph" and cannot bind
+        // to it, so the serialization package is only ever staged in binary mode. Clearing it
+        // here keeps the two package layouts consistent with each other.
+        ClearPlugins(SerializationPluginsRoot(repoRoot));
+
         // Copy directories
         foreach (var relDir in DirectoriesToCopy)
         {
@@ -452,6 +493,12 @@ public static class Program
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Unity package source staged successfully.");
         Console.ResetColor();
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine(
+            $"Note: {SerializationPackageDir} is not staged in source mode — a prebuilt " +
+            "NxGraph.Serialization.dll cannot bind to a source-compiled core. Use stage-binary " +
+            "to produce both packages.");
+        Console.ResetColor();
 
         foreach (var file in Directory.GetFiles(stagedRoot, "*", SearchOption.AllDirectories))
         {
@@ -461,47 +508,133 @@ public static class Program
 
     private static async Task StageBinary(string repoRoot)
     {
-        var projectPath = Path.Combine(repoRoot, "NxGraph", "NxGraph.csproj");
+        // Building the serialization project also builds the core it references, and its
+        // netstandard2.1 output carries the full dependency closure
+        // (CopyLocalLockFileAssemblies) that the serialization package bundles.
+        var serializationProject = Path.Combine(repoRoot, "NxGraph.Serialization", "NxGraph.Serialization.csproj");
 
         Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("Building NxGraph binary for Unity package staging...");
+        Console.WriteLine("Building netstandard2.1 binaries for Unity package staging...");
         Console.ResetColor();
-        Console.WriteLine($"Project: {projectPath}");
-        Console.WriteLine($"Package: {PackageRoot(repoRoot)}");
+        Console.WriteLine($"Project:  {serializationProject}");
+        Console.WriteLine($"Packages: {PackageRoot(repoRoot)}");
+        Console.WriteLine($"          {SerializationPackageRoot(repoRoot)}");
 
-        if (!File.Exists(projectPath))
-            throw new InvalidOperationException($"Project not found: {projectPath}");
+        if (!File.Exists(serializationProject))
+            throw new InvalidOperationException($"Project not found: {serializationProject}");
 
         ClearStagedSource(repoRoot);
         ClearStagedPlugins(repoRoot);
+        ClearPlugins(SerializationPluginsRoot(repoRoot));
 
-        await RunDotNet(repoRoot, $"build \"{projectPath}\" -c Release -f netstandard2.1");
+        await RunDotNet(repoRoot, $"build \"{serializationProject}\" -c Release -f netstandard2.1");
 
-        // Copy outputs
-        var buildDir = BuildOutput(repoRoot);
-        var pluginsDir = PluginsRoot(repoRoot);
+        var serializationBuildDir = SerializationBuildOutput(repoRoot);
 
-        var dllPath = Path.Combine(buildDir, "NxGraph.dll");
-        if (!File.Exists(dllPath))
-            throw new InvalidOperationException($"Build completed but NxGraph.dll was not found at {dllPath}");
+        // The core package takes NxGraph plus the dependency-free serialization abstraction;
+        // both come out of the same build directory.
+        StagePlugins(repoRoot, serializationBuildDir, PluginsRoot(repoRoot), CorePackageDir,
+            name => CoreAssemblies.Contains(name, StringComparer.OrdinalIgnoreCase));
 
-        File.Copy(dllPath, Path.Combine(pluginsDir, "NxGraph.dll"), overwrite: true);
-
-        var pdbPath = Path.Combine(buildDir, "NxGraph.pdb");
-        if (File.Exists(pdbPath))
-            File.Copy(pdbPath, Path.Combine(pluginsDir, "NxGraph.pdb"), overwrite: true);
-
-        var xmlPath = Path.Combine(buildDir, "NxGraph.xml");
-        if (File.Exists(xmlPath))
-            File.Copy(xmlPath, Path.Combine(pluginsDir, "NxGraph.xml"), overwrite: true);
+        // The serialization package takes everything else: the serializer itself and its
+        // bundled third-party dependencies.
+        StagePlugins(repoRoot, serializationBuildDir, SerializationPluginsRoot(repoRoot),
+            SerializationPackageDir,
+            name => !CoreAssemblies.Contains(name, StringComparer.OrdinalIgnoreCase));
 
         Console.WriteLine();
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("Binary staged successfully.");
+        Console.WriteLine("Binaries staged successfully.");
         Console.ResetColor();
+    }
 
-        foreach (var file in Directory.GetFiles(pluginsDir))
+    /// <summary>
+    /// Copies the assemblies selected by <paramref name="include"/> from a build directory into
+    /// a package's Plugins folder, and reconciles the result against the committed
+    /// <c>.meta</c> sidecars: an assembly with no sidecar, or a sidecar with no assembly, fails
+    /// the target. That keeps a shipped package's binary contents a reviewed, tracked decision
+    /// rather than whatever NuGet happened to resolve.
+    /// </summary>
+    private static void StagePlugins(string repoRoot, string buildDir, string pluginsDir,
+        string packageName, Func<string, bool> include)
+    {
+        if (!Directory.Exists(buildDir))
+            throw new InvalidOperationException($"Build output not found: {buildDir}");
+
+        var expected = StagedPluginNames(pluginsDir);
+        var staged = new List<string>();
+
+        foreach (var dll in Directory.GetFiles(buildDir, "*.dll").Order(StringComparer.Ordinal))
         {
+            var assemblyName = Path.GetFileNameWithoutExtension(dll);
+            if (!include(assemblyName))
+                continue;
+
+            foreach (var extension in AssemblySidecars)
+            {
+                var source = Path.Combine(buildDir, assemblyName + extension);
+                if (!File.Exists(source))
+                    continue;
+
+                var fileName = assemblyName + extension;
+
+                // Only files with a committed .meta are staged; the reconciliation below turns
+                // anything missing into an actionable error rather than a silent omission.
+                if (!expected.Contains(fileName))
+                {
+                    if (extension == ".dll")
+                        staged.Add(fileName);
+
+                    continue;
+                }
+
+                File.Copy(source, Path.Combine(pluginsDir, fileName), overwrite: true);
+                if (extension == ".dll")
+                    staged.Add(fileName);
+            }
+        }
+
+        var unexpected = staged.Where(f => !expected.Contains(f)).Order(StringComparer.Ordinal).ToList();
+        var missing = expected
+            .Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !staged.Contains(f, StringComparer.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        if (unexpected.Count > 0 || missing.Count > 0)
+        {
+            var message = new StringBuilder();
+            message.Append("The staged assemblies for ").Append(packageName)
+                .AppendLine(" do not match the package's committed .meta sidecars.");
+
+            if (unexpected.Count > 0)
+            {
+                message.AppendLine().AppendLine(
+                    "Built but not allowed (a dependency was added — review it, then commit a " +
+                    ".meta with a fresh GUID for each):");
+                foreach (var file in unexpected)
+                    message.Append("  + ").AppendLine(file);
+            }
+
+            if (missing.Count > 0)
+            {
+                message.AppendLine().AppendLine(
+                    "Allowed but not built (a dependency was dropped — delete the stale .meta):");
+                foreach (var file in missing)
+                    message.Append("  - ").AppendLine(file);
+            }
+
+            message.AppendLine().Append("Plugins folder: ").Append(pluginsDir);
+            throw new InvalidOperationException(message.ToString());
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"{packageName}:");
+        foreach (var file in Directory.GetFiles(pluginsDir).Order(StringComparer.Ordinal))
+        {
+            if (Path.GetExtension(file).Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var info = new FileInfo(file);
             Console.WriteLine($"  {info.Name}  ({info.Length:N0} bytes)");
         }
@@ -510,7 +643,6 @@ public static class Program
     private static void CleanStaged(string repoRoot)
     {
         var stagedRoot = StagedSourceRoot(repoRoot);
-        var pluginsDir = PluginsRoot(repoRoot);
 
         if (Directory.Exists(stagedRoot))
         {
@@ -526,18 +658,21 @@ public static class Program
             Console.ResetColor();
         }
 
-        if (Directory.Exists(pluginsDir))
+        foreach (var pluginsDir in new[] { PluginsRoot(repoRoot), SerializationPluginsRoot(repoRoot) })
         {
-            ClearStagedPlugins(repoRoot);
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Cleaned staged Unity package binaries in {pluginsDir}");
-            Console.ResetColor();
-        }
-        else
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"Nothing to clean: {pluginsDir} does not exist.");
-            Console.ResetColor();
+            if (Directory.Exists(pluginsDir))
+            {
+                ClearPlugins(pluginsDir);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Cleaned staged Unity package binaries in {pluginsDir}");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"Nothing to clean: {pluginsDir} does not exist.");
+                Console.ResetColor();
+            }
         }
     }
 }
