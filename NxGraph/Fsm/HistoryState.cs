@@ -51,15 +51,59 @@ public sealed class HistoryState : ILogic, ISubGraphProvider, IBlackboardSettabl
         ((IBlackboardSettable)Child).SetBlackboards(in context);
     }
 
-    public HistoryState(Graph child, ParallelStepMode mode = ParallelStepMode.RunToJoin)
+    /// <param name="child">The child graph to wrap.</param>
+    /// <param name="mode">How child nodes map onto <see cref="Execute"/> calls.</param>
+    /// <param name="outcomeCodeKey">Optional Graph- or Global-scoped key the composite writes the
+    /// child's terminal outcome code to, through the stamped parent-level context, the moment
+    /// the child run reaches a genuine terminal — success and failure terminals alike, before
+    /// the composite returns its own <see cref="Result"/>. A terminal that declared no outcome
+    /// writes <c>0</c> — hosts route on non-zero codes. A lift-back re-entry publishes nothing
+    /// until the resumed session actually ends. Node-scoped keys are rejected here.</param>
+    /// <param name="outcomeNameKey">Optional key for the outcome's registered display name;
+    /// same timing as <paramref name="outcomeCodeKey"/>, empty string when none is declared.
+    /// Either key may be declared without the other.</param>
+    public HistoryState(Graph child, ParallelStepMode mode = ParallelStepMode.RunToJoin,
+        BlackboardKey<int>? outcomeCodeKey = null, BlackboardKey<string>? outcomeNameKey = null)
+        : this(CreateChild(child, outcomeCodeKey, outcomeNameKey), mode)
     {
-        Guard.NotNull(child, nameof(child));
-        Child = new StateMachine(child);
+    }
+
+    private HistoryState(StateMachine child, ParallelStepMode mode)
+    {
+        Child = child;
         // Manual keeps the child's position (current node) intact after a failure instead of
         // auto-resetting to the start — that position is exactly the history to resume from.
         Child.SetRestartPolicy(RestartPolicy.Manual);
         Mode = mode;
     }
+
+    private static StateMachine CreateChild(Graph child, BlackboardKey<int>? outcomeCodeKey,
+        BlackboardKey<string>? outcomeNameKey)
+    {
+        Guard.NotNull(child, nameof(child));
+        // The child machine owns the publish: it writes the keys at its own genuine terminals
+        // (through the context this composite forwards), which is exactly the history timing —
+        // a lift-back re-entry resumes a session and publishes only when that session ends.
+        return new StateMachine(child, null, outcomeCodeKey, outcomeNameKey);
+    }
+
+    /// <summary>
+    /// Creates a history composite with name-bound outcome keys — the deserialization rebind
+    /// form (see <see cref="StateMachine.Unbound"/>). A <see langword="null"/> name means that
+    /// key is not declared.
+    /// </summary>
+    public static HistoryState Unbound(Graph child, ParallelStepMode mode,
+        string? outcomeCodeKeyName, string? outcomeNameKeyName)
+    {
+        Guard.NotNull(child, nameof(child));
+        return new HistoryState(StateMachine.Unbound(child, outcomeCodeKeyName, outcomeNameKeyName), mode);
+    }
+
+    /// <summary>The declared outcome-code key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeCodeKeyName => Child.OutcomeCodeKeyName;
+
+    /// <summary>The declared outcome-name key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeNameKeyName => Child.OutcomeNameKeyName;
 
     // ── ISuspendableComposite ─────────────────────────────────────────────
     // Two things persist across Execute() calls: the RoundPerTick visit flag (_inFlight)

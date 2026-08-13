@@ -807,6 +807,52 @@ public class AllocationGateTests
         AssertZeroAlloc(parent.ToStateMachine());
     }
 
+    // The outcome publish is two typed Sets on the existing boards — it must stay 0 B on
+    // both runtimes, name lookup (LastOutcomeName) included.
+
+    private static (Graph Parent, Blackboard Board) OutcomePublishingParent(bool sync)
+    {
+        BlackboardSchema schema = new(sync ? "alloc-outcome-sync" : "alloc-outcome-async",
+            BlackboardScope.Graph);
+        BlackboardKey<int> code = schema.Register("verdict", 0);
+        BlackboardKey<string> name = schema.Register("verdictName", "");
+
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(() => Result.Success).WithOutcome(3, "Done")
+            .Build();
+
+        StateToken start = GraphBuilder.StartWith(() => Result.Success);
+        StateToken composite = sync
+            ? start.SubGraph(ParallelStepMode.RunToJoin, child, history: false, code, name)
+            : start.SubGraph(child, history: false, code, name);
+        Graph parent = composite
+            .To(() => Result.Success)
+            .WithSchema(schema)
+            .Build();
+        return (parent, new Blackboard(schema));
+    }
+
+    [Test]
+    public void sync_subgraph_outcome_publish_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = OutcomePublishingParent(sync: true);
+        StateMachine machine = parent.ToStateMachine();
+        machine.SetBlackboard(board);
+
+        AssertZeroAlloc(machine);
+    }
+
+    [Test]
+    public async Task async_subgraph_outcome_publish_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = OutcomePublishingParent(sync: false);
+        AsyncStateMachine machine = parent.ToAsyncStateMachine();
+        machine.SetBlackboard(board);
+
+        await AssertZeroAllocAsync(machine);
+    }
+
     [Test]
     public void sync_wait_for_ticking_is_allocation_free()
     {

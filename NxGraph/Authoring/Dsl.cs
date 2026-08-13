@@ -26,27 +26,44 @@ public static partial class Dsl
     /// to completion within the parent's step. With <paramref name="history"/> enabled, a
     /// failed child resumes at its last-active node when the parent re-enters the composite
     /// (see <see cref="AsyncHistoryState"/>); without it, re-entry restarts the child.
+    /// <paramref name="outcomeCode"/>/<paramref name="outcomeName"/> optionally declare
+    /// Graph- or Global-scoped keys the composite publishes the child's terminal outcome
+    /// through, the moment the child run ends — so the parent branches on <i>which</i>
+    /// outcome a sub-graph ended with using an ordinary switch (Node-scoped keys are
+    /// rejected; a terminal without a declared outcome publishes <c>0</c> / empty string).
     /// </summary>
-    public static StateToken SubGraph(this StateToken prev, Graph child, bool history = false)
+    public static StateToken SubGraph(this StateToken prev, Graph child, bool history = false,
+        BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null)
     {
         Guard.NotNull(child, nameof(child));
-        return prev.ToAsync(history ? new AsyncHistoryState(child) : new AsyncStateMachine(child));
+        return prev.ToAsync(CreateAsyncComposite(child, history, outcomeCode, outcomeName));
     }
 
     /// <summary>
-    /// Starts the graph with a child graph as its first (composite) state.
+    /// Starts the graph with a child graph as its first (composite) state
+    /// (see <see cref="SubGraph(StateToken, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?)"/>).
     /// </summary>
-    public static StateToken SubGraph(this StartToken root, Graph child, bool history = false)
+    public static StateToken SubGraph(this StartToken root, Graph child, bool history = false,
+        BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null)
     {
         Guard.NotNull(child, nameof(child));
-        IAsyncLogic composite = history ? new AsyncHistoryState(child) : new AsyncStateMachine(child);
+        IAsyncLogic composite = CreateAsyncComposite(child, history, outcomeCode, outcomeName);
         NodeId id = root.Builder.AddNode(composite, true);
         return new StateToken(id, root.Builder);
     }
 
+    private static IAsyncLogic CreateAsyncComposite(Graph child, bool history,
+        BlackboardKey<int>? outcomeCode, BlackboardKey<string>? outcomeName)
+    {
+        return history
+            ? new AsyncHistoryState(child, outcomeCode, outcomeName)
+            : new AsyncStateMachine(child, null, outcomeCode, outcomeName);
+    }
+
     /// <summary>
     /// Adds a <b>sync</b> child-graph composite and wires a transition to it — the
-    /// runtime-parity twin of <see cref="SubGraph(StateToken, Graph, bool)"/>. Without
+    /// runtime-parity twin of
+    /// <see cref="SubGraph(StateToken, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?)"/>. Without
     /// history the child runs as a nested sync <see cref="StateMachine"/>; with
     /// <paramref name="history"/> a failed child resumes at its last-active node on re-entry
     /// (see <see cref="HistoryState"/>). <paramref name="mode"/> decides whether the child
@@ -55,31 +72,32 @@ public static partial class Dsl
     /// sync runtime only).
     /// </summary>
     public static StateToken SubGraph(this StateToken prev, ParallelStepMode mode, Graph child,
-        bool history = false)
+        bool history = false, BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null)
     {
         Guard.NotNull(child, nameof(child));
-        return prev.To(CreateSyncComposite(mode, child, history));
+        return prev.To(CreateSyncComposite(mode, child, history, outcomeCode, outcomeName));
     }
 
     /// <summary>
     /// Starts the graph with a sync child-graph composite as its first state
-    /// (see <see cref="SubGraph(StateToken, ParallelStepMode, Graph, bool)"/>).
+    /// (see <see cref="SubGraph(StateToken, ParallelStepMode, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?)"/>).
     /// </summary>
     public static StateToken SubGraph(this StartToken root, ParallelStepMode mode, Graph child,
-        bool history = false)
+        bool history = false, BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null)
     {
         Guard.NotNull(child, nameof(child));
-        return root.To(CreateSyncComposite(mode, child, history));
+        return root.To(CreateSyncComposite(mode, child, history, outcomeCode, outcomeName));
     }
 
-    private static ILogic CreateSyncComposite(ParallelStepMode mode, Graph child, bool history)
+    private static ILogic CreateSyncComposite(ParallelStepMode mode, Graph child, bool history,
+        BlackboardKey<int>? outcomeCode, BlackboardKey<string>? outcomeName)
     {
         if (history)
         {
-            return new HistoryState(child, mode);
+            return new HistoryState(child, mode, outcomeCode, outcomeName);
         }
 
-        StateMachine machine = new(child);
+        StateMachine machine = new(child, null, outcomeCode, outcomeName);
         machine.SetStepMode(mode);
         return machine;
     }

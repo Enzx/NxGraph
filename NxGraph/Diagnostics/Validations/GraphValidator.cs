@@ -230,6 +230,10 @@ public static class GraphValidator
         // rejections, not lints: they cannot reach a built graph.
         ValidateBranches(graph, result);
 
+        // 4g) Outcome-key lints: a composite that declares outcome keys over a child graph
+        // with no declared outcome codes will only ever publish 0 / the empty string.
+        ValidateOutcomeKeys(graph, result);
+
         // 5) Unreachable-node and duplicate-name checks. A supplied AllNodes wins (back-compat
         // for pre-build ID lists); otherwise the set is derived from the graph itself — a built
         // Graph holds every node with its display name applied at Build(), so standalone
@@ -344,6 +348,45 @@ public static class GraphValidator
                     "Switch declares no default target — a value matching no case terminates the run " +
                     "silently. Declare an explicit Default(...) arm.", node.Id);
             }
+        }
+    }
+
+    private static void ValidateOutcomeKeys(Graph graph, GraphValidationResult result)
+    {
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            // The machine-wrapping single-child composites: nested machines (either runtime;
+            // LogicNode.Logic already unwraps the sync adapter) and the history states.
+            (string? codeKeyName, string? nameKeyName, Graph? child) = logicNode.AsyncLogic switch
+            {
+                AsyncStateMachine machine => (machine.OutcomeCodeKeyName, machine.OutcomeNameKeyName,
+                    machine.Graph),
+                AsyncHistoryState history => (history.OutcomeCodeKeyName, history.OutcomeNameKeyName,
+                    history.Child.Graph),
+                _ => logicNode.Logic switch
+                {
+                    StateMachine machine => (machine.OutcomeCodeKeyName, machine.OutcomeNameKeyName,
+                        machine.Graph),
+                    HistoryState history => (history.OutcomeCodeKeyName, history.OutcomeNameKeyName,
+                        history.Child.Graph),
+                    _ => (null, null, (Graph?)null),
+                },
+            };
+
+            if ((codeKeyName ?? nameKeyName) is null || child is null || child.OutcomeCodes is not null)
+            {
+                continue;
+            }
+
+            result.Add(Severity.Warning,
+                "Composite declares an outcome key but its child graph declares no outcome codes " +
+                "(no terminal carries WithOutcome) — the parent will only ever read 0 and the empty " +
+                "string. Declare outcomes on the child's terminals, or drop the keys.", node.Id);
         }
     }
 

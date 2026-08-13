@@ -9,9 +9,10 @@ internal sealed class CompositeDtoFormatter : GraphEntityFormatter<CompositeDto>
     public override void Serialize(ref MessagePackWriter writer, CompositeDto value,
         MessagePackSerializerOptions options)
     {
-        // [OwnerIndex, Kind, Mode, Children[], SelectorKey] — SelectorKey (v6) is appended
-        // after Children so the v4/v5 4-element prefix parse is untouched.
-        writer.WriteArrayHeader(5);
+        // [OwnerIndex, Kind, Mode, Children[], SelectorKey, OutcomeCodeKeyName,
+        // OutcomeNameKeyName] — SelectorKey (v6) and the outcome key names (v11) are appended
+        // after Children so the older prefix parses are untouched.
+        writer.WriteArrayHeader(7);
         writer.Write(value.OwnerIndex);
         writer.Write((byte)value.Kind);
         writer.Write(value.Mode);
@@ -19,15 +20,18 @@ internal sealed class CompositeDtoFormatter : GraphEntityFormatter<CompositeDto>
         for (int i = 0; i < value.Children.Length; i++)
             GraphDtoFormatter.Instance.Serialize(ref writer, value.Children[i], options);
         writer.Write(value.SelectorKey);
+        writer.Write(value.OutcomeCodeKeyName);
+        writer.Write(value.OutcomeNameKeyName);
     }
 
     public override CompositeDto Deserialize(ref MessagePackReader reader, MessagePackSerializerOptions options)
     {
-        // 4 elements = pre-v6 payload (no SelectorKey); old readers never see the 5-element
-        // form — the strict-greater version gate rejects v6 payloads first.
+        // 4 elements = pre-v6 payload (no SelectorKey), 5 = v6..v10 (no outcome key names);
+        // old readers never see the longer forms — the strict-greater version gate rejects
+        // newer payloads first.
         int count = reader.ReadArrayHeader();
-        if (count is not (4 or 5))
-            throw new InvalidOperationException($"CompositeDto: expected 4 or 5 elements, got {count}");
+        if (count is not (4 or 5 or 7))
+            throw new InvalidOperationException($"CompositeDto: expected 4, 5 or 7 elements, got {count}");
         int owner = reader.ReadInt32();
         byte kind = reader.ReadByte();
         if (kind > (byte)CompositeKind.SyncDynamicParallel)
@@ -38,7 +42,10 @@ internal sealed class CompositeDtoFormatter : GraphEntityFormatter<CompositeDto>
         for (int i = 0; i < childCount; i++)
             children[i] = GraphDtoFormatter.Instance.Deserialize(ref reader, options);
         string? selectorKey = count >= 5 ? reader.ReadString() : null;
-        return new CompositeDto(owner, (CompositeKind)kind, mode, children, selectorKey);
+        string? outcomeCodeKeyName = count >= 7 ? reader.ReadString() : null;
+        string? outcomeNameKeyName = count >= 7 ? reader.ReadString() : null;
+        return new CompositeDto(owner, (CompositeKind)kind, mode, children, selectorKey,
+            outcomeCodeKeyName, outcomeNameKeyName);
     }
 }
 

@@ -2,6 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
+## [Unreleased]
+
+### Runtime (staged NxGraph core)
+- Hierarchical outcomes: the machine-wrapping single-child composites — nested machines (`.SubGraph(child)` / `.SubGraph(mode, child)`) and the history states — accept optional `outcomeCode` (`BlackboardKey<int>`) and `outcomeName` (`BlackboardKey<string>`) keys at construction. When the child run reaches a terminal, the composite writes the child machine's `LastOutcome` code and name through its stamped parent-level context, before returning its own `Result`, so a parent branches on *which* outcome a sub-graph ended with using the ordinary data-built `SwitchState<int>`/`ChoiceState`. A terminal with no declared outcome publishes `0` and the empty string; failure terminals publish too; a history composite publishes only at genuine terminals — a lift-back re-entry publishes nothing until the resumed session ends. Node-scoped keys are rejected at construction naming the key, and the validator warns when a key is declared but the child graph declares no outcome codes.
+- Serialization payload version 11: the declarations ride the existing subgraph/composite payload entries as key names; deserialized composites rebuild name-bound and resolve against the machine's bound boards per publish, with targeted miss/type-mismatch errors. Pre-v11 payloads read outcome-key-free.
+
 ## [2.2.0-alpha]
 
 ### Breaking

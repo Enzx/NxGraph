@@ -11,8 +11,9 @@ namespace NxGraph.Fsm;
 /// <summary>
 /// A synchronous state machine with an agent, mirroring <see cref="AsyncStateMachine{TAgent}"/>.
 /// </summary>
-public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer = null)
-    : StateMachine(graph, observer), IAgentSettable<TAgent>
+public class StateMachine<TAgent>(Graph graph, IStateMachineObserver? observer = null,
+    BlackboardKey<int>? outcomeCodeKey = null, BlackboardKey<string>? outcomeNameKey = null)
+    : StateMachine(graph, observer, outcomeCodeKey, outcomeNameKey), IAgentSettable<TAgent>
 {
     private TAgent? _agent;
     private bool _hasAgent;
@@ -102,6 +103,15 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
     private bool _nodeEntered; // the current node's EnterAction has fired for this visit
     private readonly int[]? _outcomeCodes; // graph-owned; null when no node declares one
 
+    // Outcome publication: when this machine runs as a nested node, the declared keys make
+    // its terminal outcome readable one level up. The name is the declaration (non-null iff
+    // a key is declared); the key struct is valid only for the live-key form — name-bound
+    // (deserialized) instances resolve per publish via OutcomeKeys.Resolve.
+    private readonly BlackboardKey<int> _outcomeCodeKey;
+    private readonly BlackboardKey<string> _outcomeNameKey;
+    private readonly string? _outcomeCodeKeyName;
+    private readonly string? _outcomeNameKeyName;
+
     // Event dispatch (spec 013): node 0's dispatcher, cached at construction (log-report-table
     // precedent) so a raise never probes the graph; null for graphs without event entries.
     private readonly EventEntryState? _eventEntry;
@@ -127,9 +137,35 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         get => _status;
     }
 
-    public StateMachine(Graph graph, IStateMachineObserver? observer = null)
+    /// <param name="graph">The graph to execute.</param>
+    /// <param name="observer">Optional lifecycle observer.</param>
+    /// <param name="outcomeCodeKey">Optional Graph- or Global-scoped key this machine writes its
+    /// terminal outcome code (<see cref="LastOutcome"/>) to, through its stamped context, the
+    /// moment a run reaches a terminal — success and failure terminals alike, before the
+    /// machine returns its own <see cref="Result"/>. A terminal that declared no outcome
+    /// writes <c>0</c>, the machine's own "nothing recorded" reading — hosts route on
+    /// non-zero codes. Node-scoped keys are rejected here. An exception escaping node logic
+    /// is a fault, not a terminal — nothing is published.</param>
+    /// <param name="outcomeNameKey">Optional key for the outcome's registered display name;
+    /// same timing as <paramref name="outcomeCodeKey"/>. A terminal with no declared outcome
+    /// (or an unregistered code) writes the empty string. Either key may be declared without
+    /// the other.</param>
+    public StateMachine(Graph graph, IStateMachineObserver? observer = null,
+        BlackboardKey<int>? outcomeCodeKey = null, BlackboardKey<string>? outcomeNameKey = null)
     {
         Guard.NotNull(graph, nameof(graph));
+        if (outcomeCodeKey is { } codeKey)
+        {
+            _outcomeCodeKeyName = OutcomeKeys.Validate(in codeKey, nameof(outcomeCodeKey));
+            _outcomeCodeKey = codeKey;
+        }
+
+        if (outcomeNameKey is { } nameKey)
+        {
+            _outcomeNameKeyName = OutcomeKeys.Validate(in nameKey, nameof(outcomeNameKey));
+            _outcomeNameKey = nameKey;
+        }
+
         // Fail fast on graphs the sync runtime cannot execute, instead of throwing mid-run
         // after earlier nodes already produced side effects. The validator's StrictSyncOnly
         // option offers the same check as a lint.
@@ -160,7 +196,70 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
         }
     }
 
+    private StateMachine(Graph graph, string? outcomeCodeKeyName, string? outcomeNameKeyName)
+        : this(graph)
+    {
+        if (outcomeCodeKeyName is not null)
+        {
+            _outcomeCodeKeyName = OutcomeKeys.ValidateName(outcomeCodeKeyName, nameof(outcomeCodeKeyName));
+        }
+
+        if (outcomeNameKeyName is not null)
+        {
+            _outcomeNameKeyName = OutcomeKeys.ValidateName(outcomeNameKeyName, nameof(outcomeNameKeyName));
+        }
+    }
+
+    /// <summary>
+    /// Creates a machine with name-bound outcome keys — the deserialization rebind form. The
+    /// names resolve per publish against the machine's bound boards' schemas (Graph, then
+    /// Global) via <see cref="BlackboardSchema.TryResolve{T}"/>, with targeted miss and
+    /// type-mismatch errors. A <see langword="null"/> name means that key is not declared.
+    /// </summary>
+    public static StateMachine Unbound(Graph graph, string? outcomeCodeKeyName, string? outcomeNameKeyName) =>
+        new(graph, outcomeCodeKeyName, outcomeNameKeyName);
+
+    /// <summary>The declared outcome-code key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeCodeKeyName => _outcomeCodeKeyName;
+
+    /// <summary>The declared outcome-name key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeNameKeyName => _outcomeNameKeyName;
+
     private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
+
+    /// <summary>
+    /// Records the terminal node's outcome and, when outcome keys are declared, publishes
+    /// code and name through the stamped context — before the machine returns its own
+    /// result, so a parent's immediately following director reads fresh values.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RecordTerminalOutcome()
+    {
+        LastOutcome = OutcomeOf(_current);
+        if (_outcomeCodeKeyName is not null || _outcomeNameKeyName is not null)
+        {
+            PublishOutcome();
+        }
+    }
+
+    private void PublishOutcome()
+    {
+        if (_outcomeCodeKeyName is not null)
+        {
+            BlackboardKey<int> key = _outcomeCodeKey.IsValid
+                ? _outcomeCodeKey
+                : OutcomeKeys.Resolve<int>(in _blackboards, _outcomeCodeKeyName);
+            _blackboards.Set(key, LastOutcome);
+        }
+
+        if (_outcomeNameKeyName is not null)
+        {
+            BlackboardKey<string> key = _outcomeNameKey.IsValid
+                ? _outcomeNameKey
+                : OutcomeKeys.Resolve<string>(in _blackboards, _outcomeNameKeyName);
+            _blackboards.Set(key, LastOutcomeName ?? string.Empty);
+        }
+    }
 
     /// <summary>
     /// Hook for derived machines to (re)apply per-machine execution context (e.g. the typed
@@ -785,7 +884,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                     next = director.SelectNext();
                     if (next.Equals(NodeId.Default))
                     {
-                        LastOutcome = OutcomeOf(_current);
+                        RecordTerminalOutcome();
                         return Result.Success;
                     }
 
@@ -799,13 +898,13 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                             _current,
                             new InvalidOperationException($"No transition found for state '{_current}'."));
 
-                        LastOutcome = OutcomeOf(_current);
+                        RecordTerminalOutcome();
                         return Result.Failure;
                     }
 
                     if (edge.IsEmpty)
                     {
-                        LastOutcome = OutcomeOf(_current);
+                        RecordTerminalOutcome();
                         return Result.Success; // terminal
                     }
 
@@ -847,7 +946,7 @@ public class StateMachine : State, ISubGraphProvider, IBlackboardBindable, IBlac
                 if (!Graph.TryGetTransition(_current, out Transition failEdge) ||
                     !failEdge.HasFailureDestination)
                 {
-                    LastOutcome = OutcomeOf(_current);
+                    RecordTerminalOutcome();
                     return Result.Failure;
                 }
 

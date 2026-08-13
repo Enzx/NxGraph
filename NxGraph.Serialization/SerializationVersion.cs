@@ -38,6 +38,13 @@ public static class SerializationVersion
     //      name against the machine's bound schemas. The standard condition set (IsTrue, Not,
     //      KeyEquals<T>) rides with zero options via the default ConditionRegistry, closing
     //      the last relay-lambda hole in graph payloads. Pre-v10 payloads read branch-free.
-    public const int Version = 10;
+    // v11: hierarchical outcome keys — the SubGraphs entries and the history kinds of
+    //      CompositeDto gain optional OutcomeCodeKeyName/OutcomeNameKeyName (names only;
+    //      value types are fixed int/string, and the names are exclusive to the history
+    //      kinds on CompositeDto), so a composite that publishes its child's terminal
+    //      outcome onto declared blackboard keys survives the trip. Rebuilds name-bound,
+    //      resolved per publish against the machine's bound schemas (the EventEntryDto
+    //      recipe). Pre-v11 payloads read outcome-key-free.
+    public const int Version = 11;
 }
 

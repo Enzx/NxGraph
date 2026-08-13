@@ -315,9 +315,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
                     if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
-                        // Serialize state machine as sub-graph
+                        // Serialize state machine as sub-graph. Outcome key names (v11) are
+                        // construction data — dropping them would silently stop the publish
+                        // after a round-trip.
                         GraphDto childDto = ToDto(stateMachine.Graph, depth + 1);
-                        subGraphs.Add(new SubGraphDto(index, childDto));
+                        subGraphs.Add(new SubGraphDto(index, childDto,
+                            stateMachine.OutcomeCodeKeyName, stateMachine.OutcomeNameKeyName));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.StateMachineMarker.Id.Name);
                         break;
                     }
@@ -328,7 +331,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     if (logicNode.Logic is StateMachine syncStateMachine)
                     {
                         GraphDto childDto = ToDto(syncStateMachine.Graph, depth + 1);
-                        subGraphs.Add(new SubGraphDto(index, childDto));
+                        subGraphs.Add(new SubGraphDto(index, childDto,
+                            syncStateMachine.OutcomeCodeKeyName, syncStateMachine.OutcomeNameKeyName));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.SyncStateMachineMarker.Id.Name);
                         break;
@@ -342,7 +346,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     if (logicNode.AsyncLogic is AsyncHistoryState asyncHistory)
                     {
                         composites.Add(new CompositeDto(index, CompositeKind.AsyncHistory, Mode: 0,
-                            [ToDto(asyncHistory.Child.Graph, depth + 1)]));
+                            [ToDto(asyncHistory.Child.Graph, depth + 1)],
+                            OutcomeCodeKeyName: asyncHistory.OutcomeCodeKeyName,
+                            OutcomeNameKeyName: asyncHistory.OutcomeNameKeyName));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.HistoryStateMarker.Id.Name);
                         break;
                     }
@@ -350,7 +356,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     if (logicNode.Logic is HistoryState syncHistory)
                     {
                         composites.Add(new CompositeDto(index, CompositeKind.SyncHistory, (byte)syncHistory.Mode,
-                            [ToDto(syncHistory.Child.Graph, depth + 1)]));
+                            [ToDto(syncHistory.Child.Graph, depth + 1)],
+                            OutcomeCodeKeyName: syncHistory.OutcomeCodeKeyName,
+                            OutcomeNameKeyName: syncHistory.OutcomeNameKeyName));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.SyncHistoryStateMarker.Id.Name);
                         break;
                     }
@@ -1089,7 +1097,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException($"Node DTO payload is missing entry for index {i}.");
         }
 
-        Dictionary<int, Graph> ownerToSubGraph = new();
+        Dictionary<int, (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName)>
+            ownerToSubGraph = new();
         int subgraphCount = dto.SubGraphs.Length;
         for (int i = 0; i < subgraphCount; i++)
         {
@@ -1112,7 +1121,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             // Defense in depth: the claims pass above already rejects duplicate owners, so an
             // overwrite here is unreachable — but the old indexer-assign silently dropped the
             // first child, and this loop must never regress to that.
-            if (!ownerToSubGraph.TryAdd(subDto.OwnerIndex, childGraph))
+            if (!ownerToSubGraph.TryAdd(subDto.OwnerIndex,
+                    (childGraph, subDto.OutcomeCodeKeyName, subDto.OutcomeNameKeyName)))
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} is duplicated in the payload.");
         }
@@ -1123,7 +1133,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             bool isSyncMarker = marker == LogicNode.SyncStateMachineMarker;
             if (marker != LogicNode.StateMachineMarker && !isSyncMarker) continue;
 
-            if (!ownerToSubGraph.TryGetValue(i, out Graph? childGraph))
+            if (!ownerToSubGraph.TryGetValue(i,
+                    out (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName) sub))
                 throw new InvalidOperationException(
                     $"Node at index {i} was marked as a StateMachine but has no associated subgraph.");
 
@@ -1138,9 +1149,12 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             // back as sync StateMachines (behind the sync-logic adapter), async ones as an
             // AsyncStateMachine. Machine-level config (step mode, restart policy) is runtime
             // configuration, not structure — deserialized machines carry the defaults.
+            // Outcome key names (v11) rebuild name-bound: the machine resolves them against
+            // its bound boards per publish (both nulls = the plain outcome-key-free machine).
             IAsyncLogic stateMachineAsyncLogic = isSyncMarker
-                ? new SyncLogicAdapter(new StateMachine(childGraph))
-                : new AsyncStateMachine(childGraph);
+                ? new SyncLogicAdapter(
+                    StateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName))
+                : AsyncStateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName);
             nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineAsyncLogic);
         }
 
@@ -1190,6 +1204,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Composite DTO for node {compositeDto.OwnerIndex} has kind '{compositeDto.Kind}' but " +
                     "carries a selector key — only dynamic parallel kinds may.");
 
+            // Outcome key names (v11) are exclusive to the history kinds — a name smuggled
+            // onto a parallel kind is a crafted or corrupt payload (the SelectorKey rule).
+            if (!isHistory && (compositeDto.OutcomeCodeKeyName is not null ||
+                               compositeDto.OutcomeNameKeyName is not null))
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} has kind '{compositeDto.Kind}' but " +
+                    "carries an outcome key name — only history kinds may.");
+
             Graph[] childGraphs = new Graph[compositeDto.Children.Length];
             for (int c = 0; c < childGraphs.Length; c++)
             {
@@ -1198,9 +1220,13 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
             IAsyncLogic compositeLogic = compositeDto.Kind switch
             {
-                CompositeKind.AsyncHistory => new AsyncHistoryState(childGraphs[0]),
+                // History kinds rebuild through the name-bound form (both nulls = plain);
+                // the child machine resolves the keys against its bound boards per publish.
+                CompositeKind.AsyncHistory => AsyncHistoryState.Unbound(childGraphs[0],
+                    compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName),
                 CompositeKind.SyncHistory => new SyncLogicAdapter(
-                    new HistoryState(childGraphs[0], (ParallelStepMode)compositeDto.Mode)),
+                    HistoryState.Unbound(childGraphs[0], (ParallelStepMode)compositeDto.Mode,
+                        compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName)),
                 CompositeKind.AsyncParallel => new AsyncParallelState(childGraphs),
                 CompositeKind.SyncParallel => new SyncLogicAdapter(
                     new ParallelState((ParallelStepMode)compositeDto.Mode, childGraphs)),

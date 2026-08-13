@@ -778,4 +778,80 @@ public class DeepSuspendResumeTests
                 "(attempts survived) but the scratch restarted from its registered default.");
         });
     }
+
+    // ── Outcome keys across a durable boundary ────────────────────────────
+
+    [Test]
+    public void parked_child_with_outcome_keys_still_publishes_after_deep_resume()
+    {
+        BlackboardSchema schema = new("deep-outcome", BlackboardScope.Graph);
+        BlackboardKey<int> code = schema.Register("verdict", -1);
+        BlackboardKey<string> name = schema.Register("verdictName", "unset");
+        Blackboard board = new(schema);
+        List<string> log = [];
+
+        Graph BuildParent()
+        {
+            Graph child = GraphBuilder
+                .StartWith(() =>
+                {
+                    log.Add("c0");
+                    return Result.Success;
+                })
+                .To(() =>
+                {
+                    log.Add("c1");
+                    return Result.Success;
+                })
+                .To(() =>
+                {
+                    log.Add("c2");
+                    return Result.Success;
+                }).WithOutcome(4, "Deep")
+                .Build();
+
+            return GraphBuilder
+                .StartWith(() =>
+                {
+                    log.Add("p0");
+                    return Result.Success;
+                })
+                .SubGraph(ParallelStepMode.RoundPerTick, child, history: false, code, name)
+                .To(() =>
+                {
+                    log.Add("p1");
+                    return Result.Success;
+                })
+                .WithSchema(schema)
+                .Build();
+        }
+
+        StateMachine first = BuildParent().ToStateMachine();
+        first.SetBlackboard(board);
+        first.Execute(); // p0
+        first.Execute(); // child c0
+        first.Execute(); // child c1 — parked mid-child, before the terminal
+        Assert.Multiple(() =>
+        {
+            Assert.That(log, Is.EqualTo(new[] { "p0", "c0", "c1" }));
+            Assert.That(board.Get(code), Is.EqualTo(-1), "Nothing publishes before the terminal.");
+        });
+
+        StateMachineDeepSnapshot deep = JsonRoundTrip(first.SuspendDeep());
+
+        StateMachine second = BuildParent().ToStateMachine();
+        second.SetBlackboard(board); // the board is the durable artifact — rebind, then resume
+        second.ResumeDeep(deep);
+        Result result = RunToCompletion(second);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(Result.Success));
+            Assert.That(log, Is.EqualTo(new[] { "p0", "c0", "c1", "c2", "p1" }),
+                "The child resumed mid-run at c2 and reached its terminal.");
+            Assert.That(board.Get(code), Is.EqualTo(4),
+                "The resumed child's terminal published through the fresh machine's rebuilt keys.");
+            Assert.That(board.Get(name), Is.EqualTo("Deep"));
+        });
+    }
 }
