@@ -315,12 +315,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
 
                     if (logicNode.AsyncLogic is AsyncStateMachine stateMachine)
                     {
-                        // Serialize state machine as sub-graph. Outcome key names (v11) are
-                        // construction data — dropping them would silently stop the publish
-                        // after a round-trip.
+                        // Serialize state machine as sub-graph. Outcome key names (v11) and
+                        // the ports declaration (v12) are construction data — dropping them
+                        // would silently change runtime behavior after a round-trip.
                         GraphDto childDto = ToDto(stateMachine.Graph, depth + 1);
                         subGraphs.Add(new SubGraphDto(index, childDto,
-                            stateMachine.OutcomeCodeKeyName, stateMachine.OutcomeNameKeyName));
+                            stateMachine.OutcomeCodeKeyName, stateMachine.OutcomeNameKeyName,
+                            stateMachine.OwnsBoard,
+                            BuildPortDtos(node.Id, stateMachine.OwnsBoard, stateMachine.Ports)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.StateMachineMarker.Id.Name);
                         break;
                     }
@@ -332,7 +334,9 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     {
                         GraphDto childDto = ToDto(syncStateMachine.Graph, depth + 1);
                         subGraphs.Add(new SubGraphDto(index, childDto,
-                            syncStateMachine.OutcomeCodeKeyName, syncStateMachine.OutcomeNameKeyName));
+                            syncStateMachine.OutcomeCodeKeyName, syncStateMachine.OutcomeNameKeyName,
+                            syncStateMachine.OwnsBoard,
+                            BuildPortDtos(node.Id, syncStateMachine.OwnsBoard, syncStateMachine.Ports)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.SyncStateMachineMarker.Id.Name);
                         break;
@@ -348,7 +352,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         composites.Add(new CompositeDto(index, CompositeKind.AsyncHistory, Mode: 0,
                             [ToDto(asyncHistory.Child.Graph, depth + 1)],
                             OutcomeCodeKeyName: asyncHistory.OutcomeCodeKeyName,
-                            OutcomeNameKeyName: asyncHistory.OutcomeNameKeyName));
+                            OutcomeNameKeyName: asyncHistory.OutcomeNameKeyName,
+                            RegionPorts: BuildSingleRegionPorts(node.Id, asyncHistory.Child)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.HistoryStateMarker.Id.Name);
                         break;
                     }
@@ -358,7 +363,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         composites.Add(new CompositeDto(index, CompositeKind.SyncHistory, (byte)syncHistory.Mode,
                             [ToDto(syncHistory.Child.Graph, depth + 1)],
                             OutcomeCodeKeyName: syncHistory.OutcomeCodeKeyName,
-                            OutcomeNameKeyName: syncHistory.OutcomeNameKeyName));
+                            OutcomeNameKeyName: syncHistory.OutcomeNameKeyName,
+                            RegionPorts: BuildSingleRegionPorts(node.Id, syncHistory.Child)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.SyncHistoryStateMarker.Id.Name);
                         break;
                     }
@@ -368,7 +374,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         GraphDto[] children = new GraphDto[asyncParallel.Regions.Count];
                         for (int r = 0; r < children.Length; r++)
                             children[r] = ToDto(asyncParallel.Regions[r].Graph, depth + 1);
-                        composites.Add(new CompositeDto(index, CompositeKind.AsyncParallel, Mode: 0, children));
+                        composites.Add(new CompositeDto(index, CompositeKind.AsyncParallel, Mode: 0, children,
+                            RegionPorts: BuildRegionPorts(node.Id, asyncParallel.Regions)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name, LogicNode.ParallelStateMarker.Id.Name);
                         break;
                     }
@@ -379,7 +386,7 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         for (int r = 0; r < children.Length; r++)
                             children[r] = ToDto(syncParallel.Regions[r].Graph, depth + 1);
                         composites.Add(new CompositeDto(index, CompositeKind.SyncParallel, (byte)syncParallel.Mode,
-                            children));
+                            children, RegionPorts: BuildRegionPorts(node.Id, syncParallel.Regions)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.SyncParallelStateMarker.Id.Name);
                         break;
@@ -395,7 +402,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         for (int r = 0; r < children.Length; r++)
                             children[r] = ToDto(asyncDynamic.Regions[r].Graph, depth + 1);
                         composites.Add(new CompositeDto(index, CompositeKind.AsyncDynamicParallel, Mode: 0,
-                            children, ResolveSelectorKey(node.Id, asyncDynamic.Selector)));
+                            children, ResolveSelectorKey(node.Id, asyncDynamic.Selector),
+                            RegionPorts: BuildRegionPorts(node.Id, asyncDynamic.Regions)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.DynamicParallelStateMarker.Id.Name);
                         break;
@@ -407,7 +415,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                         for (int r = 0; r < children.Length; r++)
                             children[r] = ToDto(syncDynamic.Regions[r].Graph, depth + 1);
                         composites.Add(new CompositeDto(index, CompositeKind.SyncDynamicParallel,
-                            (byte)syncDynamic.Mode, children, ResolveSelectorKey(node.Id, syncDynamic.Selector)));
+                            (byte)syncDynamic.Mode, children, ResolveSelectorKey(node.Id, syncDynamic.Selector),
+                            RegionPorts: BuildRegionPorts(node.Id, syncDynamic.Regions)));
                         nodes[index] = new NodeTextDto(index, node.Id.Name,
                             LogicNode.SyncDynamicParallelStateMarker.Id.Name);
                         break;
@@ -777,6 +786,219 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
         return key;
     }
 
+    // ── Sub-graph ports (payload version 12) ────────────────────────────────
+
+    /// <summary>
+    /// Serializes one composite's ports declaration. Null without a declaration; a declared
+    /// but port-less board rides as an empty list — the declaration's presence is what makes
+    /// the composite own the board. Sources ride as key names, or as field-model literals
+    /// (via <see cref="PortLiteral"/>) for literal inputs, plus the runtime-stable value type
+    /// name that closes the typed pair on read.
+    /// </summary>
+    private static SubGraphPortDto[]? BuildPortDtos(NodeId nodeId, bool ownsBoard,
+        IReadOnlyList<ISubGraphPort> ports)
+    {
+        if (!ownsBoard)
+        {
+            return null;
+        }
+
+        SubGraphPortDto[] dtos = new SubGraphPortDto[ports.Count];
+        for (int i = 0; i < dtos.Length; i++)
+        {
+            ISubGraphPort port = ports[i];
+            dtos[i] = new SubGraphPortDto(
+                port.IsInput ? (byte)0 : (byte)1,
+                port.SourceKeyName,
+                port.SourceKeyName is null && port.IsInput
+                    ? PortLiteral.Write(port.ValueType, port.SourceLiteral, nodeId)
+                    : null,
+                port.TargetKeyName,
+                BlackboardSerializer.StableTypeName(port.ValueType));
+        }
+
+        return dtos;
+    }
+
+    private static RegionPortsDto[] BuildSingleRegionPorts(NodeId nodeId, AsyncStateMachine child) =>
+        child.OwnsBoard ? [new RegionPortsDto(0, BuildPortDtos(nodeId, ownsBoard: true, child.Ports)!)] : [];
+
+    private static RegionPortsDto[] BuildSingleRegionPorts(NodeId nodeId, StateMachine child) =>
+        child.OwnsBoard ? [new RegionPortsDto(0, BuildPortDtos(nodeId, ownsBoard: true, child.Ports)!)] : [];
+
+    private static RegionPortsDto[] BuildRegionPorts(NodeId nodeId, IReadOnlyList<AsyncStateMachine> regions)
+    {
+        List<RegionPortsDto>? entries = null;
+        for (int r = 0; r < regions.Count; r++)
+        {
+            if (regions[r].OwnsBoard)
+            {
+                (entries ??= []).Add(new RegionPortsDto(r,
+                    BuildPortDtos(nodeId, ownsBoard: true, regions[r].Ports)!));
+            }
+        }
+
+        return entries?.ToArray() ?? [];
+    }
+
+    private static RegionPortsDto[] BuildRegionPorts(NodeId nodeId, IReadOnlyList<StateMachine> regions)
+    {
+        List<RegionPortsDto>? entries = null;
+        for (int r = 0; r < regions.Count; r++)
+        {
+            if (regions[r].OwnsBoard)
+            {
+                (entries ??= []).Add(new RegionPortsDto(r,
+                    BuildPortDtos(nodeId, ownsBoard: true, regions[r].Ports)!));
+            }
+        }
+
+        return entries?.ToArray() ?? [];
+    }
+
+    /// <summary>
+    /// Rebuilds one ports declaration from the wire — name-bound (the unbound recipe): each
+    /// port resolves its key names per application against the boards bound at that moment.
+    /// Ports without board ownership are a crafted or corrupt payload.
+    /// </summary>
+    private static SubGraphPorts? RebuildPorts(bool ownsBoard, SubGraphPortDto[]? ports, string owner)
+    {
+        if (!ownsBoard)
+        {
+            if (ports is { Length: > 0 })
+            {
+                throw new InvalidOperationException(
+                    $"{owner} carries sub-graph ports but does not declare board ownership — ports are " +
+                    "exclusive to board-owning composites.");
+            }
+
+            return null;
+        }
+
+        SubGraphPorts declaration = SubGraphPorts.OwnBoard();
+        if (ports is null)
+        {
+            return declaration;
+        }
+
+        foreach (SubGraphPortDto port in ports)
+        {
+            declaration.Add(RebuildPort(port, owner));
+        }
+
+        return declaration;
+    }
+
+    private static ISubGraphPort RebuildPort(SubGraphPortDto dto, string owner)
+    {
+        if (dto.Direction > 1)
+        {
+            throw new InvalidOperationException(
+                $"{owner} has a sub-graph port with unknown direction {dto.Direction}.");
+        }
+
+        if (string.IsNullOrEmpty(dto.TargetName))
+        {
+            throw new InvalidOperationException($"{owner} has a sub-graph port with no target key name.");
+        }
+
+        if (!StableTypeResolver.TryResolve(dto.ValueTypeName, out Type valueType))
+        {
+            throw new InvalidOperationException(
+                $"{owner} names port value type '{dto.ValueTypeName}', which cannot be resolved — ensure " +
+                "the assembly declaring it is loaded.");
+        }
+
+        MethodInfo builder = typeof(GraphSerializer)
+            .GetMethod(nameof(RebuildPortGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(valueType);
+        try
+        {
+            return (ISubGraphPort)builder.Invoke(null, [dto, owner])!;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            // Surface the port's own reconstruction error rather than the reflection
+            // wrapper, stack trace intact.
+            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            throw; // unreachable — Throw() always rethrows
+        }
+    }
+
+    private static ISubGraphPort RebuildPortGeneric<T>(SubGraphPortDto dto, string owner)
+    {
+        if (dto.Direction == 0)
+        {
+            if (dto.SourceKeyName is { } sourceName)
+            {
+                if (dto.SourceLiteral is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"{owner} has an input port carrying both a source key name and a literal.");
+                }
+
+                return SubGraphPort.UnboundIn(BlackboardValue<T>.Bound(sourceName), dto.TargetName);
+            }
+
+            if (dto.SourceLiteral is null)
+            {
+                throw new InvalidOperationException(
+                    $"{owner} has an input port carrying neither a source key name nor a literal.");
+            }
+
+            return SubGraphPort.UnboundIn(PortLiteral.Read<T>(dto.SourceLiteral, owner), dto.TargetName);
+        }
+
+        if (string.IsNullOrEmpty(dto.SourceKeyName))
+        {
+            throw new InvalidOperationException($"{owner} has an output port with no source key name.");
+        }
+
+        if (dto.SourceLiteral is not null)
+        {
+            throw new InvalidOperationException(
+                $"{owner} has an output port carrying a literal — outputs copy child keys.");
+        }
+
+        return SubGraphPort.UnboundOut<T>(dto.SourceKeyName!, dto.TargetName);
+    }
+
+    /// <summary>
+    /// Rebuilds a composite's sparse per-region ports into a by-index array, validating
+    /// region indexes (in range for the child list — which also confines history kinds to
+    /// region 0 — and unique).
+    /// </summary>
+    private static SubGraphPorts?[] RebuildRegionPorts(CompositeDto compositeDto)
+    {
+        SubGraphPorts?[] byRegion = new SubGraphPorts?[compositeDto.Children.Length];
+        if (compositeDto.RegionPorts is not { Length: > 0 } declared)
+        {
+            return byRegion;
+        }
+
+        foreach (RegionPortsDto entry in declared)
+        {
+            if (entry.RegionIndex < 0 || entry.RegionIndex >= byRegion.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} declares ports for region " +
+                    $"{entry.RegionIndex}, which is out of range (0..{byRegion.Length - 1}).");
+            }
+
+            if (byRegion[entry.RegionIndex] is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Composite DTO for node {compositeDto.OwnerIndex} declares ports for region " +
+                    $"{entry.RegionIndex} twice.");
+            }
+
+            byRegion[entry.RegionIndex] = RebuildPorts(ownsBoard: true, entry.Ports,
+                $"Composite DTO for node {compositeDto.OwnerIndex}, region {entry.RegionIndex}");
+        }
+
+        return byRegion;
+    }
+
     private Graph FromDto(GraphDto dto) => FromDto(dto, depth: 0);
 
     private Graph FromDto(GraphDto dto, int depth)
@@ -1097,8 +1319,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 throw new InvalidOperationException($"Node DTO payload is missing entry for index {i}.");
         }
 
-        Dictionary<int, (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName)>
-            ownerToSubGraph = new();
+        Dictionary<int, (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName,
+            SubGraphPorts? Ports)> ownerToSubGraph = new();
         int subgraphCount = dto.SubGraphs.Length;
         for (int i = 0; i < subgraphCount; i++)
         {
@@ -1118,11 +1340,13 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                     $"Subgraph DTO owner index {subDto.OwnerIndex} does not reference a state-machine marker node.");
 
             Graph childGraph = FromDto(subDto.Graph, depth + 1);
+            SubGraphPorts? ports = RebuildPorts(subDto.OwnsBoard, subDto.Ports,
+                $"Subgraph DTO for node {subDto.OwnerIndex}");
             // Defense in depth: the claims pass above already rejects duplicate owners, so an
             // overwrite here is unreachable — but the old indexer-assign silently dropped the
             // first child, and this loop must never regress to that.
             if (!ownerToSubGraph.TryAdd(subDto.OwnerIndex,
-                    (childGraph, subDto.OutcomeCodeKeyName, subDto.OutcomeNameKeyName)))
+                    (childGraph, subDto.OutcomeCodeKeyName, subDto.OutcomeNameKeyName, ports)))
                 throw new InvalidOperationException(
                     $"Subgraph DTO owner index {subDto.OwnerIndex} is duplicated in the payload.");
         }
@@ -1134,7 +1358,8 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             if (marker != LogicNode.StateMachineMarker && !isSyncMarker) continue;
 
             if (!ownerToSubGraph.TryGetValue(i,
-                    out (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName) sub))
+                    out (Graph Child, string? OutcomeCodeKeyName, string? OutcomeNameKeyName,
+                        SubGraphPorts? Ports) sub))
                 throw new InvalidOperationException(
                     $"Node at index {i} was marked as a StateMachine but has no associated subgraph.");
 
@@ -1149,12 +1374,14 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
             // back as sync StateMachines (behind the sync-logic adapter), async ones as an
             // AsyncStateMachine. Machine-level config (step mode, restart policy) is runtime
             // configuration, not structure — deserialized machines carry the defaults.
-            // Outcome key names (v11) rebuild name-bound: the machine resolves them against
-            // its bound boards per publish (both nulls = the plain outcome-key-free machine).
+            // Outcome key names (v11) and ports (v12) rebuild name-bound: the machine
+            // resolves them against the boards bound at publish/application time (all nulls =
+            // the plain shared-board machine).
             IAsyncLogic stateMachineAsyncLogic = isSyncMarker
                 ? new SyncLogicAdapter(
-                    StateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName))
-                : AsyncStateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName);
+                    StateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName, sub.Ports))
+                : AsyncStateMachine.Unbound(sub.Child, sub.OutcomeCodeKeyName, sub.OutcomeNameKeyName,
+                    sub.Ports);
             nodes[i] = new LogicNode(new NodeId(i, nodeName), stateMachineAsyncLogic);
         }
 
@@ -1218,23 +1445,32 @@ public sealed class GraphSerializer : IGraphJsonSerializer, IGraphBinarySerializ
                 childGraphs[c] = FromDto(compositeDto.Children[c], depth + 1);
             }
 
+            // Region ports (v12) rebuild name-bound per region; the by-index array aligns
+            // with Children, which also confines history kinds to region 0.
+            SubGraphPorts?[] regionPorts = RebuildRegionPorts(compositeDto);
+
             IAsyncLogic compositeLogic = compositeDto.Kind switch
             {
-                // History kinds rebuild through the name-bound form (both nulls = plain);
+                // History kinds rebuild through the name-bound form (all nulls = plain);
                 // the child machine resolves the keys against its bound boards per publish.
                 CompositeKind.AsyncHistory => AsyncHistoryState.Unbound(childGraphs[0],
-                    compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName),
+                    compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName, regionPorts[0]),
                 CompositeKind.SyncHistory => new SyncLogicAdapter(
                     HistoryState.Unbound(childGraphs[0], (ParallelStepMode)compositeDto.Mode,
-                        compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName)),
-                CompositeKind.AsyncParallel => new AsyncParallelState(childGraphs),
+                        compositeDto.OutcomeCodeKeyName, compositeDto.OutcomeNameKeyName, regionPorts[0])),
+                // Parallel kinds rebuild through the unbound factories so per-region ports
+                // (when declared) resolve name-bound; without ports the machines they build
+                // match the public constructors'.
+                CompositeKind.AsyncParallel => AsyncParallelState.Unbound(childGraphs, regionPorts),
                 CompositeKind.SyncParallel => new SyncLogicAdapter(
-                    new ParallelState((ParallelStepMode)compositeDto.Mode, childGraphs)),
-                CompositeKind.AsyncDynamicParallel => new AsyncDynamicParallelState(
-                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs),
-                CompositeKind.SyncDynamicParallel => new SyncLogicAdapter(new DynamicParallelState(
+                    ParallelState.Unbound((ParallelStepMode)compositeDto.Mode, childGraphs, regionPorts)),
+                CompositeKind.AsyncDynamicParallel => AsyncDynamicParallelState.Unbound(
+                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs,
+                    regionPorts),
+                CompositeKind.SyncDynamicParallel => new SyncLogicAdapter(DynamicParallelState.Unbound(
                     (ParallelStepMode)compositeDto.Mode,
-                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs)),
+                    ResolveSelector(compositeDto.SelectorKey!, compositeDto.OwnerIndex), childGraphs,
+                    regionPorts)),
                 _ => throw new InvalidOperationException(
                     $"Composite DTO for node {compositeDto.OwnerIndex} has unknown kind {(byte)compositeDto.Kind}.")
             };

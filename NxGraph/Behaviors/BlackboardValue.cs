@@ -87,6 +87,12 @@ public readonly struct BlackboardValue<T>
     /// <summary>The literal value; meaningful only when <see cref="IsBound"/> is <see langword="false"/>.</summary>
     public T Literal => _literal;
 
+    /// <summary>
+    /// The live bound key (invalid for literals and name-bound forms). Internal surface for
+    /// wiring-time validation — e.g. the sub-graph ports' Node-scope source rejection.
+    /// </summary>
+    internal BlackboardKey<T> BoundKey => _key;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal T Resolve(in BlackboardContext bb)
     {

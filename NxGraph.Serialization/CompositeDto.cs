@@ -29,7 +29,10 @@ internal enum CompositeKind : byte
 /// version 11) name the blackboard keys a history composite publishes the child's terminal
 /// outcome through — names only, value types fixed (<c>int</c> / <c>string</c>); they are
 /// exclusive to the history kinds and must be null elsewhere. Pre-v11 payloads read
-/// outcome-key-free.
+/// outcome-key-free. <paramref name="RegionPorts"/> (payload version 12) carries the
+/// per-region sub-graph ports declarations, sparse by region index (history kinds may only
+/// claim index 0); an entry's presence is the owns-board flag. Pre-v12 payloads read
+/// shared-board and port-free.
 /// </summary>
 internal sealed record CompositeDto(
     int OwnerIndex,
@@ -38,4 +41,5 @@ internal sealed record CompositeDto(
     GraphDto[] Children,
     string? SelectorKey = null,
     string? OutcomeCodeKeyName = null,
-    string? OutcomeNameKeyName = null);
+    string? OutcomeNameKeyName = null,
+    RegionPortsDto[]? RegionPorts = null);

@@ -28,7 +28,8 @@ namespace NxGraph.Fsm;
 /// (<see cref="ILogic"/>) node logic, as with any sync-run graph.
 /// </para>
 /// </summary>
-public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
+public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite,
+    IOwnedBoardProvider
 {
     private readonly StateMachine[] _regions;
     private readonly bool[] _done;
@@ -69,28 +70,49 @@ public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettab
     }
 
     public ParallelState(ParallelStepMode mode, params Graph[] regions)
+        : this(mode, ParallelComposites.ToRegions(regions))
     {
-        Guard.NotNull(regions, nameof(regions));
-        if (regions.Length == 0)
-        {
-            throw new ArgumentException("At least one region is required.", nameof(regions));
-        }
+    }
 
+    /// <summary>
+    /// Region-entry overload: each <see cref="ParallelRegion"/> pairs its graph with an
+    /// optional per-region ports declaration (see <see cref="SubGraphPorts"/>) — sibling
+    /// regions running the same child graph each get their own board.
+    /// </summary>
+    public ParallelState(ParallelStepMode mode, ParallelRegion[] regions)
+        : this(mode, ParallelComposites.BuildSyncRegions(regions, unbound: false))
+    {
+    }
+
+    private ParallelState(ParallelStepMode mode, StateMachine[] regions)
+    {
         _mode = mode;
-        _regions = new StateMachine[regions.Length];
-        for (int i = 0; i < regions.Length; i++)
+        _regions = regions;
+        foreach (StateMachine region in regions)
         {
-            _regions[i] = new StateMachine(regions[i]);
             // Manual keeps a finished region's terminal status readable between the join and
             // the next visit (instead of auto-resetting to Ready the instant it finishes) —
             // deep suspend recomputes the join's failure aggregation from those statuses.
             // The fresh-visit reset happens in ResetTerminalRegions instead, so visits still
             // start clean exactly as they did under the regions' old auto-reset.
-            _regions[i].SetRestartPolicy(RestartPolicy.Manual);
+            region.SetRestartPolicy(RestartPolicy.Manual);
         }
 
         _done = new bool[regions.Length];
     }
+
+    /// <summary>
+    /// Creates a composite whose region machines carry name-bound ports — the deserialization
+    /// rebind form (see <see cref="StateMachine.Unbound"/>). <paramref name="ports"/> aligns
+    /// with <paramref name="regions"/> by index; <see langword="null"/> entries (or a
+    /// <see langword="null"/> array) mean the shared-board default.
+    /// </summary>
+    public static ParallelState Unbound(ParallelStepMode mode, Graph[] regions, SubGraphPorts?[]? ports) =>
+        new(mode, ParallelComposites.BuildSyncRegions(ParallelComposites.ToRegions(regions, ports),
+            unbound: true));
+
+    IEnumerable<OwnedBoardEntry> IOwnedBoardProvider.EnumerateOwnedBoards(int nodeIndex) =>
+        ParallelComposites.EnumerateOwnedBoards(nodeIndex, _regions);
 
     // ── ISuspendableComposite ─────────────────────────────────────────────
     // RoundPerTick join bookkeeping spans Execute() calls: the visit flag, the per-region
@@ -202,7 +224,26 @@ public sealed class ParallelState : ILogic, ISubGraphProvider, IBlackboardSettab
         }
 
         _inFlight = false;
+        RecopyOutputsInRegionOrder();
         return _anyFailed ? Result.Failure : Result.Success;
+    }
+
+    private void RecopyOutputsInRegionOrder()
+    {
+        // Several regions may target the same parent output key: re-applying the terminal
+        // copies in region order at the join makes that conflict resolve by region order (the
+        // documented rule) instead of by completion order. Values are unchanged since each
+        // region's terminal, so this is idempotent for every non-conflicting declaration.
+        // Regions that never reached a terminal this visit are skipped via their status
+        // (Manual policy keeps it readable until the next visit's reset).
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (_regions[i].Status is ExecutionStatus.Completed or ExecutionStatus.Failed
+                or ExecutionStatus.Cancelled)
+            {
+                _regions[i].RecopyOutputPortsAtJoin();
+            }
+        }
     }
 
     private void RunRound()

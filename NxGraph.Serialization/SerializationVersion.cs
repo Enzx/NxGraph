@@ -45,6 +45,14 @@ public static class SerializationVersion
     //      outcome onto declared blackboard keys survives the trip. Rebuilds name-bound,
     //      resolved per publish against the machine's bound schemas (the EventEntryDto
     //      recipe). Pre-v11 payloads read outcome-key-free.
-    public const int Version = 11;
+    // v12: sub-graph ports — the SubGraphs entries gain OwnsBoard + a ports list, and
+    //      CompositeDto gains sparse per-region ports (entry presence = owns-board; history
+    //      kinds may only claim region 0), so a composite that runs its child on the child's
+    //      own Graph board with declared inputs/outputs survives the trip. Each port rides as
+    //      (Direction, source key name or field-model literal, target name, runtime-stable
+    //      value type name); everything rebuilds unbound and resolves per application against
+    //      the boards bound at that moment, with targeted miss/type-mismatch errors. Pre-v12
+    //      payloads read shared-board and port-free.
+    public const int Version = 12;
 }
 

@@ -34,7 +34,8 @@ namespace NxGraph.Fsm.Async;
 /// capture, and its absence from one is correct, not a gap.
 /// </para>
 /// </summary>
-public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
+public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable,
+    IOwnedBoardProvider
 {
     private readonly Func<BlackboardContext, RegionMask> _selector;
     private readonly AsyncStateMachine[] _regions;
@@ -63,29 +64,44 @@ public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, 
     }
 
     public AsyncDynamicParallelState(Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+        : this(selector, ParallelComposites.BuildAsyncRegions(ParallelComposites.ToRegions(regions),
+            unbound: false))
+    {
+    }
+
+    /// <summary>
+    /// Region-entry overload: each <see cref="ParallelRegion"/> pairs its graph with an
+    /// optional per-region ports declaration (see <see cref="SubGraphPorts"/>). A dynamically
+    /// deselected region applies no inputs and copies no outputs for that execution.
+    /// </summary>
+    public AsyncDynamicParallelState(Func<BlackboardContext, RegionMask> selector, ParallelRegion[] regions)
+        : this(selector, ParallelComposites.BuildAsyncRegions(regions, unbound: false))
+    {
+    }
+
+    private AsyncDynamicParallelState(Func<BlackboardContext, RegionMask> selector,
+        AsyncStateMachine[] regions)
     {
         _selector = Guard.NotNull(selector, nameof(selector));
-        Guard.NotNull(regions, nameof(regions));
-        if (regions.Length == 0)
-        {
-            throw new ArgumentException("At least one region is required.", nameof(regions));
-        }
+        ParallelComposites.ValidateDynamicRegionCount(regions.Length, nameof(regions));
 
-        if (regions.Length > 64)
-        {
-            throw new ArgumentException(
-                $"Dynamic parallel composites support at most 64 regions ({regions.Length} given) — " +
-                "the selection mask is a single ulong.", nameof(regions));
-        }
-
-        _regions = new AsyncStateMachine[regions.Length];
-        for (int i = 0; i < regions.Length; i++)
-        {
-            _regions[i] = new AsyncStateMachine(regions[i]);
-        }
-
+        _regions = regions;
         _done = new bool[regions.Length];
     }
+
+    /// <summary>
+    /// Creates a composite whose region machines carry name-bound ports — the deserialization
+    /// rebind form (see <see cref="AsyncStateMachine.Unbound"/>). <paramref name="ports"/>
+    /// aligns with <paramref name="regions"/> by index; <see langword="null"/> entries (or a
+    /// <see langword="null"/> array) mean the shared-board default.
+    /// </summary>
+    public static AsyncDynamicParallelState Unbound(Func<BlackboardContext, RegionMask> selector,
+        Graph[] regions, SubGraphPorts?[]? ports) =>
+        new(selector, ParallelComposites.BuildAsyncRegions(ParallelComposites.ToRegions(regions, ports),
+            unbound: true));
+
+    IEnumerable<OwnedBoardEntry> IOwnedBoardProvider.EnumerateOwnedBoards(int nodeIndex) =>
+        ParallelComposites.EnumerateOwnedBoards(nodeIndex, _regions);
 
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
     {
@@ -141,6 +157,19 @@ public sealed class AsyncDynamicParallelState : IAsyncLogic, ISubGraphProvider, 
                 {
                     anyFailed = true;
                 }
+            }
+        }
+
+        // Several regions may target the same parent output key: re-applying the terminal
+        // copies in region order at the join makes that conflict resolve by region order (the
+        // documented rule) instead of by completion order. Values are unchanged since each
+        // region's terminal, so this is idempotent for every non-conflicting declaration; a
+        // deselected region copied nothing and copies nothing here either.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (selected.Contains(i))
+            {
+                _regions[i].RecopyOutputPortsAtJoin();
             }
         }
 

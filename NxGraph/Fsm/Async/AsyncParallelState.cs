@@ -26,7 +26,8 @@ namespace NxGraph.Fsm.Async;
 /// from one is correct, not a gap.
 /// </para>
 /// </summary>
-public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable
+public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackboardSettable,
+    IOwnedBoardProvider
 {
     private readonly AsyncStateMachine[] _regions;
     private readonly bool[] _done;
@@ -57,21 +58,38 @@ public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackb
     }
 
     public AsyncParallelState(params Graph[] regions)
+        : this(ParallelComposites.BuildAsyncRegions(ParallelComposites.ToRegions(regions), unbound: false))
     {
-        Guard.NotNull(regions, nameof(regions));
-        if (regions.Length == 0)
-        {
-            throw new ArgumentException("At least one region is required.", nameof(regions));
-        }
+    }
 
-        _regions = new AsyncStateMachine[regions.Length];
-        for (int i = 0; i < regions.Length; i++)
-        {
-            _regions[i] = new AsyncStateMachine(regions[i]);
-        }
+    /// <summary>
+    /// Region-entry overload: each <see cref="ParallelRegion"/> pairs its graph with an
+    /// optional per-region ports declaration (see <see cref="SubGraphPorts"/>) — sibling
+    /// regions running the same child graph each get their own board.
+    /// </summary>
+    public AsyncParallelState(ParallelRegion[] regions)
+        : this(ParallelComposites.BuildAsyncRegions(regions, unbound: false))
+    {
+    }
 
+    private AsyncParallelState(AsyncStateMachine[] regions)
+    {
+        _regions = regions;
         _done = new bool[regions.Length];
     }
+
+    /// <summary>
+    /// Creates a composite whose region machines carry name-bound ports — the deserialization
+    /// rebind form (see <see cref="AsyncStateMachine.Unbound"/>). <paramref name="ports"/>
+    /// aligns with <paramref name="regions"/> by index; <see langword="null"/> entries (or a
+    /// <see langword="null"/> array) mean the shared-board default.
+    /// </summary>
+    public static AsyncParallelState Unbound(Graph[] regions, SubGraphPorts?[]? ports) =>
+        new(ParallelComposites.BuildAsyncRegions(ParallelComposites.ToRegions(regions, ports),
+            unbound: true));
+
+    IEnumerable<OwnedBoardEntry> IOwnedBoardProvider.EnumerateOwnedBoards(int nodeIndex) =>
+        ParallelComposites.EnumerateOwnedBoards(nodeIndex, _regions);
 
     public async ValueTask<Result> ExecuteAsync(CancellationToken ct = default)
     {
@@ -104,6 +122,15 @@ public sealed class AsyncParallelState : IAsyncLogic, ISubGraphProvider, IBlackb
                     anyFailed = true;
                 }
             }
+        }
+
+        // Several regions may target the same parent output key: re-applying the terminal
+        // copies in region order at the join makes that conflict resolve by region order (the
+        // documented rule) instead of by completion order. Values are unchanged since each
+        // region's terminal, so this is idempotent for every non-conflicting declaration.
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            _regions[i].RecopyOutputPortsAtJoin();
         }
 
         return anyFailed ? Result.Failure : Result.Success;

@@ -446,7 +446,7 @@ public class GraphSerializerTestsTextCodec
         // drains) must never move the payload version — the project bumps it only for
         // structural format additions. Update this pin consciously, together with the
         // changelog comment in SerializationVersion.cs, when such an addition ships.
-        Assert.That(SerializationVersion.Version, Is.EqualTo(11));
+        Assert.That(SerializationVersion.Version, Is.EqualTo(12));
     }
 
     // ── Crafted MessagePack: inflated header counts must drain, not desync ──
