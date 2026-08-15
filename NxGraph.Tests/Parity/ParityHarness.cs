@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using NxGraph.Authoring;
+using NxGraph.Blackboards;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -39,6 +40,13 @@ internal static class TraceFormat
 internal sealed class ParityScenario
 {
     public required Graph Graph { get; init; }
+
+    /// <summary>
+    /// Optional board the FSM runners bind onto every machine they create (resumed machines
+    /// included) — for scenarios whose graphs read or publish through Graph-scoped keys.
+    /// The recipe owns the instance, so it is fresh per adapter like the graph itself.
+    /// </summary>
+    public Blackboard? Board { get; init; }
 
     /// <summary>Read after the drive completes, appended to the trace in declaration order.</summary>
     public List<(string Name, Func<int> Read)> Probes { get; } = [];
@@ -311,6 +319,9 @@ internal interface IParityMachine
 
     void SetRestartPolicy(RestartPolicy policy);
 
+    /// <summary>Binds a Graph/Global board onto the underlying machine (scenario boards).</summary>
+    void BindBlackboard(Blackboard board);
+
     ExecutionStatus Status { get; }
 
     int LastOutcome { get; }
@@ -343,6 +354,8 @@ internal sealed class SyncFullMachine : IParityMachine
 
     public void SetRestartPolicy(RestartPolicy policy) => _machine.SetRestartPolicy(policy);
 
+    public void BindBlackboard(Blackboard board) => _machine.SetBlackboard(board);
+
     public ExecutionStatus Status => _machine.Status;
 
     public int LastOutcome => _machine.LastOutcome;
@@ -374,6 +387,8 @@ internal sealed class SyncSteppedMachine(Graph graph, List<string> trace, string
 
     public void SetRestartPolicy(RestartPolicy policy) => _machine.SetRestartPolicy(policy);
 
+    public void BindBlackboard(Blackboard board) => _machine.SetBlackboard(board);
+
     public ExecutionStatus Status => _machine.Status;
 
     public int LastOutcome => _machine.LastOutcome;
@@ -397,6 +412,8 @@ internal sealed class AsyncFullMachine(Graph graph, List<string> trace, string? 
         throw new NotSupportedException("ExecuteAsync completes a run per call; use the stepped adapter.");
 
     public void SetRestartPolicy(RestartPolicy policy) => _machine.SetRestartPolicy(policy);
+
+    public void BindBlackboard(Blackboard board) => _machine.SetBlackboard(board);
 
     public ExecutionStatus Status => _machine.Status;
 
@@ -429,6 +446,8 @@ internal sealed class AsyncSteppedMachine(Graph graph, List<string> trace, strin
     public ValueTask<Result> StepOnceAsync() => _machine.StepAsync();
 
     public void SetRestartPolicy(RestartPolicy policy) => _machine.SetRestartPolicy(policy);
+
+    public void BindBlackboard(Blackboard board) => _machine.SetBlackboard(board);
 
     public ExecutionStatus Status => _machine.Status;
 
@@ -680,6 +699,11 @@ internal static class ParityRunner
             ParityScenario scenario = recipe();
             List<string> trace = [];
             IParityMachine machine = adapter.Create(scenario.Graph, trace, observerThrowOnceAt);
+            if (scenario.Board is { } board)
+            {
+                machine.BindBlackboard(board);
+            }
+
             await drive(machine, trace);
             AppendProbes(scenario, trace);
             runs.Add((adapter.Name, trace));
@@ -703,6 +727,10 @@ internal static class ParityRunner
             ParityScenario scenario = recipe();
             List<string> trace = [];
             IParityMachine first = adapter.Create(scenario.Graph, trace, null);
+            if (scenario.Board is { } board)
+            {
+                first.BindBlackboard(board);
+            }
 
             if (!adapter.Stepped)
             {
@@ -717,6 +745,13 @@ internal static class ParityRunner
 
                 StateMachineSnapshot snapshot = first.Suspend();
                 IParityMachine second = adapter.Create(scenario.Graph, trace, null);
+                if (scenario.Board is { } boardForSecond)
+                {
+                    // The scenario board is the durable artifact: the fresh machine rebinds
+                    // it before resuming, exactly like a host restoring a run.
+                    second.BindBlackboard(boardForSecond);
+                }
+
                 second.Resume(snapshot);
                 Result result = await second.RunToEndAsync();
                 ParityDrives.AppendSurface(second, trace, result);

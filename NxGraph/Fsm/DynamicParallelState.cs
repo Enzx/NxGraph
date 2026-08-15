@@ -22,7 +22,8 @@ namespace NxGraph.Fsm;
 /// (compose with <see cref="RegionMask.Bit"/> and <c>|</c>, or precompute masks at setup).
 /// </para>
 /// </summary>
-public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboardSettable, ISuspendableComposite
+public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboardSettable,
+    ISuspendableComposite, IOwnedBoardProvider
 {
     private readonly Func<BlackboardContext, RegionMask> _selector;
     private readonly StateMachine[] _regions;
@@ -63,34 +64,53 @@ public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboar
 
     public DynamicParallelState(ParallelStepMode mode, Func<BlackboardContext, RegionMask> selector,
         params Graph[] regions)
+        : this(mode, selector, ParallelComposites.ToRegions(regions))
+    {
+    }
+
+    /// <summary>
+    /// Region-entry overload: each <see cref="ParallelRegion"/> pairs its graph with an
+    /// optional per-region ports declaration (see <see cref="SubGraphPorts"/>). A dynamically
+    /// deselected region applies no inputs and copies no outputs for that execution.
+    /// </summary>
+    public DynamicParallelState(ParallelStepMode mode, Func<BlackboardContext, RegionMask> selector,
+        ParallelRegion[] regions)
+        : this(mode, selector, ParallelComposites.BuildSyncRegions(regions, unbound: false))
+    {
+    }
+
+    private DynamicParallelState(ParallelStepMode mode, Func<BlackboardContext, RegionMask> selector,
+        StateMachine[] regions)
     {
         _selector = Guard.NotNull(selector, nameof(selector));
-        Guard.NotNull(regions, nameof(regions));
-        if (regions.Length == 0)
-        {
-            throw new ArgumentException("At least one region is required.", nameof(regions));
-        }
-
-        if (regions.Length > 64)
-        {
-            throw new ArgumentException(
-                $"Dynamic parallel composites support at most 64 regions ({regions.Length} given) — " +
-                "the selection mask is a single ulong.", nameof(regions));
-        }
+        ParallelComposites.ValidateDynamicRegionCount(regions.Length, nameof(regions));
 
         _mode = mode;
-        _regions = new StateMachine[regions.Length];
-        for (int i = 0; i < regions.Length; i++)
+        _regions = regions;
+        foreach (StateMachine region in regions)
         {
-            _regions[i] = new StateMachine(regions[i]);
             // Manual keeps a finished region's terminal status readable between the join and
             // the next visit — deep suspend recomputes the join's failure aggregation from
             // those statuses. The fresh-visit reset happens in ResetTerminalRegions instead.
-            _regions[i].SetRestartPolicy(RestartPolicy.Manual);
+            region.SetRestartPolicy(RestartPolicy.Manual);
         }
 
         _done = new bool[regions.Length];
     }
+
+    /// <summary>
+    /// Creates a composite whose region machines carry name-bound ports — the deserialization
+    /// rebind form (see <see cref="StateMachine.Unbound"/>). <paramref name="ports"/> aligns
+    /// with <paramref name="regions"/> by index; <see langword="null"/> entries (or a
+    /// <see langword="null"/> array) mean the shared-board default.
+    /// </summary>
+    public static DynamicParallelState Unbound(ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, Graph[] regions, SubGraphPorts?[]? ports) =>
+        new(mode, selector,
+            ParallelComposites.BuildSyncRegions(ParallelComposites.ToRegions(regions, ports), unbound: true));
+
+    IEnumerable<OwnedBoardEntry> IOwnedBoardProvider.EnumerateOwnedBoards(int nodeIndex) =>
+        ParallelComposites.EnumerateOwnedBoards(nodeIndex, _regions);
 
     // ── ISuspendableComposite ─────────────────────────────────────────────
     // Same durable state as ParallelState, with one addition that makes Done capture (not
@@ -228,7 +248,26 @@ public sealed class DynamicParallelState : ILogic, ISubGraphProvider, IBlackboar
         }
 
         _inFlight = false;
+        RecopyOutputsInRegionOrder();
         return _anyFailed ? Result.Failure : Result.Success;
+    }
+
+    private void RecopyOutputsInRegionOrder()
+    {
+        // Several regions may target the same parent output key: re-applying the terminal
+        // copies in region order at the join makes that conflict resolve by region order (the
+        // documented rule) instead of by completion order. Values are unchanged since each
+        // region's terminal, so this is idempotent for every non-conflicting declaration.
+        // Deselected regions never reached a terminal this visit and are skipped via their
+        // status (Manual policy keeps it readable until the next visit's reset).
+        for (int i = 0; i < _regions.Length; i++)
+        {
+            if (_regions[i].Status is ExecutionStatus.Completed or ExecutionStatus.Failed
+                or ExecutionStatus.Cancelled)
+            {
+                _regions[i].RecopyOutputPortsAtJoin();
+            }
+        }
     }
 
     private void RunRound()

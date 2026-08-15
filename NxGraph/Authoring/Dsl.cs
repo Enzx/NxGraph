@@ -26,27 +26,46 @@ public static partial class Dsl
     /// to completion within the parent's step. With <paramref name="history"/> enabled, a
     /// failed child resumes at its last-active node when the parent re-enters the composite
     /// (see <see cref="AsyncHistoryState"/>); without it, re-entry restarts the child.
+    /// <paramref name="outcomeCode"/>/<paramref name="outcomeName"/> optionally declare
+    /// Graph- or Global-scoped keys the composite publishes the child's terminal outcome
+    /// through, the moment the child run ends — so the parent branches on <i>which</i>
+    /// outcome a sub-graph ended with using an ordinary switch (Node-scoped keys are
+    /// rejected; a terminal without a declared outcome publishes <c>0</c> / empty string).
     /// </summary>
-    public static StateToken SubGraph(this StateToken prev, Graph child, bool history = false)
+    public static StateToken SubGraph(this StateToken prev, Graph child, bool history = false,
+        BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null,
+        SubGraphPorts? ports = null)
     {
         Guard.NotNull(child, nameof(child));
-        return prev.ToAsync(history ? new AsyncHistoryState(child) : new AsyncStateMachine(child));
+        return prev.ToAsync(CreateAsyncComposite(child, history, outcomeCode, outcomeName, ports));
     }
 
     /// <summary>
-    /// Starts the graph with a child graph as its first (composite) state.
+    /// Starts the graph with a child graph as its first (composite) state
+    /// (see <see cref="SubGraph(StateToken, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?, SubGraphPorts?)"/>).
     /// </summary>
-    public static StateToken SubGraph(this StartToken root, Graph child, bool history = false)
+    public static StateToken SubGraph(this StartToken root, Graph child, bool history = false,
+        BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null,
+        SubGraphPorts? ports = null)
     {
         Guard.NotNull(child, nameof(child));
-        IAsyncLogic composite = history ? new AsyncHistoryState(child) : new AsyncStateMachine(child);
+        IAsyncLogic composite = CreateAsyncComposite(child, history, outcomeCode, outcomeName, ports);
         NodeId id = root.Builder.AddNode(composite, true);
         return new StateToken(id, root.Builder);
     }
 
+    private static IAsyncLogic CreateAsyncComposite(Graph child, bool history,
+        BlackboardKey<int>? outcomeCode, BlackboardKey<string>? outcomeName, SubGraphPorts? ports)
+    {
+        return history
+            ? new AsyncHistoryState(child, outcomeCode, outcomeName, ports)
+            : new AsyncStateMachine(child, null, outcomeCode, outcomeName, ports);
+    }
+
     /// <summary>
     /// Adds a <b>sync</b> child-graph composite and wires a transition to it — the
-    /// runtime-parity twin of <see cref="SubGraph(StateToken, Graph, bool)"/>. Without
+    /// runtime-parity twin of
+    /// <see cref="SubGraph(StateToken, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?, SubGraphPorts?)"/>. Without
     /// history the child runs as a nested sync <see cref="StateMachine"/>; with
     /// <paramref name="history"/> a failed child resumes at its last-active node on re-entry
     /// (see <see cref="HistoryState"/>). <paramref name="mode"/> decides whether the child
@@ -55,31 +74,34 @@ public static partial class Dsl
     /// sync runtime only).
     /// </summary>
     public static StateToken SubGraph(this StateToken prev, ParallelStepMode mode, Graph child,
-        bool history = false)
+        bool history = false, BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null,
+        SubGraphPorts? ports = null)
     {
         Guard.NotNull(child, nameof(child));
-        return prev.To(CreateSyncComposite(mode, child, history));
+        return prev.To(CreateSyncComposite(mode, child, history, outcomeCode, outcomeName, ports));
     }
 
     /// <summary>
     /// Starts the graph with a sync child-graph composite as its first state
-    /// (see <see cref="SubGraph(StateToken, ParallelStepMode, Graph, bool)"/>).
+    /// (see <see cref="SubGraph(StateToken, ParallelStepMode, Graph, bool, BlackboardKey{int}?, BlackboardKey{string}?, SubGraphPorts?)"/>).
     /// </summary>
     public static StateToken SubGraph(this StartToken root, ParallelStepMode mode, Graph child,
-        bool history = false)
+        bool history = false, BlackboardKey<int>? outcomeCode = null, BlackboardKey<string>? outcomeName = null,
+        SubGraphPorts? ports = null)
     {
         Guard.NotNull(child, nameof(child));
-        return root.To(CreateSyncComposite(mode, child, history));
+        return root.To(CreateSyncComposite(mode, child, history, outcomeCode, outcomeName, ports));
     }
 
-    private static ILogic CreateSyncComposite(ParallelStepMode mode, Graph child, bool history)
+    private static ILogic CreateSyncComposite(ParallelStepMode mode, Graph child, bool history,
+        BlackboardKey<int>? outcomeCode, BlackboardKey<string>? outcomeName, SubGraphPorts? ports)
     {
         if (history)
         {
-            return new HistoryState(child, mode);
+            return new HistoryState(child, mode, outcomeCode, outcomeName, ports);
         }
 
-        StateMachine machine = new(child);
+        StateMachine machine = new(child, null, outcomeCode, outcomeName, ports);
         machine.SetStepMode(mode);
         return machine;
     }
@@ -162,6 +184,92 @@ public static partial class Dsl
     /// </summary>
     public static StateToken Parallel(this StartToken root, ParallelStepMode mode,
         Func<BlackboardContext, RegionMask> selector, params Graph[] regions)
+    {
+        return root.To(new DynamicParallelState(mode, selector, regions));
+    }
+
+    // ── Parallel region entries: per-region ports declarations (sub-graph ports) ──
+    // A ParallelRegion pairs a region graph with an optional SubGraphPorts declaration; a
+    // bare Graph converts implicitly, so ported and shared-board regions mix freely. Plain
+    // Graph argument lists keep resolving to the Graph[] overloads above (identity beats the
+    // user-defined conversion), so these overloads only engage when at least one entry
+    // carries a declaration.
+
+    /// <summary>
+    /// Adds an orthogonal-regions composite from region entries — each pairing its graph with
+    /// an optional per-region ports declaration (see <see cref="ParallelRegion"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, params ParallelRegion[] regions)
+    {
+        return prev.ToAsync(new AsyncParallelState(regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with an orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, params ParallelRegion[] regions)
+    {
+        NodeId id = root.Builder.AddNode(new AsyncParallelState(regions), true);
+        return new StateToken(id, root.Builder);
+    }
+
+    /// <summary>
+    /// Adds a <b>sync</b> orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="ParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode,
+        params ParallelRegion[] regions)
+    {
+        return prev.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="ParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode,
+        params ParallelRegion[] regions)
+    {
+        return root.To(new ParallelState(mode, regions));
+    }
+
+    /// <summary>
+    /// Adds a dynamic orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="AsyncDynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, Func<BlackboardContext, RegionMask> selector,
+        params ParallelRegion[] regions)
+    {
+        return prev.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a dynamic orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="AsyncDynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, Func<BlackboardContext, RegionMask> selector,
+        params ParallelRegion[] regions)
+    {
+        return root.ToAsync(new AsyncDynamicParallelState(selector, regions));
+    }
+
+    /// <summary>
+    /// Adds a <b>sync</b> dynamic orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="DynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StateToken prev, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params ParallelRegion[] regions)
+    {
+        return prev.To(new DynamicParallelState(mode, selector, regions));
+    }
+
+    /// <summary>
+    /// Starts the graph with a sync dynamic orthogonal-regions composite from region entries
+    /// (see <see cref="ParallelRegion"/> and <see cref="DynamicParallelState"/>).
+    /// </summary>
+    public static StateToken Parallel(this StartToken root, ParallelStepMode mode,
+        Func<BlackboardContext, RegionMask> selector, params ParallelRegion[] regions)
     {
         return root.To(new DynamicParallelState(mode, selector, regions));
     }

@@ -10,8 +10,10 @@ namespace NxGraph.Fsm.Async;
 /// <summary>
 /// An async state machine that executes a graph of nodes with full lifecycle/observer support.
 /// </summary>
-public class AsyncStateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? observer = null)
-    : AsyncStateMachine(graph, observer), IAgentSettable<TAgent>
+public class AsyncStateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? observer = null,
+    BlackboardKey<int>? outcomeCodeKey = null, BlackboardKey<string>? outcomeNameKey = null,
+    SubGraphPorts? ports = null)
+    : AsyncStateMachine(graph, observer, outcomeCodeKey, outcomeNameKey, ports), IAgentSettable<TAgent>
 {
     private TAgent? _agent;
     private bool _hasAgent;
@@ -42,7 +44,8 @@ public class AsyncStateMachine<TAgent>(Graph graph, IAsyncStateMachineObserver? 
 /// <summary>
 /// Non-generic AsyncStateMachine.
 /// </summary>
-public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable
+public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBindable, IBlackboardSettable,
+    IOwnedBoardProvider
 {
     public readonly Graph Graph;
     private BlackboardContext _blackboards;
@@ -71,6 +74,26 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     private bool _nodeEntered; // the current node's EnterAction has fired for this visit
     private readonly int[]? _outcomeCodes; // graph-owned; null when no node declares one
 
+    // Outcome publication: when this machine runs as a nested node, the declared keys make
+    // its terminal outcome readable one level up. The name is the declaration (non-null iff
+    // a key is declared); the key struct is valid only for the live-key form — name-bound
+    // (deserialized) instances resolve per publish via OutcomeKeys.Resolve.
+    private readonly BlackboardKey<int> _outcomeCodeKey;
+    private readonly BlackboardKey<string> _outcomeNameKey;
+    private readonly string? _outcomeCodeKeyName;
+    private readonly string? _outcomeNameKeyName;
+
+    // Sub-graph ports: when a declaration is present the machine owns its child-facing Graph
+    // board — created from the graph's declared Graph schema at construction (live form) or
+    // adopted via SetBlackboard (deserialized form, whose graph carries no schema) — and
+    // substitutes it for the Graph slot at stamp time. _parentBoards keeps the parent-side
+    // context (Global + parent Graph, never Node) for port resolution: inputs read it at
+    // every fresh run start, outputs write it at the terminal.
+    private readonly SubGraphPortBase[]? _ports; // null = no declaration (shared-board default)
+    private readonly bool _ownsBoard;
+    private Blackboard? _ownedBoard; // mutable: the deserialized form adopts a host-bound board
+    private BlackboardContext _parentBoards;
+
     // Event dispatch (spec 013): node 0's dispatcher, cached at construction (BuildReporterTable
     // precedent) so a raise never probes the graph; null for graphs without event entries.
     private readonly EventEntryState? _eventEntry;
@@ -92,8 +115,62 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     /// <summary>Public execution status (volatile for visibility).</summary>
     public ExecutionStatus Status => (ExecutionStatus)Volatile.Read(ref _statusInt);
 
-    public AsyncStateMachine(Graph graph, IAsyncStateMachineObserver? observer = null)
+    /// <param name="graph">The graph to execute.</param>
+    /// <param name="observer">Optional lifecycle observer.</param>
+    /// <param name="outcomeCodeKey">Optional Graph- or Global-scoped key this machine writes its
+    /// terminal outcome code (<see cref="LastOutcome"/>) to, through its stamped context, the
+    /// moment a run reaches a terminal — success and failure terminals alike, before the
+    /// machine returns its own <see cref="Result"/>. A terminal that declared no outcome
+    /// writes <c>0</c>, the machine's own "nothing recorded" reading — hosts route on
+    /// non-zero codes. Node-scoped keys are rejected here. An exception escaping node logic
+    /// is a fault, not a terminal — nothing is published.</param>
+    /// <param name="outcomeNameKey">Optional key for the outcome's registered display name;
+    /// same timing as <paramref name="outcomeCodeKey"/>. A terminal with no declared outcome
+    /// (or an unregistered code) writes the empty string. Either key may be declared without
+    /// the other.</param>
+    /// <param name="ports">Optional ports declaration (see <see cref="SubGraphPorts"/>): its
+    /// presence makes this machine own its Graph board — created here from the graph's
+    /// declared Graph schema and substituted for the Graph slot when a parent stamps this
+    /// machine as a nested node. Inputs apply at every fresh run start after the board resets
+    /// to its registered defaults; outputs copy to the parent context at the terminal. A graph
+    /// declaring no Graph schema rejects the declaration here — there is no board to own.</param>
+    public AsyncStateMachine(Graph graph, IAsyncStateMachineObserver? observer = null,
+        BlackboardKey<int>? outcomeCodeKey = null, BlackboardKey<string>? outcomeNameKey = null,
+        SubGraphPorts? ports = null)
     {
+        Guard.NotNull(graph, nameof(graph));
+        if (ports is not null)
+        {
+            _ownsBoard = true;
+            _ports = ports.Snapshot();
+            BlackboardSchema? childSchema = graph.Schema;
+            if (childSchema is null)
+            {
+                throw new ArgumentException(
+                    "A ports declaration needs a board to own, but the child graph declares no Graph-scoped " +
+                    "blackboard schema. Declare one via WithSchema(...) on the child graph.", nameof(ports));
+            }
+
+            foreach (SubGraphPortBase port in _ports)
+            {
+                port.Validate(childSchema, nameof(ports));
+            }
+
+            _ownedBoard = new Blackboard(childSchema);
+        }
+
+        if (outcomeCodeKey is { } codeKey)
+        {
+            _outcomeCodeKeyName = OutcomeKeys.Validate(in codeKey, nameof(outcomeCodeKey));
+            _outcomeCodeKey = codeKey;
+        }
+
+        if (outcomeNameKey is { } nameKey)
+        {
+            _outcomeNameKeyName = OutcomeKeys.Validate(in nameKey, nameof(outcomeNameKey));
+            _outcomeNameKey = nameKey;
+        }
+
         Graph = graph;
         _observer = observer;
         _initial = graph.StartNode.Id;
@@ -107,6 +184,11 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         {
             _nodeBoard = new Blackboard(nodeSchema);
             _blackboards = new BlackboardContext(null, null, _nodeBoard);
+        }
+
+        if (_ownedBoard is not null)
+        {
+            _blackboards = _blackboards.With(_ownedBoard);
         }
         // _statusInt already initialized to Created at field declaration; no transition needed.
     }
@@ -137,6 +219,24 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         Guard.NotNull(blackboard, nameof(blackboard));
         ThrowIfNodeScoped(blackboard);
         ValidateBoardAgainstDeclarations(blackboard);
+        if (_ownsBoard)
+        {
+            if (blackboard.Schema.Scope == BlackboardScope.Graph)
+            {
+                // The Graph slot is machine-owned under a ports declaration: binding replaces
+                // the owned board (validated against the declared child schema above when one
+                // exists). This is also the restore seam for deserialized graphs, whose
+                // children rebuild schema-less — the host supplies the board to own here.
+                _ownedBoard = blackboard;
+            }
+            else
+            {
+                // Global boards are parent-side too: input sources and output targets may
+                // resolve against them even when this machine runs standalone.
+                _parentBoards = _parentBoards.With(blackboard);
+            }
+        }
+
         _blackboards = _blackboards.With(blackboard);
         Graph.SetBlackboards(in _blackboards);
     }
@@ -146,9 +246,32 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
     /// path). Validates against this machine's own graph declarations, so a conflicting
     /// child schema fails loudly at stamp time. The parent's Node slot is dropped — Node
     /// boards are per-machine scratch; this machine composes its own from its own graph.
+    /// Under a ports declaration the Graph slot is substituted <b>before</b> any validation:
+    /// the parent's Graph board never enters this machine, so a child declaring its own
+    /// schema no longer conflicts with a parent-declared board at stamp time — that is the
+    /// point of owning the board. The parent-side context is kept for port resolution.
     /// </summary>
     void IBlackboardSettable.SetBlackboards(in BlackboardContext context)
     {
+        if (_ownsBoard)
+        {
+            if (context.Global is { } forwardedGlobal)
+            {
+                ValidateBoardAgainstDeclarations(forwardedGlobal);
+            }
+
+            _parentBoards = context.WithoutNode();
+            BlackboardContext substituted = new(context.Global, _ownedBoard);
+            if (_nodeBoard is not null)
+            {
+                substituted = substituted.With(_nodeBoard);
+            }
+
+            _blackboards = substituted;
+            Graph.SetBlackboards(in substituted);
+            return;
+        }
+
         if (context.Graph is { } graphBoard)
         {
             ValidateBoardAgainstDeclarations(graphBoard);
@@ -193,7 +316,186 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         }
     }
 
+    private AsyncStateMachine(Graph graph, string? outcomeCodeKeyName, string? outcomeNameKeyName,
+        SubGraphPorts? ports)
+        : this(graph)
+    {
+        if (outcomeCodeKeyName is not null)
+        {
+            _outcomeCodeKeyName = OutcomeKeys.ValidateName(outcomeCodeKeyName, nameof(outcomeCodeKeyName));
+        }
+
+        if (outcomeNameKeyName is not null)
+        {
+            _outcomeNameKeyName = OutcomeKeys.ValidateName(outcomeNameKeyName, nameof(outcomeNameKeyName));
+        }
+
+        if (ports is not null)
+        {
+            // The unbound recipe: no live-key validation and no construction throw — a
+            // deserialized graph carries no schema declarations, so the owned board is
+            // created only when the graph declares one (a host-authored graph handed to
+            // Unbound) and otherwise adopted via SetBlackboard; port keys resolve by name
+            // per application with targeted errors.
+            _ownsBoard = true;
+            _ports = ports.Snapshot();
+            if (graph.Schema is { } childSchema)
+            {
+                _ownedBoard = new Blackboard(childSchema);
+                _blackboards = _blackboards.With(_ownedBoard);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a machine with name-bound outcome keys and ports — the deserialization rebind
+    /// form. The names resolve per publish against the machine's bound boards' schemas
+    /// (Graph, then Global) via <see cref="BlackboardSchema.TryResolve{T}"/>, with targeted
+    /// miss and type-mismatch errors. A <see langword="null"/> name means that key is not
+    /// declared; a <see langword="null"/> ports declaration means the shared-board default.
+    /// </summary>
+    public static AsyncStateMachine Unbound(Graph graph, string? outcomeCodeKeyName,
+        string? outcomeNameKeyName, SubGraphPorts? ports = null) =>
+        new(graph, outcomeCodeKeyName, outcomeNameKeyName, ports);
+
+    /// <summary>The declared outcome-code key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeCodeKeyName => _outcomeCodeKeyName;
+
+    /// <summary>The declared outcome-name key's name, or <see langword="null"/> — the serialization identity of the declaration.</summary>
+    public string? OutcomeNameKeyName => _outcomeNameKeyName;
+
+    /// <summary>
+    /// <see langword="true"/> when a ports declaration was given: this machine runs on its
+    /// own Graph board and substitutes it for the parent's at stamp time.
+    /// </summary>
+    public bool OwnsBoard => _ownsBoard;
+
+    /// <summary>The declared ports in declaration order; empty without a declaration.</summary>
+    public IReadOnlyList<ISubGraphPort> Ports => _ports ?? [];
+
+    /// <summary>
+    /// Yields this machine's owned board (empty path) and, recursively, every board owned by
+    /// composites in its graph, identified by node-index paths (see
+    /// <see cref="OwnedBoardEntry"/>). Deterministic order — hosts persist each board with
+    /// <c>BlackboardSerializer</c> and restore into a fresh machine's enumeration before
+    /// <see cref="ResumeDeep"/>. Cold path; allocation is expected.
+    /// </summary>
+    public IEnumerable<OwnedBoardEntry> EnumerateOwnedBoards()
+    {
+        if (_ownedBoard is not null)
+        {
+            yield return new OwnedBoardEntry(string.Empty, _ownedBoard);
+        }
+
+        foreach (OwnedBoardEntry entry in OwnedBoards.Enumerate(Graph))
+        {
+            yield return entry;
+        }
+    }
+
+    IEnumerable<OwnedBoardEntry> IOwnedBoardProvider.EnumerateOwnedBoards(int nodeIndex)
+    {
+        foreach (OwnedBoardEntry entry in EnumerateOwnedBoards())
+        {
+            yield return new OwnedBoardEntry(OwnedBoards.ChildPath(nodeIndex, entry.Path), entry.Board);
+        }
+    }
+
+    /// <summary>
+    /// Fresh-start port init: the owned board resets to its registered defaults, then the
+    /// declared inputs apply in declaration order, each resolved in the parent-side context.
+    /// A nested graph entered twice behaves like a graph started twice — history's lift-back
+    /// re-entry skips run-start init entirely, which is exactly the opt-out.
+    /// </summary>
+    private void ResetOwnedBoardAndApplyInputs()
+    {
+        Blackboard? board = _ownedBoard;
+        if (board is null)
+        {
+            if (_ports!.Length == 0)
+            {
+                return; // board-only declaration, no board adopted yet: nothing to reset or apply
+            }
+
+            PortKeys.ThrowNoChildBoard(_ports[0].TargetKeyName);
+        }
+
+        board!.ResetToDefaults();
+        SubGraphPortBase[] ports = _ports!;
+        for (int i = 0; i < ports.Length; i++)
+        {
+            ports[i].ApplyInput(in _parentBoards, board);
+        }
+    }
+
+    /// <summary>Copies the declared outputs to the parent-side context, in declaration order.</summary>
+    private void CopyOutputPorts()
+    {
+        SubGraphPortBase[] ports = _ports!;
+        for (int i = 0; i < ports.Length; i++)
+        {
+            ports[i].CopyOutput(in _blackboards, in _parentBoards);
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the terminal output copy — called by the parallel composites at their join
+    /// so that several regions targeting the same parent key resolve in region order (the
+    /// documented tie-break), regardless of which region reached its terminal first. The
+    /// values are unchanged since the terminal copy (the region machine has not run since),
+    /// so this is idempotent for every non-conflicting declaration.
+    /// </summary>
+    internal void RecopyOutputPortsAtJoin()
+    {
+        if (_ports is not null)
+        {
+            CopyOutputPorts();
+        }
+    }
+
     private int OutcomeOf(NodeId id) => _outcomeCodes is null ? 0 : _outcomeCodes[id.Index];
+
+    /// <summary>
+    /// Records the terminal node's outcome and, when outcome keys are declared, publishes
+    /// code and name through the stamped context — before the machine returns its own
+    /// result, so a parent's immediately following director reads fresh values.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RecordTerminalOutcome()
+    {
+        LastOutcome = OutcomeOf(_current);
+        if (_ports is not null)
+        {
+            // Declared outputs copy at every genuine terminal — success and failure alike,
+            // before the machine returns — so diagnostics flow on the failure path too. An
+            // exception escaping node logic is a fault, not a terminal: this never runs.
+            CopyOutputPorts();
+        }
+
+        if (_outcomeCodeKeyName is not null || _outcomeNameKeyName is not null)
+        {
+            PublishOutcome();
+        }
+    }
+
+    private void PublishOutcome()
+    {
+        if (_outcomeCodeKeyName is not null)
+        {
+            BlackboardKey<int> key = _outcomeCodeKey.IsValid
+                ? _outcomeCodeKey
+                : OutcomeKeys.Resolve<int>(in _blackboards, _outcomeCodeKeyName);
+            _blackboards.Set(key, LastOutcome);
+        }
+
+        if (_outcomeNameKeyName is not null)
+        {
+            BlackboardKey<string> key = _outcomeNameKey.IsValid
+                ? _outcomeNameKey
+                : OutcomeKeys.Resolve<string>(in _blackboards, _outcomeNameKeyName);
+            _blackboards.Set(key, LastOutcomeName ?? string.Empty);
+        }
+    }
 
     private static EventEntryState? FindEventEntry(Graph graph)
     {
@@ -517,6 +819,14 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
         _nodeEntered = false;
         _nodeBoard?.ResetToDefaults();
         LastOutcome = 0;
+        if (_ports is not null)
+        {
+            // Fresh child start: the owned board resets to defaults, then inputs apply in
+            // declaration order. Resume never runs this — a resumed (or history lift-back)
+            // session keeps the board as survived state.
+            ResetOwnedBoardAndApplyInputs();
+        }
+
         if (_observer is not null)
         {
             await _observer.OnStateEntered(_current, ct).ConfigureAwait(false);
@@ -937,7 +1247,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                         next = await director.SelectNextAsync(ct).ConfigureAwait(false);
                         if (next.Equals(NodeId.Default))
                         {
-                            LastOutcome = OutcomeOf(_current);
+                            RecordTerminalOutcome();
                             return Result.Success;
                         }
 
@@ -951,7 +1261,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                         next = syncDirector.SelectNext();
                         if (next.Equals(NodeId.Default))
                         {
-                            LastOutcome = OutcomeOf(_current);
+                            RecordTerminalOutcome();
                             return Result.Success;
                         }
 
@@ -970,13 +1280,13 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                                 ).ConfigureAwait(false);
                             }
 
-                            LastOutcome = OutcomeOf(_current);
+                            RecordTerminalOutcome();
                             return Result.Failure;
                         }
 
                         if (edge.IsEmpty)
                         {
-                            LastOutcome = OutcomeOf(_current);
+                            RecordTerminalOutcome();
                             return Result.Success; // terminal
                         }
 
@@ -1028,7 +1338,7 @@ public class AsyncStateMachine : AsyncState, ISubGraphProvider, IBlackboardBinda
                     if (!Graph.TryGetTransition(_current, out Transition failEdge) ||
                         !failEdge.HasFailureDestination)
                     {
-                        LastOutcome = OutcomeOf(_current);
+                        RecordTerminalOutcome();
                         return Result.Failure;
                     }
 

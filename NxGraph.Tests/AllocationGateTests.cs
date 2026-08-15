@@ -807,6 +807,116 @@ public class AllocationGateTests
         AssertZeroAlloc(parent.ToStateMachine());
     }
 
+    // The outcome publish is two typed Sets on the existing boards — it must stay 0 B on
+    // both runtimes, name lookup (LastOutcomeName) included.
+
+    private static (Graph Parent, Blackboard Board) OutcomePublishingParent(bool sync)
+    {
+        BlackboardSchema schema = new(sync ? "alloc-outcome-sync" : "alloc-outcome-async",
+            BlackboardScope.Graph);
+        BlackboardKey<int> code = schema.Register("verdict", 0);
+        BlackboardKey<string> name = schema.Register("verdictName", "");
+
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(() => Result.Success).WithOutcome(3, "Done")
+            .Build();
+
+        StateToken start = GraphBuilder.StartWith(() => Result.Success);
+        StateToken composite = sync
+            ? start.SubGraph(ParallelStepMode.RunToJoin, child, history: false, code, name)
+            : start.SubGraph(child, history: false, code, name);
+        Graph parent = composite
+            .To(() => Result.Success)
+            .WithSchema(schema)
+            .Build();
+        return (parent, new Blackboard(schema));
+    }
+
+    [Test]
+    public void sync_subgraph_outcome_publish_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = OutcomePublishingParent(sync: true);
+        StateMachine machine = parent.ToStateMachine();
+        machine.SetBlackboard(board);
+
+        AssertZeroAlloc(machine);
+    }
+
+    [Test]
+    public async Task async_subgraph_outcome_publish_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = OutcomePublishingParent(sync: false);
+        AsyncStateMachine machine = parent.ToAsyncStateMachine();
+        machine.SetBlackboard(board);
+
+        await AssertZeroAllocAsync(machine);
+    }
+
+    // Sub-graph port application is an array walk of typed copies — the owned board is
+    // created at construction, the fresh-start reset reuses its slot arrays, inputs resolve
+    // typed against the parent context, and the terminal output copy is a typed Get/Set —
+    // 0 B on both runtimes.
+
+    private static (Graph Parent, Blackboard Board) PortedParent(bool sync)
+    {
+        BlackboardSchema schema = new(sync ? "alloc-ports-sync" : "alloc-ports-async",
+            BlackboardScope.Graph);
+        BlackboardKey<int> seed = schema.Register("seed", 37);
+        BlackboardKey<int> verdict = schema.Register("verdict", 0);
+
+        BlackboardSchema childSchema = new(sync ? "alloc-ports-child-sync" : "alloc-ports-child-async",
+            BlackboardScope.Graph);
+        BlackboardKey<int> childIn = childSchema.Register("childIn", 0);
+        BlackboardKey<int> childBonus = childSchema.Register("childBonus", 0);
+        BlackboardKey<int> childOut = childSchema.Register("childOut", 0);
+
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success)
+            .To(bb =>
+            {
+                bb.Set(childOut, bb.Get(childIn) + bb.Get(childBonus));
+                return Result.Success;
+            })
+            .WithSchema(childSchema)
+            .Build();
+
+        SubGraphPorts ports = SubGraphPorts.OwnBoard()
+            .In(seed, childIn)
+            .In(5, childBonus)
+            .Out(childOut, verdict);
+
+        StateToken start = GraphBuilder.StartWith(() => Result.Success);
+        StateToken composite = sync
+            ? start.SubGraph(ParallelStepMode.RunToJoin, child, history: false, null, null, ports)
+            : start.SubGraph(child, history: false, null, null, ports);
+        Graph parent = composite
+            .To(() => Result.Success)
+            .WithSchema(schema)
+            .Build();
+        return (parent, new Blackboard(schema));
+    }
+
+    [Test]
+    public void sync_subgraph_port_application_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = PortedParent(sync: true);
+        StateMachine machine = parent.ToStateMachine();
+        machine.SetBlackboard(board);
+
+        AssertZeroAlloc(machine);
+    }
+
+    [Test]
+    public async Task async_subgraph_port_application_is_allocation_free()
+    {
+        (Graph parent, Blackboard board) = PortedParent(sync: false);
+        AsyncStateMachine machine = parent.ToAsyncStateMachine();
+        machine.SetBlackboard(board);
+
+        await AssertZeroAllocAsync(machine);
+    }
+
     [Test]
     public void sync_wait_for_ticking_is_allocation_free()
     {

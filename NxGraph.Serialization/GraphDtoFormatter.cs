@@ -99,7 +99,9 @@ internal sealed class GraphDtoFormatter : GraphEntityFormatter<GraphDto>
             case 8 or 9 when count < VersionEightHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionEightHeaderCount} elements, got {count}");
-            case 10 when count < VersionTenHeaderCount:
+            // v11 changed only the SubGraphDto/CompositeDto element shapes (outcome key
+            // names), not the header shape; v12 likewise (sub-graph ports fields).
+            case 10 or 11 or 12 when count < VersionTenHeaderCount:
                 throw new InvalidOperationException(
                     $"GraphDto: expected at least {VersionTenHeaderCount} elements, got {count}");
         }

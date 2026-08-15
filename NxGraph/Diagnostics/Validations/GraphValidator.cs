@@ -1,5 +1,6 @@
 using NxGraph.Blackboards;
 using NxGraph.Compatibility;
+using NxGraph.Conditions;
 using NxGraph.Fsm;
 using NxGraph.Fsm.Async;
 using NxGraph.Graphs;
@@ -230,6 +231,14 @@ public static class GraphValidator
         // rejections, not lints: they cannot reach a built graph.
         ValidateBranches(graph, result);
 
+        // 4g) Outcome-key lints: a composite that declares outcome keys over a child graph
+        // with no declared outcome codes will only ever publish 0 / the empty string.
+        ValidateOutcomeKeys(graph, result);
+
+        // 4h) Sub-graph port lints: presence Info, colliding output targets (same composite,
+        // regions of one parallel included), and the best-effort unread-input check.
+        ValidatePorts(graph, result);
+
         // 5) Unreachable-node and duplicate-name checks. A supplied AllNodes wins (back-compat
         // for pre-build ID lists); otherwise the set is derived from the graph itself — a built
         // Graph holds every node with its display name applied at Build(), so standalone
@@ -345,6 +354,240 @@ public static class GraphValidator
                     "silently. Declare an explicit Default(...) arm.", node.Id);
             }
         }
+    }
+
+    private static void ValidateOutcomeKeys(Graph graph, GraphValidationResult result)
+    {
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            // The machine-wrapping single-child composites: nested machines (either runtime;
+            // LogicNode.Logic already unwraps the sync adapter) and the history states.
+            (string? codeKeyName, string? nameKeyName, Graph? child) = logicNode.AsyncLogic switch
+            {
+                AsyncStateMachine machine => (machine.OutcomeCodeKeyName, machine.OutcomeNameKeyName,
+                    machine.Graph),
+                AsyncHistoryState history => (history.OutcomeCodeKeyName, history.OutcomeNameKeyName,
+                    history.Child.Graph),
+                _ => logicNode.Logic switch
+                {
+                    StateMachine machine => (machine.OutcomeCodeKeyName, machine.OutcomeNameKeyName,
+                        machine.Graph),
+                    HistoryState history => (history.OutcomeCodeKeyName, history.OutcomeNameKeyName,
+                        history.Child.Graph),
+                    _ => (null, null, (Graph?)null),
+                },
+            };
+
+            if ((codeKeyName ?? nameKeyName) is null || child is null || child.OutcomeCodes is not null)
+            {
+                continue;
+            }
+
+            result.Add(Severity.Warning,
+                "Composite declares an outcome key but its child graph declares no outcome codes " +
+                "(no terminal carries WithOutcome) — the parent will only ever read 0 and the empty " +
+                "string. Declare outcomes on the child's terminals, or drop the keys.", node.Id);
+        }
+    }
+
+    /// <summary>
+    /// Sub-graph port lints. Three checks per composite node whose child machines own a
+    /// board: an Info that the board exists (tooling breadcrumb, mirroring the event-entry
+    /// presence Info); a Warning when two output ports — across all of the node's child
+    /// machines in region order — target the same parent key (the collision resolves in
+    /// region/declaration order, which is almost never meant); and a best-effort Warning for
+    /// an input target the child graph never reads, emitted only when every node of the child
+    /// graph exposes its reads statically (data-built branches, event entries, structural
+    /// nodes) — any opaque logic makes the question undecidable and the check skips.
+    /// </summary>
+    private static void ValidatePorts(Graph graph, GraphValidationResult result)
+    {
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (!graph.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            List<(bool OwnsBoard, IReadOnlyList<ISubGraphPort> Ports, Graph Child)>? machines =
+                CollectPortedMachines(logicNode);
+            if (machines is null || !machines.Any(static m => m.OwnsBoard))
+            {
+                continue;
+            }
+
+            result.Add(Severity.Info,
+                "Composite runs its child graph(s) on their own boards (ports declared) — inputs apply at " +
+                "fresh child starts, declared outputs copy back at child terminals.", node.Id);
+
+            HashSet<string> outputTargets = new(StringComparer.Ordinal);
+            foreach ((bool ownsBoard, IReadOnlyList<ISubGraphPort> ports, Graph child) in machines)
+            {
+                if (!ownsBoard)
+                {
+                    continue;
+                }
+
+                foreach (ISubGraphPort port in ports)
+                {
+                    if (!port.IsInput && !outputTargets.Add(port.TargetKeyName))
+                    {
+                        result.Add(Severity.Warning,
+                            $"Two output ports target the same parent key '{port.TargetKeyName}' — the last " +
+                            "declaration (in region order for a parallel) wins, which is almost never meant. " +
+                            "Give each output its own parent key.", node.Id);
+                    }
+                }
+
+                HashSet<string> reads = new(StringComparer.Ordinal);
+                if (!TryCollectChildReads(child, reads))
+                {
+                    continue; // opaque logic in the child: not cheaply decidable, skip
+                }
+
+                foreach (ISubGraphPort port in ports)
+                {
+                    if (port.IsInput && !reads.Contains(port.TargetKeyName))
+                    {
+                        result.Add(Severity.Warning,
+                            $"Input port target '{port.TargetKeyName}' is never read by the child graph " +
+                            "(statically) — the applied value would go unused. Point the input at a key the " +
+                            "child reads, or drop the port.", node.Id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The machine-wrapping composites' child machines in region order, as (owns-board,
+    /// ports, child graph) triples — or null when the node is not a machine-wrapping
+    /// composite.
+    /// </summary>
+    private static List<(bool OwnsBoard, IReadOnlyList<ISubGraphPort> Ports, Graph Child)>?
+        CollectPortedMachines(LogicNode logicNode)
+    {
+        switch (logicNode.AsyncLogic)
+        {
+            case AsyncStateMachine machine:
+                return [(machine.OwnsBoard, machine.Ports, machine.Graph)];
+            case AsyncHistoryState history:
+                return [(history.Child.OwnsBoard, history.Child.Ports, history.Child.Graph)];
+            case AsyncParallelState parallel:
+                return parallel.Regions
+                    .Select(static r => (r.OwnsBoard, r.Ports, r.Graph)).ToList();
+            case AsyncDynamicParallelState dynamicParallel:
+                return dynamicParallel.Regions
+                    .Select(static r => (r.OwnsBoard, r.Ports, r.Graph)).ToList();
+        }
+
+        return logicNode.Logic switch
+        {
+            StateMachine machine => [(machine.OwnsBoard, machine.Ports, machine.Graph)],
+            HistoryState history => [(history.Child.OwnsBoard, history.Child.Ports, history.Child.Graph)],
+            ParallelState parallel => parallel.Regions
+                .Select(static r => (r.OwnsBoard, r.Ports, r.Graph)).ToList(),
+            DynamicParallelState dynamicParallel => dynamicParallel.Regions
+                .Select(static r => (r.OwnsBoard, r.Ports, r.Graph)).ToList(),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Collects the key names a child graph statically reads. Returns <see langword="false"/>
+    /// — "not cheaply decidable" — the moment any node's logic does not expose its reads:
+    /// only data-built branches (switch key, choice condition keys), event entries (delivery
+    /// keys), and read-free structural nodes (fork/join) are inspectable.
+    /// </summary>
+    private static bool TryCollectChildReads(Graph child, HashSet<string> reads)
+    {
+        for (int i = 0; i < child.NodeCount; i++)
+        {
+            if (!child.TryGetNodeByIndex(i, out INode? node) || node is not LogicNode logicNode)
+            {
+                continue;
+            }
+
+            if ((logicNode.AsyncLogic as ISwitchNode ?? logicNode.Logic as ISwitchNode) is { } switchNode)
+            {
+                reads.Add(switchNode.KeyName);
+                continue;
+            }
+
+            if ((logicNode.AsyncLogic as IChoiceNode ?? logicNode.Logic as IChoiceNode) is { } choice)
+            {
+                foreach (ICondition condition in choice.Conditions)
+                {
+                    if (!TryCollectConditionReads(condition, reads))
+                    {
+                        return false;
+                    }
+                }
+
+                continue;
+            }
+
+            if ((logicNode.AsyncLogic as EventEntryState ?? logicNode.Logic as EventEntryState) is { } entry)
+            {
+                foreach (EventRegistration registration in entry.Registrations)
+                {
+                    reads.Add(registration.KeyName);
+                }
+
+                continue;
+            }
+
+            bool isStructural = logicNode.Logic is ForkState or JoinState ||
+                                logicNode.AsyncLogic is ForkState or JoinState;
+            if (!isStructural)
+            {
+                return false; // opaque logic — reads are not statically known
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryCollectConditionReads(ICondition condition, HashSet<string> reads)
+    {
+        switch (condition)
+        {
+            case IsTrue isTrue:
+                if (isTrue.Value.KeyName is { } boundName)
+                {
+                    reads.Add(boundName);
+                }
+
+                return true;
+            case Not not:
+                return TryCollectConditionReads(not.Inner, reads);
+        }
+
+        Type type = condition.GetType();
+        if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(KeyEquals<>))
+        {
+            return false; // a custom condition — reads are not statically known
+        }
+
+        // KeyEquals<T>: the tested key plus an optionally key-bound expected side. Cold-path
+        // reflection, the closed-generic recipe the serializer uses.
+        if (type.GetProperty(nameof(KeyEquals<int>.KeyName))?.GetValue(condition) is string keyName)
+        {
+            reads.Add(keyName);
+        }
+
+        object? expected = type.GetProperty(nameof(KeyEquals<int>.Expected))?.GetValue(condition);
+        if (expected?.GetType().GetProperty("KeyName")?.GetValue(expected) is string expectedKeyName)
+        {
+            reads.Add(expectedKeyName);
+        }
+
+        return true;
     }
 
     private static void ValidateEventEntries(Graph graph, GraphValidationResult result)
@@ -578,10 +821,28 @@ public static class GraphValidator
                 continue;
             }
 
+            // Region order matches the SubGraphs enumeration order — the hard determinism
+            // requirement on providers — so the position pairs each child with its machine.
+            List<(bool OwnsBoard, IReadOnlyList<ISubGraphPort> Ports, Graph Child)>? machines =
+                CollectPortedMachines(logicNode);
+
+            int position = 0;
             foreach (Graph nested in provider.SubGraphs)
             {
+                int childPosition = position++;
                 if (ReferenceEquals(nested, current))
                 {
+                    continue;
+                }
+
+                // A ports declaration substitutes the child's own board for the Graph slot,
+                // so a different child Graph schema is exactly the sanctioned shape — the
+                // child subtree is compared against the child's own schema instead.
+                bool ownsBoard = machines is not null && childPosition < machines.Count &&
+                                 machines[childPosition].OwnsBoard;
+                if (ownsBoard)
+                {
+                    WarnOnConflictingChildSchemas(nested, nested, result);
                     continue;
                 }
 

@@ -537,4 +537,139 @@ public class ParityConformanceTests
             Assert.That(baseline, Does.Contain("run-result Success"));
         });
     }
+
+    // ── Hierarchical outcomes: a child's terminal outcome, published onto
+    //    declared keys, routes the parent's switch ─────────────────────────
+
+    private static ParityScenario ChildOutcomeRoutesParentSwitch()
+    {
+        BlackboardSchema schema = new("parity-outcome", BlackboardScope.Graph);
+        BlackboardKey<int> verdict = schema.Register("verdict", -1);
+        BlackboardKey<string> verdictName = schema.Register("verdictName", "");
+        Blackboard board = new(schema);
+
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success).SetName("child-a")
+            .To(() => Result.Success).SetName("child-b").WithOutcome(2, "Refused")
+            .Build();
+
+        int refusedRuns = 0;
+        Graph parent = GraphBuilder
+            .StartWith(() => Result.Success).SetName("before")
+            .SubGraph(ParallelStepMode.RunToJoin, child, history: false, verdict, verdictName)
+            .SetName("nested")
+            .Switch(verdict)
+            .Case(1, () => Result.Success)
+            .Case(2, () =>
+            {
+                refusedRuns++;
+                return Result.Success;
+            })
+            .Default(() => Result.Success)
+            .End()
+            .WithSchema(schema)
+            .Build();
+
+        ParityScenario scenario = new() { Graph = parent, Board = board };
+        scenario.Probes.Add(("published-verdict", () => board.Get(verdict)));
+        scenario.Probes.Add(("refused-runs", () => refusedRuns));
+        return scenario;
+    }
+
+    [Test]
+    public async Task child_outcome_publication_and_parent_switch_run_identically()
+    {
+        List<string> baseline = await ParityRunner.AssertFsmParityAsync(
+            ChildOutcomeRoutesParentSwitch, ParityDrives.OneRunAsync);
+        Assert.Multiple(() =>
+        {
+            Assert.That(baseline, Does.Contain("probe published-verdict=2"),
+                "The child's terminal outcome landed on the declared key under every adapter.");
+            Assert.That(baseline, Does.Contain("probe refused-runs=1"),
+                "The parent's switch routed on the freshly published outcome.");
+            Assert.That(baseline, Does.Contain("run-result Success"));
+        });
+    }
+
+    [Test]
+    public async Task child_outcome_publication_survives_suspend_resume_identically()
+    {
+        List<string> baseline =
+            await ParityRunner.AssertSuspendResumeParityAsync(ChildOutcomeRoutesParentSwitch);
+        Assert.Multiple(() =>
+        {
+            Assert.That(baseline, Does.Contain("probe published-verdict=2"));
+            Assert.That(baseline, Does.Contain("probe refused-runs=1"));
+        });
+    }
+
+    // ── Sub-graph ports: a child on its own board, inputs in, outputs back ──
+
+    private static ParityScenario PortedChildComputesOnItsOwnBoard()
+    {
+        BlackboardSchema schema = new("parity-ports", BlackboardScope.Graph);
+        BlackboardKey<int> seed = schema.Register("seed", 0);
+        BlackboardKey<int> verdict = schema.Register("verdict", -1);
+        Blackboard board = new(schema);
+
+        BlackboardSchema childSchema = new("parity-ports-child", BlackboardScope.Graph);
+        BlackboardKey<int> childIn = childSchema.Register("childIn", 0);
+        BlackboardKey<int> childBonus = childSchema.Register("childBonus", 0);
+        BlackboardKey<int> childOut = childSchema.Register("childOut", 0);
+        Graph child = GraphBuilder
+            .StartWith(() => Result.Success).SetName("c-start")
+            .To(bb =>
+            {
+                bb.Set(childOut, bb.Get(childIn) + bb.Get(childBonus));
+                return Result.Success;
+            }).SetName("c-add")
+            .WithSchema(childSchema)
+            .Build();
+
+        SubGraphPorts ports = SubGraphPorts.OwnBoard()
+            .In(seed, childIn)
+            .In(5, childBonus)
+            .Out(childOut, verdict);
+
+        Graph parent = GraphBuilder
+            .StartWith(bb =>
+            {
+                bb.Set(seed, 37);
+                return Result.Success;
+            }).SetName("before")
+            .SubGraph(ParallelStepMode.RunToJoin, child, history: false, null, null, ports)
+            .SetName("nested")
+            .To(() => Result.Success).SetName("after")
+            .WithSchema(schema)
+            .Build();
+
+        ParityScenario scenario = new() { Graph = parent, Board = board };
+        scenario.Probes.Add(("ported-verdict", () => board.Get(verdict)));
+        scenario.Probes.Add(("parent-seed", () => board.Get(seed)));
+        return scenario;
+    }
+
+    [Test]
+    public async Task ported_child_isolation_and_port_application_run_identically()
+    {
+        List<string> baseline = await ParityRunner.AssertFsmParityAsync(
+            PortedChildComputesOnItsOwnBoard, ParityDrives.OneRunAsync);
+        Assert.Multiple(() =>
+        {
+            Assert.That(baseline, Does.Contain("probe ported-verdict=42"),
+                "seed (37) in through the key input, 5 through the literal, sum copied back — " +
+                "identically under every adapter.");
+            Assert.That(baseline, Does.Contain("probe parent-seed=37"),
+                "The parent board is untouched beyond the declared output.");
+            Assert.That(baseline, Does.Contain("run-result Success"));
+        });
+    }
+
+    [Test]
+    public async Task ported_child_port_application_survives_suspend_resume_identically()
+    {
+        List<string> baseline =
+            await ParityRunner.AssertSuspendResumeParityAsync(PortedChildComputesOnItsOwnBoard);
+        Assert.That(baseline, Does.Contain("probe ported-verdict=42"));
+    }
 }
