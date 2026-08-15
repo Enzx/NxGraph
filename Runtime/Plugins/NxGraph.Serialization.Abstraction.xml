@@ -1,0 +1,587 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NxGraph.Serialization.Abstraction</name>
+    </assembly>
+    <members>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorFieldKind">
+            <summary>
+            Value kind of one serialized behavior field — the whole neutral field model (payload
+            version 8). Deliberately small: primitives, enums (as strings), and blackboard bindings.
+            Behaviors carrying richer literals implement their own encoding on top of these (or stay
+            codec-serialized); widening the model is a recorded-decision follow-up.
+            </summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.String">
+            <summary>A string (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Text"/>; may be null).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Bool">
+            <summary>A boolean (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Flag"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Int32">
+            <summary>A 32-bit integer (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Integer"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Int64">
+            <summary>A 64-bit integer (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Integer"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Single">
+            <summary>A 32-bit float (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Number"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Double">
+            <summary>A 64-bit float (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Number"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Enum">
+            <summary>An enum rendered as its member name (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Text"/>).</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding">
+            <summary>A blackboard binding (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Binding"/>): key name or primitive literal.</summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors">
+            <summary>
+            A nested behavior entry list (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Entries"/>) — bounded
+            composition, carrying <c>Repeat</c>/<c>AsyncRepeat</c> bodies (payload version 9).
+            </summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Conditions">
+            <summary>
+            A nested condition entry list (<see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Conditions"/>) — the
+            condition model's one nesting shape, carrying <c>Not</c>'s inner condition
+            (payload version 10).
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorFieldValue">
+            <summary>
+            One serialized behavior field value — a codec-agnostic nested DTO, so JSON and MessagePack
+            both carry it with no wire-type coupling (unlike <see cref="T:NxGraph.Serialization.Abstraction.IContainerCodec`1"/>,
+            which is wire-typed by necessity). Exactly one payload slot is meaningful per
+            <see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Kind"/>.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldValue.#ctor(NxGraph.Serialization.Abstraction.BehaviorFieldKind,System.String,System.Boolean,System.Int64,System.Double,NxGraph.Serialization.Abstraction.BehaviorBinding,NxGraph.Serialization.Abstraction.BehaviorEntry[],NxGraph.Serialization.Abstraction.ConditionEntry[])">
+            <summary>
+            One serialized behavior field value — a codec-agnostic nested DTO, so JSON and MessagePack
+            both carry it with no wire-type coupling (unlike <see cref="T:NxGraph.Serialization.Abstraction.IContainerCodec`1"/>,
+            which is wire-typed by necessity). Exactly one payload slot is meaningful per
+            <see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Kind"/>.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Kind">
+            <summary>The value kind, deciding which payload slot is meaningful.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Text">
+            <summary>String/Enum payload; a binding's key name rides on <see cref="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Binding"/> instead.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Flag">
+            <summary>Bool payload.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Integer">
+            <summary>Int32/Int64 payload.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Number">
+            <summary>Single/Double payload.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Binding">
+            <summary>Binding payload; null for every other kind.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Entries">
+            <summary>Nested behavior entries payload (payload version 9); null for every other kind.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorFieldValue.Conditions">
+            <summary>Nested condition entries payload (payload version 10); null for every other kind.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorEntry">
+            <summary>
+            One serialized behavior entry (payload version 9 lifted this out of the serializer's
+            internal DTOs so nested entries can ride the neutral field model): the behavior's
+            runtime-stable CLR type name — the same rendering the blackboard payloads use — plus its
+            fields. The recursion closure: a <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/> field carries
+            entries, and each entry carries fields.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorEntry.#ctor(System.String,NxGraph.Serialization.Abstraction.BehaviorField[])">
+            <summary>
+            One serialized behavior entry (payload version 9 lifted this out of the serializer's
+            internal DTOs so nested entries can ride the neutral field model): the behavior's
+            runtime-stable CLR type name — the same rendering the blackboard payloads use — plus its
+            fields. The recursion closure: a <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/> field carries
+            entries, and each entry carries fields.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorEntry.BehaviorTypeName">
+            <summary>The behavior's runtime-stable CLR type name — the registry's lookup identity.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorEntry.Fields">
+            <summary>The entry's fields in write order.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.ConditionEntry">
+            <summary>
+            One serialized condition entry (payload version 10) — the exact twin of
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorEntry"/>, deliberately a separate type so a condition list can never be
+            read as a behavior list: the condition's runtime-stable CLR type name plus its fields. The
+            recursion closure is the same one behaviors have: a
+            <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Conditions"/> field carries entries, and each entry carries
+            fields.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.ConditionEntry.#ctor(System.String,NxGraph.Serialization.Abstraction.BehaviorField[])">
+            <summary>
+            One serialized condition entry (payload version 10) — the exact twin of
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorEntry"/>, deliberately a separate type so a condition list can never be
+            read as a behavior list: the condition's runtime-stable CLR type name plus its fields. The
+            recursion closure is the same one behaviors have: a
+            <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Conditions"/> field carries entries, and each entry carries
+            fields.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.ConditionEntry.ConditionTypeName">
+            <summary>The condition's runtime-stable CLR type name — the registry's lookup identity.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.ConditionEntry.Fields">
+            <summary>The entry's fields in write order.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorBinding">
+            <summary>
+            A serialized blackboard binding: the key form carries only the key's registered
+            <see cref="P:NxGraph.Serialization.Abstraction.BehaviorBinding.KeyName"/> (rebound by name against the machine's bound boards at execution);
+            the literal form carries a primitive <see cref="P:NxGraph.Serialization.Abstraction.BehaviorBinding.Literal"/> value (whose kind is never
+            <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/>).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorBinding.#ctor(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldValue)">
+            <summary>
+            A serialized blackboard binding: the key form carries only the key's registered
+            <see cref="P:NxGraph.Serialization.Abstraction.BehaviorBinding.KeyName"/> (rebound by name against the machine's bound boards at execution);
+            the literal form carries a primitive <see cref="P:NxGraph.Serialization.Abstraction.BehaviorBinding.Literal"/> value (whose kind is never
+            <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/>).
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorBinding.KeyName">
+            <summary>The bound key's registered name, or null for the literal form.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorBinding.Literal">
+            <summary>The primitive literal, or null for the key form.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorField">
+            <summary>One named field of a serialized behavior.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorField.#ctor(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldValue)">
+            <summary>One named field of a serialized behavior.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorField.Name">
+            <summary>The field name — unique per behavior, the reader's lookup identity.</summary>
+        </member>
+        <member name="P:NxGraph.Serialization.Abstraction.BehaviorField.Value">
+            <summary>The field's value.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader">
+            <summary>
+            Reads a behavior's fields back from the neutral field model (payload version 8) — the
+            counterpart handed to registry factories on deserialization. Lookups are by name; a
+            missing field or kind mismatch throws a targeted error, because a behavior payload that
+            lost a field is corrupt, not evolvable (schema evolution happens in the factory, which can
+            probe with <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.Has(System.String)"/>).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.#ctor(System.Collections.Generic.IReadOnlyList{NxGraph.Serialization.Abstraction.BehaviorField})">
+            <summary>Wraps a field list (in write order) — standalone, no nested-entry support (see <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBehaviors(System.String)"/>).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.Has(System.String)">
+            <summary><see langword="true"/> when a field named <paramref name="name"/> exists.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadString(System.String)">
+            <summary>Reads a string field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBool(System.String)">
+            <summary>Reads a boolean field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadInt32(System.String)">
+            <summary>Reads a 32-bit integer field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadInt64(System.String)">
+            <summary>Reads a 64-bit integer field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadSingle(System.String)">
+            <summary>Reads a 32-bit float field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadDouble(System.String)">
+            <summary>Reads a 64-bit float field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadEnum``1(System.String)">
+            <summary>Reads an enum field from its member name.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBinding``1(System.String)">
+            <summary>
+            Reads a blackboard binding: the key form rebuilds as a name-bound
+            <see cref="T:NxGraph.Behaviors.BlackboardValue`1"/> (resolved against the machine's bound boards per
+            execution); the literal form rebuilds the primitive, checked against
+            <typeparamref name="T"/>.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBehaviors(System.String)">
+            <summary>
+            Reads a nested behavior entry list (payload version 9) back as <b>live instances</b> —
+            a <c>Repeat</c> body. Each entry is reconstructed recursively through the serializer's
+            registry-first per-entry dispatch, with the usual targeted error for unregistered
+            names. Only operates inside a <c>GraphSerializer</c> payload session — the serializer
+            wires the entry codec into the readers it creates; a standalone reader throws a
+            targeted error.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadConditions(System.String)">
+            <summary>
+            Reads a nested condition entry list (payload version 10) back as <b>live instances</b>
+            — <c>Not</c>'s inner condition. Each entry is reconstructed recursively through the
+            serializer's registry dispatch, with the usual targeted error for unregistered names.
+            Only operates inside a <c>GraphSerializer</c> payload session — the serializer wires
+            the entry codec into the readers it creates; a standalone reader throws a targeted
+            error.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BehaviorFieldWriter">
+            <summary>
+            Collects a behavior's fields into the neutral field model (payload version 8). Field
+            names must be unique per behavior; the matching <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader"/> reads
+            them back by name. Cold path by nature — serialization only.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.#ctor">
+            <summary>Creates a standalone writer (no nested-entry support — see <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBehaviors(System.String,System.Collections.Generic.IReadOnlyList{System.Object})"/>).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteString(System.String,System.String)">
+            <summary>Writes a string field (null allowed).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBool(System.String,System.Boolean)">
+            <summary>Writes a boolean field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteInt32(System.String,System.Int32)">
+            <summary>Writes a 32-bit integer field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteInt64(System.String,System.Int64)">
+            <summary>Writes a 64-bit integer field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteSingle(System.String,System.Single)">
+            <summary>Writes a 32-bit float field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteDouble(System.String,System.Double)">
+            <summary>Writes a 64-bit float field.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteEnum``1(System.String,``0)">
+            <summary>Writes an enum field as its member name.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBinding``1(System.String,NxGraph.Behaviors.BlackboardValue{``0}@)">
+            <summary>
+            Writes a blackboard binding. The key form serializes only the key's registered
+            <b>name</b> (rebound by name at execution on the read side); the literal form requires
+            a primitive from the field model — string, bool, int, long, float, double, or an enum
+            — and throws a targeted <see cref="T:System.NotSupportedException"/> for anything richer.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBehaviors(System.String,System.Collections.Generic.IReadOnlyList{System.Object})">
+            <summary>
+            Writes a nested behavior entry list (payload version 9) — a <c>Repeat</c> body. Each
+            entry is encoded recursively by the serializer's per-entry dispatch
+            (<see cref="M:NxGraph.Serialization.Abstraction.ISerializableBehavior.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else the behavior registry), so nested user
+            behaviors serialize under exactly the top-level rules. Only operates inside a
+            <c>GraphSerializer</c> payload session — the serializer wires the entry codec into the
+            writers it creates; a standalone writer throws a targeted error.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteConditions(System.String,System.Collections.Generic.IReadOnlyList{System.Object})">
+            <summary>
+            Writes a nested condition entry list (payload version 10) — <c>Not</c>'s inner
+            condition. Each entry is encoded recursively by the serializer's per-entry dispatch
+            (<see cref="M:NxGraph.Serialization.Abstraction.ISerializableCondition.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else the condition registry), so nested
+            user conditions serialize under exactly the top-level rules. Only operates inside a
+            <c>GraphSerializer</c> payload session — the serializer wires the entry codec into the
+            writers it creates; a standalone writer throws a targeted error.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.ToFields">
+            <summary>Drains the collected fields in write order.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IBehaviorEntryCodec">
+            <summary>
+            Internal recursion hook behind <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBehaviors(System.String,System.Collections.Generic.IReadOnlyList{System.Object})"/> /
+            <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBehaviors(System.String)"/>: the graph serializer wires its per-entry
+            behavior dispatch (write: <see cref="M:NxGraph.Serialization.Abstraction.ISerializableBehavior.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/>; read: registry-first
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)"/>) into every writer/reader it creates for a payload
+            session, so nested entry lists (<see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/>) encode under
+            exactly the top-level rules. Standalone writers/readers carry no codec — the two methods
+            throw a targeted error there.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IBehaviorEntryCodec.WriteEntry(System.Object)">
+            <summary>Encodes one live behavior into a payload entry.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IBehaviorEntryCodec.ReadEntry(NxGraph.Serialization.Abstraction.BehaviorEntry)">
+            <summary>Reconstructs one live behavior from a payload entry.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IBehaviorRegistry">
+            <summary>
+            Resolves behavior payload identities (payload version 8). The read side maps a behavior's
+            runtime-stable type name plus its fields back to a live instance; the write side covers
+            behaviors that carry no <see cref="T:NxGraph.Serialization.Abstraction.ISerializableBehavior"/> implementation of their own —
+            the shipped default registry (<c>NxGraph.Serialization.BehaviorRegistry</c>) handles the
+            standard set (<c>Log</c>, closed <c>SetValue&lt;T&gt;</c>) built in, so standard-set
+            graphs round-trip with zero options configured. Same posture as
+            <see cref="T:NxGraph.Serialization.Abstraction.IRegionSelectorRegistry"/>: the registry restores <i>a</i> behavior for the
+            name; whether it behaves like the authored one is the user's contract.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)">
+            <summary>
+            Reconstructs a behavior from its runtime-stable type name and serialized fields.
+            Returns <see langword="false"/> when the name is not known to this registry.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <summary>
+            Writes the fields of a behavior that does not implement
+            <see cref="T:NxGraph.Serialization.Abstraction.ISerializableBehavior"/> itself (the standard set). Returns
+            <see langword="false"/> when the instance is not recognized.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy">
+            <summary>
+            How restore treats payload entries that no longer line up with the live schema.
+            Independent of direction: schema keys absent from the payload always keep their
+            registered defaults (forward compatibility for schemas that added keys).
+            </summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy.Strict">
+            <summary>
+            Fail loudly: an unknown payload key, a changed value type, or a schema-name/scope
+            mismatch throws.
+            </summary>
+        </member>
+        <member name="F:NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy.Skip">
+            <summary>
+            Skip entries that don't fit the schema (schema evolution): the matching subset is
+            restored over defaults, mismatched entries are dropped. Corrupt values still throw.
+            <para>
+            Data safety: a restore that would apply <b>zero</b> entries — mismatched header, every
+            entry skipped, or an entry-less payload — leaves the target board completely untouched
+            (live values preserved). Skip never resets a board to defaults without restoring at
+            least one value; the documented "defaults + payload" post-state applies only once at
+            least one payload entry matches the live schema.
+            </para>
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer">
+            <summary>
+            Serializes one <see cref="T:NxGraph.Blackboards.Blackboard"/> to/from JSON as an independent durability
+            artifact (alongside the graph payload and the machine snapshot). Restore writes into an
+            existing board — the schema is code and cannot be reconstructed from a payload.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IBlackboardBinarySerializer">
+            <summary>
+            Binary counterpart of <see cref="T:NxGraph.Serialization.Abstraction.IBlackboardJsonSerializer"/>.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IConditionEntryCodec">
+            <summary>
+            Internal recursion hook behind <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteConditions(System.String,System.Collections.Generic.IReadOnlyList{System.Object})"/> /
+            <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadConditions(System.String)"/> — the exact twin of
+            <see cref="T:NxGraph.Serialization.Abstraction.IBehaviorEntryCodec"/>: the graph serializer wires its per-entry condition
+            dispatch (write: <see cref="M:NxGraph.Serialization.Abstraction.ISerializableCondition.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else
+            <see cref="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/>; read: <see cref="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)"/>)
+            into every writer/reader it creates for a payload session, so nested entry lists
+            (<see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Conditions"/>) encode under exactly the top-level rules.
+            Standalone writers/readers carry no codec — the two methods throw a targeted error there.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IConditionEntryCodec.WriteEntry(System.Object)">
+            <summary>Encodes one live condition into a payload entry.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IConditionEntryCodec.ReadEntry(NxGraph.Serialization.Abstraction.ConditionEntry)">
+            <summary>Reconstructs one live condition from a payload entry.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IConditionRegistry">
+            <summary>
+            Resolves condition payload identities (payload version 10) — the branch twin of
+            <see cref="T:NxGraph.Serialization.Abstraction.IBehaviorRegistry"/>. The read side maps a condition's runtime-stable type name
+            plus its fields back to a live instance; the write side covers conditions that carry no
+            <see cref="T:NxGraph.Serialization.Abstraction.ISerializableCondition"/> implementation of their own — the shipped default
+            registry (<c>NxGraph.Serialization.ConditionRegistry</c>) handles the standard set
+            (<c>IsTrue</c>, <c>Not</c>, closed <c>KeyEquals&lt;T&gt;</c>) built in, so branching graphs
+            round-trip with zero options configured. Same posture as <see cref="T:NxGraph.Serialization.Abstraction.IBehaviorRegistry"/>:
+            the registry restores <i>a</i> condition for the name; whether it decides like the authored
+            one is the user's contract.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)">
+            <summary>
+            Reconstructs a condition from its runtime-stable type name and serialized fields.
+            Returns <see langword="false"/> when the name is not known to this registry.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <summary>
+            Writes the fields of a condition that does not implement
+            <see cref="T:NxGraph.Serialization.Abstraction.ISerializableCondition"/> itself (the standard set). Returns
+            <see langword="false"/> when the instance is not recognized.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IContainerCodec">
+            <summary>
+            Non-generic marker for container codecs — mirrors <see cref="T:NxGraph.Serialization.Abstraction.ILogicCodec"/>. A container
+            codec (payload version 6) serializes custom <see cref="T:NxGraph.Graphs.ISubGraphProvider"/> containers
+            (including <c>AsyncCompositeState</c> subclasses) that the graph serializer has no
+            built-in recipe for.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IContainerCodec`1">
+            <summary>
+            Division of labor with the graph serializer: the <b>serializer</b> owns child-graph
+            recursion — it walks the container's <see cref="P:NxGraph.Graphs.ISubGraphProvider.SubGraphs"/> onto the
+            wire and rebuilds them on read; the <b>codec</b> owns the reconstruction recipe — its
+            opaque payload rides in the node's ordinary logic slot (typically a key plus config,
+            reusing the user's logic-codec keys for any non-graph children).
+            <para>
+            Order contract (normative): <see cref="P:NxGraph.Graphs.ISubGraphProvider.SubGraphs"/> enumeration order
+            = wire order = the <c>children</c> order passed to
+            <see cref="M:NxGraph.Serialization.Abstraction.IContainerCodec`1.Deserialize(`0,System.Collections.Generic.IReadOnlyList{NxGraph.Graphs.Graph})"/> — order is identity, exactly as region order is for
+            <c>RegionMask</c> bits. This leans on the hard <see cref="P:NxGraph.Graphs.ISubGraphProvider.SubGraphs"/>
+            requirement that enumeration is stable and deterministic (identical sequence every time);
+            a container backed by an unordered collection corrupts reconstruction silently, and the
+            graph serializer verifies the requirement in DEBUG builds with a second enumeration. The rebuilt container must surface the <b>new</b>
+            <see cref="T:NxGraph.Graphs.Graph"/> instances via its own <c>SubGraphs</c> and keep
+            <c>IBlackboardSettable</c> forwarding — those walks are what agent stamping and
+            blackboard binding reach (the standing user-container contract). A container that hides
+            graphs from <c>SubGraphs</c> serializes without them; such a container is already broken
+            for stamping, and the serializer inherits that contract rather than validating it.
+            </para>
+            <para>
+            <see cref="M:NxGraph.Serialization.Abstraction.IContainerCodec`1.Serialize(NxGraph.Graphs.ISubGraphProvider)"/> receives the <b>unwrapped</b> container (a sync-only container
+            is unwrapped from its <c>SyncLogicAdapter</c> first); a codec rebuilding a sync-only
+            container must wrap the result in the public <c>SyncLogicAdapter</c> itself so the node
+            stays sync-runnable.
+            </para>
+            </summary>
+            <typeparam name="TWire">
+            The wire type — must match the logic codec's wire type, because the container payload
+            rides in the same node DTO slot; the graph serializer rejects a mismatch at construction.
+            </typeparam>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IContainerCodec`1.Serialize(NxGraph.Graphs.ISubGraphProvider)">
+            <summary>Encodes the reconstruction recipe for <paramref name="container"/> (not its child graphs).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IContainerCodec`1.Deserialize(`0,System.Collections.Generic.IReadOnlyList{NxGraph.Graphs.Graph})">
+            <summary>
+            Rebuilds the container from its <paramref name="payload"/> and the already-rebuilt
+            <paramref name="children"/> (in <c>SubGraphs</c> enumeration order). Must not return null.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IGraphBinarySerializer.ToBinaryAsync(NxGraph.Graphs.Graph,System.IO.Stream,System.Threading.CancellationToken)">
+            <summary>
+            Serialize a graph to the stream as binary.
+            </summary>
+            <param name="graph">The graph to serialize.</param>
+            <param name="destination">The destination stream.</param>
+            <param name="ct">Cancellation token.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IGraphBinarySerializer.FromBinaryAsync(System.IO.Stream,System.Threading.CancellationToken)">
+            <summary>
+            Deserialize a graph from a binary stream.
+            </summary>
+            <param name="source">The source stream.</param>
+            <param name="ct">Cancellation token.</param>
+            <returns>A task that represents the asynchronous operation. The task result contains the deserialized graph.</returns>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IGraphJsonSerializer.ToJsonAsync(NxGraph.Graphs.Graph,System.IO.Stream,System.Threading.CancellationToken)">
+            <summary>
+            Serialize a graph to the stream as JSON.
+            </summary>
+            <param name="graph">The graph to serialize.</param>
+            <param name="destination">The destination stream.</param>
+            <param name="ct">Cancellation token.</param>
+            <returns>A task that represents the asynchronous operation.</returns>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IGraphJsonSerializer.FromJsonAsync(System.IO.Stream,System.Threading.CancellationToken)">
+            <summary>
+            Deserialize a graph from a JSON stream.
+            </summary>
+            <param name="source">The source stream.</param>
+            <param name="ct">Cancellation token.</param>
+            <returns>A task that represents the asynchronous operation. The task result contains the deserialized graph.</returns>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.IRegionSelectorRegistry">
+            <summary>
+            Maps dynamic-parallel region selectors to stable string keys so they can ride the graph
+            payload (payload version 6): the write side turns the authored delegate into a key, the
+            read side turns the key back into a delegate. Delegates themselves cannot ride a wire
+            payload — the registry is the durable identity for them, analogous to how an
+            <see cref="T:NxGraph.Serialization.Abstraction.ILogicCodec"/> keys node logic.
+            <para>
+            Both lookups follow the try-pattern so the serializer owns the error messages and can
+            include node context. The trust model matches <see cref="T:NxGraph.Serialization.Abstraction.ILogicCodec"/>: the registry
+            restores <i>a</i> delegate for the key — nothing verifies it behaves like the delegate
+            the graph was authored with; that contract belongs to the user.
+            </para>
+            <para>
+            Delegate identity is reference identity: two lambdas with identical bodies are distinct
+            delegates, so the graph must be authored with the <b>registered instance</b> for the
+            write-side lookup to succeed.
+            </para>
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IRegionSelectorRegistry.TryGetKey(System.Func{NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask},System.String@)">
+            <summary>Write side: resolves the key an authored selector was registered under.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.IRegionSelectorRegistry.TryGetSelector(System.String,System.Func{NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask}@)">
+            <summary>Read side: resolves the selector registered under a payload key.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.ISerializableBehavior">
+            <summary>
+            Opt-in serialization contract for behaviors (payload version 8): a behavior that wants to
+            ride graph payloads writes its fields through the deliberately small neutral field model
+            (<see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldWriter"/>) — string, bool, integral/floating numerics, enum (as
+            string), and blackboard bindings. Reconstruction is registry-based: register a factory
+            under the behavior's runtime-stable type name on the
+            <c>GraphSerializerOptions.BehaviorRegistry</c>, and it rebuilds the instance from a
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader"/> on read. The standard set (<c>Log</c>,
+            <c>SetValue&lt;T&gt;</c>) needs neither — the default registry carries it built in.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.ISerializableBehavior.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <summary>Writes this behavior's fields to the payload.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.ISerializableCondition">
+            <summary>
+            Opt-in serialization contract for conditions (payload version 10) — the branch twin of
+            <see cref="T:NxGraph.Serialization.Abstraction.ISerializableBehavior"/>, reusing the same neutral field model
+            (<see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldWriter"/>) so a decision rides the wire under exactly the rules a
+            behavior does. Reconstruction is registry-based: register a factory under the condition's
+            runtime-stable type name on the <c>GraphSerializerOptions.ConditionRegistry</c>, and it
+            rebuilds the instance from a <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader"/> on read. The standard set
+            (<c>IsTrue</c>, <c>Not</c>, <c>KeyEquals&lt;T&gt;</c>) needs neither — the default registry
+            carries it built in, so a branching graph round-trips with zero options.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Abstraction.ISerializableCondition.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <summary>Writes this condition's fields to the payload.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Abstraction.Shims.ArgumentNullExceptionShim">
+            <summary>
+            netstandard2.1 stand-in for <c>System.ArgumentNullException.ThrowIfNull</c> (net6.0+).
+            </summary>
+        </member>
+        <member name="T:System.Runtime.CompilerServices.CallerArgumentExpressionAttribute">
+            <summary>
+            Lets the argument-null shim capture the caller's expression text the way
+            <c>ArgumentNullException.ThrowIfNull</c> does on net8.0. Added in net5.0; absent
+            from netstandard2.1.
+            </summary>
+        </member>
+        <member name="T:System.Runtime.CompilerServices.IsExternalInit">
+            <summary>
+            Marker the compiler requires to emit init-only setters (records, <c>init</c>
+            properties). Present in net5.0+; absent from netstandard2.1, so this assembly
+            carries its own copy. The core library's copy is internal and cannot be shared.
+            </summary>
+        </member>
+    </members>
+</doc>
