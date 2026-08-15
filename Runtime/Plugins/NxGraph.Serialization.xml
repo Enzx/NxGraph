@@ -1,0 +1,859 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>NxGraph.Serialization</name>
+    </assembly>
+    <members>
+        <member name="T:NxGraph.Serialization.BehaviorDto">
+            <summary>
+            Payload entry for a behavior composite node (payload version 8). <paramref name="IsSync"/>
+            discriminates the runtime (wire markers "BehaviorState"/"AsyncBehaviorState" must match);
+            <paramref name="AgentTypeName"/> is the runtime-stable name closing
+            <c>BehaviorState&lt;TAgent&gt;</c> on read, or null for the untyped composites — the agent
+            itself never rides (it is runtime context, re-attached via <c>SetAgent</c>). Entries ride
+            as the abstraction's <see cref="T:NxGraph.Serialization.Abstraction.BehaviorEntry"/> since payload version 9, which lifted the
+            entry shape out of this file so nested bodies (<see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/>)
+            reuse it recursively.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorDto.#ctor(System.Int32,System.Boolean,System.String,NxGraph.Serialization.Abstraction.BehaviorEntry[])">
+            <summary>
+            Payload entry for a behavior composite node (payload version 8). <paramref name="IsSync"/>
+            discriminates the runtime (wire markers "BehaviorState"/"AsyncBehaviorState" must match);
+            <paramref name="AgentTypeName"/> is the runtime-stable name closing
+            <c>BehaviorState&lt;TAgent&gt;</c> on read, or null for the untyped composites — the agent
+            itself never rides (it is runtime context, re-attached via <c>SetAgent</c>). Entries ride
+            as the abstraction's <see cref="T:NxGraph.Serialization.Abstraction.BehaviorEntry"/> since payload version 9, which lifted the
+            entry shape out of this file so nested bodies (<see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/>)
+            reuse it recursively.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorDtoFormatter.WriteConditionEntry(MessagePack.MessagePackWriter@,NxGraph.Serialization.Abstraction.ConditionEntry)">
+            <summary>
+            Writes one condition entry (payload version 10) — the same
+            <c>[typeName, fields[]]</c> shape behavior entries use, so both nesting axes share one
+            field-value encoding.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorDtoFormatter.ReadConditionEntry(MessagePack.MessagePackReader@,System.Int32,System.Int32)">
+            <summary>
+            Reads one condition entry (payload version 10) — the behavior-entry shape with its own
+            nesting counter, so a <c>Not</c> chain cannot exceed the shared depth cap.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.BehaviorRegistry">
+            <summary>
+            Default <see cref="T:NxGraph.Serialization.Abstraction.IBehaviorRegistry"/>: user factories keyed by runtime-stable behavior
+            type name, with the standard set (<c>Log</c>, every closed <c>SetValue&lt;T&gt;</c>, and
+            all four repeat forms — <c>Repeat</c>/<c>AsyncRepeat</c> plus the <c>&lt;TAgent&gt;</c>
+            twins) built in — so standard-set graphs round-trip with <b>zero options configured</b>
+            (<see cref="T:NxGraph.Serialization.GraphSerializer"/> falls back to a fresh instance of this class when no
+            <see cref="P:NxGraph.Serialization.GraphSerializerOptions.BehaviorRegistry"/> is given). Generic forms close on
+            read via cold-path reflection over the stable type name (<c>BlackboardSerializer</c>
+            precedent). Repeat bodies ride as nested entry lists (payload version 9) encoded through
+            the serializer's entry codec, and reconstruct through the <c>Unbound</c> forms with a
+            targeted error naming the offending entry when a body mixes runtime families. User
+            factories are consulted first, so a factory registered under a standard name overrides
+            the built-in handling.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorRegistry.Register(System.String,System.Func{NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object})">
+            <summary>
+            Registers a reconstruction factory under <paramref name="behaviorTypeName"/> — the
+            behavior's runtime-stable type name, the identity its payload entries carry. The
+            factory receives the entry's fields and returns the live behavior instance. Duplicate
+            names fail here, at setup, rather than at load time.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)">
+            <inheritdoc />
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <inheritdoc />
+        </member>
+        <member name="M:NxGraph.Serialization.BehaviorRegistry.RepeatBody``1(NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.String)">
+            <summary>
+            Reads a repeat body and casts each reconstructed entry to the family's entry
+            interface, with a targeted error naming the offender on mismatch — a crafted payload
+            putting a sync-only entry in an async repeat body must not surface as a cast
+            exception.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.BlackboardEntryDto">
+            <summary>One slot value: key name, value-type full name (verification only), and the value.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BlackboardEntryDto.#ctor(System.String,System.String,System.Text.Json.JsonElement)">
+            <summary>One slot value: key name, value-type full name (verification only), and the value.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.BlackboardDto">
+            <summary>
+            JSON payload shape for one <see cref="T:NxGraph.Blackboards.Blackboard"/>. Independent of
+            <see cref="T:NxGraph.Serialization.GraphDto"/> — the blackboard is its own durability artifact with its own
+            payload version.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BlackboardDto.#ctor(NxGraph.Serialization.BlackboardEntryDto[],System.String,System.Int32)">
+            <summary>
+            JSON payload shape for one <see cref="T:NxGraph.Blackboards.Blackboard"/>. Independent of
+            <see cref="T:NxGraph.Serialization.GraphDto"/> — the blackboard is its own durability artifact with its own
+            payload version.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.BlackboardSerializer">
+            <summary>
+            Serializes a single <see cref="T:NxGraph.Blackboards.Blackboard"/> to JSON or MessagePack as an independent
+            durability artifact: a saved flow is (graph payload, machine snapshot, one payload per
+            bound board). Each scope's board serializes separately — a global board once per world,
+            graph boards per entity.
+            <para>
+            Values are written per key via the schema's <see cref="T:NxGraph.Blackboards.BlackboardKeyDescriptor"/>s
+            (boxing is fine off the hot path). Custom value types plug in through the
+            caller-supplied <see cref="T:System.Text.Json.JsonSerializerOptions"/> / <see cref="T:MessagePack.MessagePackSerializerOptions"/>.
+            </para>
+            <para>
+            Restore is restore-into: the schema is code and cannot be reconstructed from a payload,
+            so the caller supplies a live board and the payload is applied over its defaults —
+            post-state is always defaults + payload. The payload's type names are verification data
+            only; they are never used to resolve a type.
+            </para>
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BlackboardSerializer.HeaderMatches(NxGraph.Blackboards.Blackboard,System.String,System.Int32,NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy)">
+            <summary>
+            Verifies the payload header against the live schema. Returns <see langword="false"/>
+            to skip the whole restore (Skip policy); throws under Strict.
+            <para>
+            Null-name wildcard (intended): the name check only fires when <b>both</b> sides are
+            named — a <see langword="null"/> schema name on either side matches anything, and scope
+            alone decides. Unnamed schemas are common (the name is optional presentation data), so
+            an unnamed board accepts payloads saved from named schemas and vice versa; tightening
+            this to a mismatch would make naming a previously unnamed schema break every existing
+            payload. Scope must always match exactly, and per-entry key/type verification still
+            applies either way.
+            </para>
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BlackboardSerializer.TryMatchEntry(NxGraph.Blackboards.Blackboard,System.String,System.String,NxGraph.Serialization.Abstraction.BlackboardMismatchPolicy,NxGraph.Blackboards.BlackboardKeyDescriptor@)">
+            <summary>
+            Matches one payload entry to a live slot. Unknown keys and changed value types throw
+            under Strict and are skipped under Skip. The payload type name only verifies — the
+            schema dictates the deserialization target, so payloads cannot inject types.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.BlackboardSerializer.StableTypeName(System.Type)">
+            <summary>
+            Renders a runtime-stable type name for payload verification. <see cref="P:System.Type.FullName"/>
+            embeds assembly-qualified argument names (including core-lib version) for constructed
+            generics — e.g. <c>List`1[[System.Int32, System.Private.CoreLib, Version=8.0.0.0, ...]]</c> —
+            which breaks Strict restores (and silently drops values under Skip) after a runtime
+            upgrade. This renders <c>System.Collections.Generic.List`1[System.Int32]</c> instead.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.ChoiceDto">
+            <summary>
+            Payload entry for a data-built <c>ChoiceState</c> node (payload version 10):
+            <paramref name="Match"/> is the <c>ConditionMatch</c> mode (All/Any),
+            <paramref name="Conditions"/> the decision itself in evaluation order, and the two targets
+            the arms — <c>-1</c> encodes <c>NodeId.Default</c> (a terminal arm), exactly as
+            <see cref="P:NxGraph.Serialization.EventEntryDto.DefaultTarget"/> does. Conditions ride the neutral field model, so
+            the standard set round-trips with zero options through the default
+            <see cref="T:NxGraph.Serialization.ConditionRegistry"/>. Reserved marker: "ChoiceState" (one for both runtimes —
+            the data-built branch is a single class implementing both logic and both director
+            interfaces).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.ChoiceDto.#ctor(System.Int32,System.Byte,NxGraph.Serialization.Abstraction.ConditionEntry[],System.Int32,System.Int32)">
+            <summary>
+            Payload entry for a data-built <c>ChoiceState</c> node (payload version 10):
+            <paramref name="Match"/> is the <c>ConditionMatch</c> mode (All/Any),
+            <paramref name="Conditions"/> the decision itself in evaluation order, and the two targets
+            the arms — <c>-1</c> encodes <c>NodeId.Default</c> (a terminal arm), exactly as
+            <see cref="P:NxGraph.Serialization.EventEntryDto.DefaultTarget"/> does. Conditions ride the neutral field model, so
+            the standard set round-trips with zero options through the default
+            <see cref="T:NxGraph.Serialization.ConditionRegistry"/>. Reserved marker: "ChoiceState" (one for both runtimes —
+            the data-built branch is a single class implementing both logic and both director
+            interfaces).
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Guard">
+            <summary>
+            Argument guards whose BCL equivalents postdate netstandard2.1. Unlike the files under
+            <c>Shims/</c> this compiles into both target frameworks: the call sites are shared, so the
+            helper — not the caller — carries the conditional.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.Guard.NotNullOrEmpty(System.String,System.String)">
+            <summary>
+            netstandard2.1 stand-in for <c>ArgumentException.ThrowIfNullOrEmpty</c> (net7.0+),
+            throwing the same two exception types for the same two cases.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.TextIoPolyfills">
+            <summary>
+            Cancellable text-IO overloads that net8.0 has as instance methods and netstandard2.1 does
+            not. Declared in the serializers' own namespace so the call sites bind to them without an
+            import, and compiled only for netstandard2.1 so they can never shadow the real instance
+            methods on net8.0.
+            <para>
+            The token cannot interrupt an in-flight read or flush on this framework, so it is honored
+            at entry only — the observable difference is that a cancellation requested mid-operation
+            surfaces after it completes rather than during.
+            </para>
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.CompositeKind">
+            <summary>
+            Discriminates the machine-wrapping composite kinds that ride the graph payload
+            (payload version 4; the dynamic kinds arrived with version 6). The sync kinds carry
+            their <c>ParallelStepMode</c> in <see cref="P:NxGraph.Serialization.CompositeDto.Mode"/>; for async kinds the
+            mode is written as zero and ignored.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.CompositeDto">
+            <summary>
+            Payload entry for a history/parallel composite node (payload version 4). Lives beside
+            <see cref="T:NxGraph.Serialization.SubGraphDto"/> — plain nested machines keep their v3 shape untouched; composites
+            get their own section so pre-v4 readers reject the payload via the version gate instead of
+            misreading it. <paramref name="Children"/> holds the child/region graphs in region order
+            (order is identity for <c>RegionMask</c> bits); history kinds carry exactly one child.
+            <paramref name="SelectorKey"/> (payload version 6) names the region selector of the
+            dynamic kinds, resolved through the configured <c>IRegionSelectorRegistry</c> — it is
+            required for kinds 4–5 and must be null for kinds 0–3.
+            <paramref name="OutcomeCodeKeyName"/> / <paramref name="OutcomeNameKeyName"/> (payload
+            version 11) name the blackboard keys a history composite publishes the child's terminal
+            outcome through — names only, value types fixed (<c>int</c> / <c>string</c>); they are
+            exclusive to the history kinds and must be null elsewhere. Pre-v11 payloads read
+            outcome-key-free. <paramref name="RegionPorts"/> (payload version 12) carries the
+            per-region sub-graph ports declarations, sparse by region index (history kinds may only
+            claim index 0); an entry's presence is the owns-board flag. Pre-v12 payloads read
+            shared-board and port-free.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.CompositeDto.#ctor(System.Int32,NxGraph.Serialization.CompositeKind,System.Byte,NxGraph.Serialization.GraphDto[],System.String,System.String,System.String,NxGraph.Serialization.RegionPortsDto[])">
+            <summary>
+            Payload entry for a history/parallel composite node (payload version 4). Lives beside
+            <see cref="T:NxGraph.Serialization.SubGraphDto"/> — plain nested machines keep their v3 shape untouched; composites
+            get their own section so pre-v4 readers reject the payload via the version gate instead of
+            misreading it. <paramref name="Children"/> holds the child/region graphs in region order
+            (order is identity for <c>RegionMask</c> bits); history kinds carry exactly one child.
+            <paramref name="SelectorKey"/> (payload version 6) names the region selector of the
+            dynamic kinds, resolved through the configured <c>IRegionSelectorRegistry</c> — it is
+            required for kinds 4–5 and must be null for kinds 0–3.
+            <paramref name="OutcomeCodeKeyName"/> / <paramref name="OutcomeNameKeyName"/> (payload
+            version 11) name the blackboard keys a history composite publishes the child's terminal
+            outcome through — names only, value types fixed (<c>int</c> / <c>string</c>); they are
+            exclusive to the history kinds and must be null elsewhere. Pre-v11 payloads read
+            outcome-key-free. <paramref name="RegionPorts"/> (payload version 12) carries the
+            per-region sub-graph ports declarations, sparse by region index (history kinds may only
+            claim index 0); an entry's presence is the owns-board flag. Pre-v12 payloads read
+            shared-board and port-free.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.ConditionRegistry">
+            <summary>
+            Default <see cref="T:NxGraph.Serialization.Abstraction.IConditionRegistry"/>: user factories keyed by runtime-stable condition
+            type name, with the standard set (<c>IsTrue</c>, <c>Not</c>, every closed
+            <c>KeyEquals&lt;T&gt;</c>) built in — so branching graphs round-trip with <b>zero options
+            configured</b> (<see cref="T:NxGraph.Serialization.GraphSerializer"/> falls back to a fresh instance of this class
+            when no <see cref="P:NxGraph.Serialization.GraphSerializerOptions.ConditionRegistry"/> is given). The branch twin of
+            <see cref="T:NxGraph.Serialization.BehaviorRegistry"/>, down to the mechanics: generic forms close on read via
+            cold-path reflection over the stable type name, <c>KeyEquals&lt;T&gt;</c> rebuilds through
+            its <c>Unbound</c> form (the key rides as a name and resolves against the machine's bound
+            schemas per evaluation), and <c>Not</c>'s inner condition rides as a nested entry list
+            encoded through the serializer's entry codec. User factories are consulted first, so a
+            factory registered under a standard name overrides the built-in handling.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.ConditionRegistry.Register(System.String,System.Func{NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object})">
+            <summary>
+            Registers a reconstruction factory under <paramref name="conditionTypeName"/> — the
+            condition's runtime-stable type name, the identity its payload entries carry. The
+            factory receives the entry's fields and returns the live condition instance. Duplicate
+            names fail here, at setup, rather than at load time.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.ConditionRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)">
+            <inheritdoc />
+        </member>
+        <member name="M:NxGraph.Serialization.ConditionRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)">
+            <inheritdoc />
+        </member>
+        <member name="M:NxGraph.Serialization.ConditionRegistry.SingleInner(NxGraph.Serialization.Abstraction.BehaviorFieldReader)">
+            <summary>
+            Reads <c>Not</c>'s body, which must hold exactly one condition — the arity is the
+            type's contract, so a payload carrying anything else is crafted or corrupt.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.ContainerDto">
+            <summary>
+            Payload entry for a container-codec node (payload version 6): the child graphs the
+            serializer recursed into, in <c>ISubGraphProvider.SubGraphs</c> enumeration order
+            (order is identity — the codec's <c>Deserialize</c> receives them in the same order).
+            There is no marker string for containers: the claim itself is the discriminator that
+            routes the node's ordinary logic payload to the container codec instead of the logic
+            codec.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.ContainerDto.#ctor(System.Int32,NxGraph.Serialization.GraphDto[])">
+            <summary>
+            Payload entry for a container-codec node (payload version 6): the child graphs the
+            serializer recursed into, in <c>ISubGraphProvider.SubGraphs</c> enumeration order
+            (order is identity — the codec's <c>Deserialize</c> receives them in the same order).
+            There is no marker string for containers: the claim itself is the discriminator that
+            routes the node's ordinary logic payload to the container codec instead of the logic
+            codec.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.EventRegistrationDto">
+            <summary>
+            One entry of an event dispatcher's dispatch table on the wire (payload version 7):
+            the delivery key's registered name, the event's runtime-stable CLR type name (the same
+            rendering the blackboard payloads use), and the entry chain's head node index. Keys never
+            ride the payload (schemas do not serialize), so the read side rebuilds unbound
+            registrations resolved by name at raise time.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.EventRegistrationDto.#ctor(System.String,System.String,System.Int32)">
+            <summary>
+            One entry of an event dispatcher's dispatch table on the wire (payload version 7):
+            the delivery key's registered name, the event's runtime-stable CLR type name (the same
+            rendering the blackboard payloads use), and the entry chain's head node index. Keys never
+            ride the payload (schemas do not serialize), so the read side rebuilds unbound
+            registrations resolved by name at raise time.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.EventEntryDto">
+            <summary>
+            Payload entry for an <c>EventEntryState</c> dispatcher node (payload version 7).
+            <paramref name="DefaultTarget"/> is the <c>Otherwise</c> chain's head node index, or -1
+            when the graph has no plain-run entry.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.EventEntryDto.#ctor(System.Int32,System.Int32,NxGraph.Serialization.EventRegistrationDto[])">
+            <summary>
+            Payload entry for an <c>EventEntryState</c> dispatcher node (payload version 7).
+            <paramref name="DefaultTarget"/> is the <c>Otherwise</c> chain's head node index, or -1
+            when the graph has no plain-run entry.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.ForkDto">
+            <summary>
+            Payload entry for a token fork node (payload version 6). <paramref name="Branches"/>
+            holds the branch-head node indexes in declaration order — branch 0 continues the arriving
+            token (normative). Fork branch edges are not transitions: the owner's transition slot
+            stays empty on the wire, exactly as it is in the live graph.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.ForkDto.#ctor(System.Int32,System.Int32[])">
+            <summary>
+            Payload entry for a token fork node (payload version 6). <paramref name="Branches"/>
+            holds the branch-head node indexes in declaration order — branch 0 continues the arriving
+            token (normative). Fork branch edges are not transitions: the owner's transition slot
+            stays empty on the wire, exactly as it is in the live graph.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.GraphDto">
+            <summary>
+            Minimal DTO for a graph that can be serialized/deserialized.
+            Keeps indices stable and captures names and edges.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphDto.#ctor(NxGraph.Serialization.INodeDto[],NxGraph.Serialization.TransitionDto[],NxGraph.Serialization.SubGraphDto[],System.Int32,System.String,NxGraph.Serialization.RetryPolicyDto[],NxGraph.Serialization.OutcomeCodeDto[],NxGraph.Serialization.OutcomeNameDto[],NxGraph.Serialization.CompositeDto[],NxGraph.Serialization.UidDto[],NxGraph.Serialization.ForkDto[],NxGraph.Serialization.JoinDto[],NxGraph.Serialization.ContainerDto[],NxGraph.Serialization.EventEntryDto[],NxGraph.Serialization.BehaviorDto[],NxGraph.Serialization.ChoiceDto[],NxGraph.Serialization.SwitchDto[])">
+            <summary>
+            Minimal DTO for a graph that can be serialized/deserialized.
+            Keeps indices stable and captures names and edges.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.GraphDto.Version">
+            <summary>
+            Serialized payload version. Defaults to <c>0</c> ("no version seen"): the writer stamps
+            <see cref="F:NxGraph.Serialization.SerializationVersion.Version"/> explicitly when building a payload
+            (<c>GraphSerializer.ToDto</c>), and the readers overwrite it with the payload's value.
+            Defaulting to the current version instead would make a JSON payload with its
+            <c>version</c> property stripped indistinguishable from a current one and sail past the
+            read-path version gates; <c>0</c> makes it detectable and rejectable.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildBehaviorDto(System.Int32,NxGraph.Graphs.NodeId,NxGraph.Behaviors.IBehaviorComposite)">
+            <summary>
+            Serializes one behavior composite's entries into the neutral field model through the
+            per-session entry codec. Entries implementing <see cref="T:NxGraph.Serialization.Abstraction.ISerializableBehavior"/>
+            write themselves; the registry covers the standard set; anything else fails with the
+            targeted error naming the unlocking option (the dynamic-parallel/container precedent).
+            The same dispatch applies recursively to nested bodies
+            (<see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Behaviors"/> fields, payload version 9).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildChoiceDto(System.Int32,NxGraph.Graphs.NodeId,NxGraph.Fsm.IChoiceNode)">
+            <summary>
+            Serializes one data-built choice node's decision (payload version 10): the match mode
+            and the condition list, through the per-session condition entry codec. The two arms ride
+            as node indexes, with -1 for a terminal <see cref="P:NxGraph.Graphs.NodeId.Default"/> arm — the
+            <see cref="T:NxGraph.Serialization.EventEntryDto"/> encoding.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildSwitchDto(System.Int32,NxGraph.Graphs.NodeId,NxGraph.Fsm.ISwitchNode)">
+            <summary>
+            Serializes one data-built switch node (payload version 10). The typed key rides as its
+            registered name plus the runtime-stable value type name; case values ride as field-model
+            literals (see <see cref="T:NxGraph.Serialization.SwitchLiteral"/>), which is where a <c>T</c> outside the field
+            model fails, naming this node.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.TargetIndex(NxGraph.Graphs.NodeId)">
+            <summary>A branch arm's wire index: -1 encodes <see cref="P:NxGraph.Graphs.NodeId.Default"/> (terminal).</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.GraphSerializer.ConditionEntryCodec">
+            <summary>
+            Per-payload-session condition entry codec (payload version 10) — the exact twin of
+            <see cref="T:NxGraph.Serialization.GraphSerializer.BehaviorEntryCodec"/>: write dispatch is
+            <see cref="M:NxGraph.Serialization.Abstraction.ISerializableCondition.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> first and
+            <see cref="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> second, read dispatch is the registry only,
+            and the codec is wired into every writer/reader it creates so nested entry lists
+            (<c>Not</c>) encode under exactly the top-level rules. The read side caps entry nesting
+            at the same depth as behaviors — the codec-neutral backstop for the JSON path.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.ConditionEntryCodec.#ctor(NxGraph.Serialization.Abstraction.IConditionRegistry,System.String)">
+            <summary>
+            Per-payload-session condition entry codec (payload version 10) — the exact twin of
+            <see cref="T:NxGraph.Serialization.GraphSerializer.BehaviorEntryCodec"/>: write dispatch is
+            <see cref="M:NxGraph.Serialization.Abstraction.ISerializableCondition.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> first and
+            <see cref="M:NxGraph.Serialization.Abstraction.IConditionRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> second, read dispatch is the registry only,
+            and the codec is wired into every writer/reader it creates so nested entry lists
+            (<c>Not</c>) encode under exactly the top-level rules. The read side caps entry nesting
+            at the same depth as behaviors — the codec-neutral backstop for the JSON path.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.GraphSerializer.BehaviorEntryCodec">
+            <summary>
+            Per-payload-session behavior entry codec (payload version 9): the serializer's
+            per-entry dispatch — write: <see cref="M:NxGraph.Serialization.Abstraction.ISerializableBehavior.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/>; read: registry-first
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)"/> — wired into every
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldWriter"/>/<see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader"/> the serializer
+            creates, so nested entry lists encode under exactly the top-level rules. The read side
+            caps entry nesting (crafted-payload guard, matching the MessagePack formatter's cap —
+            the codec-neutral backstop for the JSON path).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BehaviorEntryCodec.#ctor(NxGraph.Serialization.Abstraction.IBehaviorRegistry,System.String)">
+            <summary>
+            Per-payload-session behavior entry codec (payload version 9): the serializer's
+            per-entry dispatch — write: <see cref="M:NxGraph.Serialization.Abstraction.ISerializableBehavior.Write(NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/> else
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryWrite(System.Object,NxGraph.Serialization.Abstraction.BehaviorFieldWriter)"/>; read: registry-first
+            <see cref="M:NxGraph.Serialization.Abstraction.IBehaviorRegistry.TryRead(System.String,NxGraph.Serialization.Abstraction.BehaviorFieldReader,System.Object@)"/> — wired into every
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldWriter"/>/<see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldReader"/> the serializer
+            creates, so nested entry lists encode under exactly the top-level rules. The read side
+            caps entry nesting (crafted-payload guard, matching the MessagePack formatter's cap —
+            the codec-neutral backstop for the JSON path).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.ResolveSelectorKey(NxGraph.Graphs.NodeId,System.Func{NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask})">
+            <summary>
+            Maps a dynamic-parallel selector delegate to its registered key. Selector identity is
+            reference identity — the graph must be authored with the registered delegate instance
+            (the default registry's <c>Register</c> returns it for exactly that reason).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildPortDtos(NxGraph.Graphs.NodeId,System.Boolean,System.Collections.Generic.IReadOnlyList{NxGraph.Fsm.ISubGraphPort})">
+            <summary>
+            Serializes one composite's ports declaration. Null without a declaration; a declared
+            but port-less board rides as an empty list — the declaration's presence is what makes
+            the composite own the board. Sources ride as key names, or as field-model literals
+            (via <see cref="T:NxGraph.Serialization.PortLiteral"/>) for literal inputs, plus the runtime-stable value type
+            name that closes the typed pair on read.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.RebuildPorts(System.Boolean,NxGraph.Serialization.SubGraphPortDto[],System.String)">
+            <summary>
+            Rebuilds one ports declaration from the wire — name-bound (the unbound recipe): each
+            port resolves its key names per application against the boards bound at that moment.
+            Ports without board ownership are a crafted or corrupt payload.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.RebuildRegionPorts(NxGraph.Serialization.CompositeDto)">
+            <summary>
+            Rebuilds a composite's sparse per-region ports into a by-index array, validating
+            region indexes (in range for the child list — which also confines history kinds to
+            region 0 — and unique).
+            </summary>
+        </member>
+        <member name="F:NxGraph.Serialization.GraphSerializer.ContainerPlaceholderMarker">
+            <summary>
+            In-memory placeholder for container-claimed nodes between the node loop and the
+            container rebuild pass (children rebuild first). Purely internal — unlike the
+            composite markers it never rides the wire, because container claims are markerless.
+            Index -15 is the next free slot after <see cref="P:NxGraph.Graphs.NodeId.AsyncBehaviorStateMarker"/>
+            (-14): NodeId equality is index-only, so the sentinel space must stay collision-free
+            even though this placeholder is only ever compared by reference.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.AssertStableSubGraphOrder(NxGraph.Graphs.ISubGraphProvider,System.Collections.Generic.List{NxGraph.Graphs.Graph})">
+            <summary>
+            DEBUG-only check of the container ordering contract: <see cref="P:NxGraph.Graphs.ISubGraphProvider.SubGraphs"/>
+            must yield an identical sequence on every enumeration — wire order is reconstruction
+            identity ("SubGraphs enumeration order = wire order = Deserialize children order"), and a
+            container backed by an unordered collection corrupts its rebuilt children silently.
+            Release builds compile the call out; the contract itself is documented on
+            <see cref="T:NxGraph.Graphs.ISubGraphProvider"/> and <c>IContainerCodec&lt;TWire&gt;</c>.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.ResolveSelector(System.String,System.Int32)">
+            <summary>
+            Maps a payload selector key back to the registered delegate. The registry restores
+            <i>a</i> delegate for the key; whether it behaves like the authored one is the user's
+            contract — the same trust model the logic codec has for node logic.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildBehaviorComposite(NxGraph.Serialization.BehaviorDto,System.Object[])">
+            <summary>
+            Rebuilds one behavior composite from its reconstructed entries, closing the typed
+            variants over the payload's runtime-stable agent type name. Sync composites re-wrap
+            in the sync-logic adapter so the node stays runnable on both runtimes, mirroring the
+            nested-machine and composite installs above.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.RebuildTarget(System.Int32,System.Int32,System.String,System.String)">
+            <summary>
+            Rebuilds one branch arm's node id from its wire index, with -1 decoding back to
+            <see cref="P:NxGraph.Graphs.NodeId.Default"/> (a terminal arm). Ids rebuild as bare indexes — equality is
+            index-only and names resolve through the graph at runtime, so reading
+            <c>nodes[target].Id</c> here would only risk capturing a not-yet-rebuilt sentinel.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.NodeName(NxGraph.Serialization.GraphDto,System.Int32)">
+            <summary>The display name a payload carries for one node index.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.BuildSwitchState(NxGraph.Serialization.SwitchDto,NxGraph.Graphs.NodeId[],NxGraph.Graphs.NodeId)">
+            <summary>
+            Rebuilds one data-built switch, closing <c>SwitchState&lt;T&gt;</c> over the payload's
+            runtime-stable value type name and reconstructing through the public <c>Unbound</c>
+            factory, so duplicate-case validation re-runs on load (the
+            <c>BehaviorRegistry.ReadSetValue</c> recipe).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.AddClaims(System.Collections.Generic.Dictionary{System.Int32,System.String}@,System.Collections.Generic.IEnumerable{System.Int32},System.String)">
+            <summary>
+            Folds one section's claimed owner indexes into the shared claim map, throwing on the
+            first index already claimed by another section.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.TryGetCompositeMarker(System.String)">
+            <summary>
+            Maps a node's serialized logic string to the composite marker sentinel it names, or
+            null when the string is not a composite marker. The caller must still verify that a
+            <see cref="T:NxGraph.Serialization.CompositeDto"/> claims the node index — an unclaimed marker string is
+            ordinary codec payload, not a marker.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.MarkerFor(NxGraph.Serialization.CompositeKind)">
+            <summary>The marker sentinel a <see cref="T:NxGraph.Serialization.CompositeKind"/> must attach to.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.AsJsonSerializer">
+            <summary>
+             Gets this instance as a JSON serializer.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:NxGraph.Serialization.GraphSerializer.AsBinarySerializer">
+            <summary>
+             Gets this instance as a binary serializer.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:NxGraph.Serialization.GraphSerializerOptions">
+            <summary>
+            Optional extension points for <see cref="T:NxGraph.Serialization.GraphSerializer"/> (payload version 6). With
+            both left null the serializer behaves exactly like the single-argument constructor:
+            dynamic-parallel composites and custom containers fail with targeted errors naming the
+            option that unlocks them. Token fork/join nodes need no configuration — their structure
+            is plain data and always rides.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.GraphSerializerOptions.SelectorRegistry">
+            <summary>
+            Resolves dynamic-parallel region selectors to named keys (write) and back (read).
+            Required to serialize or deserialize graphs containing
+            <c>AsyncDynamicParallelState</c> / <c>DynamicParallelState</c> nodes.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.GraphSerializerOptions.ContainerCodec">
+            <summary>
+            Owns the reconstruction recipe for custom <c>ISubGraphProvider</c> containers
+            (including <c>AsyncCompositeState</c> subclasses). Its wire type must match the
+            logic codec's — the container payload rides in the same node DTO slot.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.GraphSerializerOptions.BehaviorRegistry">
+            <summary>
+            Resolves behavior payload identities (payload version 8). When left null the
+            serializer uses a fresh default <see cref="P:NxGraph.Serialization.GraphSerializerOptions.BehaviorRegistry"/>, which carries the
+            standard set (<c>Log</c>, closed <c>SetValue&lt;T&gt;</c>) built in — standard-set
+            graphs round-trip with zero options. Configure one to register reconstruction
+            factories for user <c>ISerializableBehavior</c> implementations.
+            </summary>
+        </member>
+        <member name="P:NxGraph.Serialization.GraphSerializerOptions.ConditionRegistry">
+            <summary>
+            Resolves condition payload identities (payload version 10). When left null the
+            serializer uses a fresh default <see cref="P:NxGraph.Serialization.GraphSerializerOptions.ConditionRegistry"/>, which carries the
+            standard set (<c>IsTrue</c>, <c>Not</c>, closed <c>KeyEquals&lt;T&gt;</c>) built in —
+            data-built branching graphs round-trip with zero options. Configure one to register
+            reconstruction factories for user <c>ISerializableCondition</c> implementations.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.INodeDto">
+            <summary>
+            Interface for node DTOs used in graph serialization.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.JoinDto">
+            <summary>
+            Payload entry for a token join node (payload version 6): the <c>JoinPolicy</c> as raw
+            <paramref name="Kind"/>/<paramref name="Count"/>. The deserializer reconstructs the
+            policy through its public factories so their validation re-runs — the wire itself stays
+            minimal, like the other sparse sections.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.JoinDto.#ctor(System.Int32,System.Byte,System.Int32)">
+            <summary>
+            Payload entry for a token join node (payload version 6): the <c>JoinPolicy</c> as raw
+            <paramref name="Kind"/>/<paramref name="Count"/>. The deserializer reconstructs the
+            policy through its public factories so their validation re-runs — the wire itself stays
+            minimal, like the other sparse sections.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.OutcomeCodeDto">
+            <summary>Sparse per-node terminal outcome code entry.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.OutcomeCodeDto.#ctor(System.Int32,System.Int32)">
+            <summary>Sparse per-node terminal outcome code entry.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.OutcomeNameDto">
+            <summary>Display name for an outcome code.</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.OutcomeNameDto.#ctor(System.Int32,System.String)">
+            <summary>Display name for an outcome code.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.RegionSelectorRegistry">
+            <summary>
+            Default <see cref="T:NxGraph.Serialization.Abstraction.IRegionSelectorRegistry"/>: a bidirectional key ↔ delegate map built
+            at registration time. Delegate identity is reference identity, so author the graph with
+            the instance <see cref="M:NxGraph.Serialization.RegionSelectorRegistry.Register(System.String,System.Func{NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask})"/> returns:
+            <code>
+            var sel = registry.Register("battle", ctx => ...);
+            ... .Parallel(sel, region1, region2)
+            </code>
+            Two lambdas with identical bodies are distinct delegates — a graph authored with an
+            unregistered twin fails the write-side lookup.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.RegionSelectorRegistry.Register(System.String,System.Func{NxGraph.Blackboards.BlackboardContext,NxGraph.Fsm.RegionMask})">
+            <summary>
+            Registers <paramref name="selector"/> under <paramref name="key"/> and returns the
+            delegate, so authoring uses the registered instance naturally. Duplicate keys and
+            duplicate delegates fail here, at setup, rather than at save time.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.RetryPolicyDto">
+            <summary>
+            Sparse per-node retry policy entry: only nodes that declare a policy are serialized.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.RetryPolicyDto.#ctor(System.Int32,System.Byte,System.Int64,System.Byte)">
+            <summary>
+            Sparse per-node retry policy entry: only nodes that declare a policy are serialized.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.StableTypeResolver">
+            <summary>
+            Resolves the runtime-stable type names the payloads carry (see
+            <see cref="M:NxGraph.Serialization.BlackboardSerializer.StableTypeName(System.Type)"/> for the rendering) back to live
+            <see cref="T:System.Type"/>s — cold read-side reflection, the <c>BlackboardSerializer</c>
+            precedent. Simple names probe <see cref="M:System.Type.GetType(System.String)"/> and then every loaded
+            assembly; constructed generics and arrays are parsed recursively, because stable names
+            deliberately omit assembly qualification.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.StableTypeResolver.FindMatchingOpen(System.String)">
+            <summary>Index of the '[' matching the final ']' of <paramref name="name"/>, or -1.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SubGraphDto">
+            <summary>
+            Payload entry for a plain nested machine. <paramref name="OutcomeCodeKeyName"/> /
+            <paramref name="OutcomeNameKeyName"/> (payload version 11) name the blackboard keys the
+            machine publishes its terminal outcome through — names only (keys never ride; the read
+            side rebuilds name-bound machines resolved against the bound boards per publish); the
+            value types are fixed (<c>int</c> / <c>string</c>), so no type names ride. Pre-v11
+            payloads read outcome-key-free. <paramref name="OwnsBoard"/> / <paramref name="Ports"/>
+            (payload version 12) carry the sub-graph ports declaration: the machine runs its child
+            graph on its own board, with the declared ports (see <see cref="T:NxGraph.Serialization.SubGraphPortDto"/>).
+            <paramref name="Ports"/> may be an empty array (board-only declaration) and must be
+            null/empty when <paramref name="OwnsBoard"/> is false. Pre-v12 payloads read shared-board
+            and port-free.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SubGraphDto.#ctor(System.Int32,NxGraph.Serialization.GraphDto,System.String,System.String,System.Boolean,NxGraph.Serialization.SubGraphPortDto[])">
+            <summary>
+            Payload entry for a plain nested machine. <paramref name="OutcomeCodeKeyName"/> /
+            <paramref name="OutcomeNameKeyName"/> (payload version 11) name the blackboard keys the
+            machine publishes its terminal outcome through — names only (keys never ride; the read
+            side rebuilds name-bound machines resolved against the bound boards per publish); the
+            value types are fixed (<c>int</c> / <c>string</c>), so no type names ride. Pre-v11
+            payloads read outcome-key-free. <paramref name="OwnsBoard"/> / <paramref name="Ports"/>
+            (payload version 12) carry the sub-graph ports declaration: the machine runs its child
+            graph on its own board, with the declared ports (see <see cref="T:NxGraph.Serialization.SubGraphPortDto"/>).
+            <paramref name="Ports"/> may be an empty array (board-only declaration) and must be
+            null/empty when <paramref name="OwnsBoard"/> is false. Pre-v12 payloads read shared-board
+            and port-free.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SubGraphPortDto">
+            <summary>
+            One declared sub-graph port on the wire (payload version 12): direction (0 = input,
+            1 = output), the source — a key <b>name</b> (parent-side for inputs, child-side for
+            outputs) or, for a literal input, a field-model literal (the <see cref="T:NxGraph.Serialization.SwitchLiteral"/>
+            recipe: kind <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/> validation applies verbatim) — the
+            target key name, and the runtime-stable value type name that closes the typed pair on
+            read. Keys never ride typed: a deserialized port resolves its names per application
+            against the boards bound at that moment, with targeted miss/type-mismatch errors.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SubGraphPortDto.#ctor(System.Byte,System.String,NxGraph.Serialization.Abstraction.BehaviorFieldValue,System.String,System.String)">
+            <summary>
+            One declared sub-graph port on the wire (payload version 12): direction (0 = input,
+            1 = output), the source — a key <b>name</b> (parent-side for inputs, child-side for
+            outputs) or, for a literal input, a field-model literal (the <see cref="T:NxGraph.Serialization.SwitchLiteral"/>
+            recipe: kind <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/> validation applies verbatim) — the
+            target key name, and the runtime-stable value type name that closes the typed pair on
+            read. Keys never ride typed: a deserialized port resolves its names per application
+            against the boards bound at that moment, with targeted miss/type-mismatch errors.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.RegionPortsDto">
+            <summary>
+            The ports declaration of one region of a composite (payload version 12): the region index
+            (0 for the single child of a history composite) plus its port list. The entry's
+            <b>presence</b> is the owns-board flag — a region with an entry runs on its own board even
+            when the port list is empty; absent regions keep the shared-board default.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.RegionPortsDto.#ctor(System.Int32,NxGraph.Serialization.SubGraphPortDto[])">
+            <summary>
+            The ports declaration of one region of a composite (payload version 12): the region index
+            (0 for the single child of a history composite) plus its port list. The entry's
+            <b>presence</b> is the owns-board flag — a region with an entry runs on its own board even
+            when the port list is empty; absent regions keep the shared-board default.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SubGraphPortWire">
+            <summary>
+            Hand-rolled MessagePack encoding for the port entries — shared by
+            <see cref="T:NxGraph.Serialization.SubGraphDtoFormatter"/> and <see cref="T:NxGraph.Serialization.CompositeDtoFormatter"/>, which own the
+            enclosing array shapes. Literals reuse the behavior field model's value encoding.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.PortLiteral">
+            <summary>
+            Encodes a literal input-port source through the neutral field model (the
+            <see cref="T:NxGraph.Serialization.SwitchLiteral"/> recipe): the value is written as a one-field
+            <c>WriteBinding</c> payload and read back through <c>ReadBinding</c>, so port literals
+            inherit the field model's validation — a value type outside string/bool/int/long/float/
+            double/enum fails at save time with a targeted error naming the node.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.PortLiteral.Write(System.Type,System.Object,NxGraph.Graphs.NodeId)">
+            <summary>Encodes one boxed literal of runtime type <paramref name="valueType"/> (cold path).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.PortLiteral.Read``1(NxGraph.Serialization.Abstraction.BehaviorFieldValue,System.String)">
+            <summary>Decodes one literal, rejecting the key-binding form (keys ride as names, never as literals).</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SwitchCaseDto">
+            <summary>
+            One arm of a data-built switch on the wire (payload version 10): the case's
+            <b>literal</b> value plus the arm's head node index. The literal rides as an ordinary
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldValue"/> of kind <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/> — see
+            <see cref="T:NxGraph.Serialization.SwitchLiteral"/> — so the case values inherit the field model's literal
+            validation and need no wire vocabulary of their own.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SwitchCaseDto.#ctor(NxGraph.Serialization.Abstraction.BehaviorFieldValue,System.Int32)">
+            <summary>
+            One arm of a data-built switch on the wire (payload version 10): the case's
+            <b>literal</b> value plus the arm's head node index. The literal rides as an ordinary
+            <see cref="T:NxGraph.Serialization.Abstraction.BehaviorFieldValue"/> of kind <see cref="F:NxGraph.Serialization.Abstraction.BehaviorFieldKind.Binding"/> — see
+            <see cref="T:NxGraph.Serialization.SwitchLiteral"/> — so the case values inherit the field model's literal
+            validation and need no wire vocabulary of their own.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SwitchDto">
+            <summary>
+            Payload entry for a data-built <c>SwitchState&lt;T&gt;</c> node (payload version 10). The
+            typed key never rides typed: <paramref name="KeyName"/> plus the runtime-stable
+            <paramref name="ValueTypeName"/> rebuild an unbound switch that resolves its key by name
+            against the machine's bound schemas at selection (the <see cref="T:NxGraph.Serialization.EventEntryDto"/> recipe).
+            <paramref name="DefaultTarget"/> is <c>-1</c> for <c>NodeId.Default</c> (a terminal
+            no-match exit). Reserved marker: "SwitchState" — one for both runtimes and every closed
+            <c>T</c>.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SwitchDto.#ctor(System.Int32,System.String,System.String,NxGraph.Serialization.SwitchCaseDto[],System.Int32)">
+            <summary>
+            Payload entry for a data-built <c>SwitchState&lt;T&gt;</c> node (payload version 10). The
+            typed key never rides typed: <paramref name="KeyName"/> plus the runtime-stable
+            <paramref name="ValueTypeName"/> rebuild an unbound switch that resolves its key by name
+            against the machine's bound schemas at selection (the <see cref="T:NxGraph.Serialization.EventEntryDto"/> recipe).
+            <paramref name="DefaultTarget"/> is <c>-1</c> for <c>NodeId.Default</c> (a terminal
+            no-match exit). Reserved marker: "SwitchState" — one for both runtimes and every closed
+            <c>T</c>.
+            </summary>
+        </member>
+        <member name="T:NxGraph.Serialization.SwitchLiteral">
+            <summary>
+            Encodes a data-built switch's <b>case literals</b> (payload version 10) through the neutral
+            field model, so the branch sections need no wire vocabulary of their own: a case value is
+            written as a one-field <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldWriter.WriteBinding``1(System.String,NxGraph.Behaviors.BlackboardValue{``0}@)"/> payload and read
+            back through <see cref="M:NxGraph.Serialization.Abstraction.BehaviorFieldReader.ReadBinding``1(System.String)"/>. Two consequences are
+            deliberate — the model's literal validation applies verbatim (a <c>SwitchState&lt;T&gt;</c>
+            whose <c>T</c> is not string/bool/int/long/float/double/enum fails at save time with the
+            field model's own targeted error, here re-thrown naming the node), and a crafted payload
+            cannot smuggle a <i>key binding</i> into a case value: a switch matches literals only.
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SwitchLiteral.Write(System.Type,System.Object,NxGraph.Graphs.NodeId)">
+            <summary>
+            Encodes one boxed case value of runtime type <paramref name="valueType"/>. Cold path:
+            the closed <c>T</c> comes from <c>ISwitchNode.ValueType</c>, so the generic writer is
+            reached by reflection (the <c>BehaviorRegistry.ReadSetValue</c> recipe).
+            </summary>
+        </member>
+        <member name="M:NxGraph.Serialization.SwitchLiteral.Read``1(NxGraph.Serialization.Abstraction.BehaviorFieldValue,System.String)">
+            <summary>Decodes one case literal, rejecting the key-binding form.</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.UidDto">
+            <summary>Sparse per-node stable UID entry (shipped with payload version 5).</summary>
+        </member>
+        <member name="M:NxGraph.Serialization.UidDto.#ctor(System.Int32,System.Guid)">
+            <summary>Sparse per-node stable UID entry (shipped with payload version 5).</summary>
+        </member>
+        <member name="T:NxGraph.Serialization.Shims.ArgumentNullExceptionShim">
+            <summary>
+            netstandard2.1 stand-in for <c>System.ArgumentNullException.ThrowIfNull</c> (net6.0+).
+            </summary>
+        </member>
+        <member name="T:System.Runtime.CompilerServices.IsExternalInit">
+            <summary>
+            Marker the compiler requires to emit init-only setters (records, <c>init</c>
+            properties). Present in net5.0+; absent from netstandard2.1, so this assembly
+            carries its own copy — the sibling assemblies' copies are internal.
+            </summary>
+        </member>
+        <member name="T:MessagePack.GeneratedMessagePackResolver">
+            <summary>A MessagePack resolver that uses generated formatters for types in this assembly.</summary>
+        </member>
+        <member name="F:MessagePack.GeneratedMessagePackResolver.Instance">
+            <summary>An instance of this resolver that only returns formatters specifically generated for types in this assembly.</summary>
+        </member>
+    </members>
+</doc>
